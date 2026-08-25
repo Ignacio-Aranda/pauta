@@ -1,0 +1,13 @@
+# Cadena de herramientas: se instala con las instrucciones de docs/desarrollo.md
+tools/adata/
+tools/adata2/
+tools/auser/
+tools/auser2/
+tools/libs119/
+tools/arduino-cli
+tools/arduino-cli.yaml
+.venv/
+
+# Volcados de depuración y capturas en crudo: pueden contener credenciales
+dump/
+*.vlw
