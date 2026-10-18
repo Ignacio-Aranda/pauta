@@ -45,7 +45,7 @@ bool themeIsDark();
 #define BOX_R         9          // radio de la casilla de marcado
 
 #define LIST_TOP    (HEADER_H + 4)
-#define LIST_H      (SCR_H - LIST_TOP - FOOTER_H)
+#define LIST_AREA_H (SCR_H - LIST_TOP - FOOTER_H)
 
 // --- Tipografia -------------------------------------------------------------
 // LGFXBase::loadFont() reutiliza un unico buffer interno, asi que para tener

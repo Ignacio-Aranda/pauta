@@ -1,7 +1,8 @@
 // Definicion de hardware: Makerfabs ESP32-S3 Parallel TFT with Touch 3.5" V1.0.
 //
 // Panel ILI9488 320x480 sobre bus paralelo de 16 bits y tactil capacitivo
-// FT6236 en I2C 0x38 (SDA=38, SCL=39, confirmado por barrido del bus).
+// FT6236 en I2C 0x38 (SDA=38, SCL=39, confirmado por barrido del bus). La
+// variante con tactil resistivo (NS2009) no esta soportada.
 //
 // OJO CON LA REVISION. La V2.0 movio tres lineas de control respecto a la
 // V1.0 porque paso al modulo N16R8, cuya PSRAM octal ocupa los GPIO 35-37:
@@ -13,8 +14,19 @@
 // libres. Los ejemplos publicados en la rama principal son para V2.0 y con
 // ellos no se pinta nada, porque IO17/IO18 son el conector Mabee.
 //
-// Ademas hay dos pines que hay que pilotar A MANO antes de init(), porque
-// LovyanGFX declara pin_cs = -1 y no los toca:
+// En la V2.0 no bastan los pines: su PSRAM octal necesita PSRAM=opi (el
+// perfil v2 de sketch.yaml). Con PSRAM=enabled la PSRAM no arranca y el
+// lienzo de la pantalla no tiene donde vivir. La V2.0 compila, pero no se ha
+// probado en una placa real.
+//
+// firmware/pauta y firmware/disptest llevan cada uno su copia de este
+// archivo: arduino-cli copia cada sketch a su carpeta de compilacion, y un
+// #include "../" hacia el otro no lo encontraria. Al cambiar de revision hay
+// que tocar las dos.
+//
+// Ademas hay dos pines que hay que pilotar A MANO antes de init(): aqui
+// abajo el panel va con pin_cs = -1 y sin control de retroiluminacion, asi
+// que LovyanGFX no toca ninguno de los dos:
 //   - CS del LCD (IO37) a nivel BAJO. Sin esto el panel ignora el bus entero:
 //     no se pinta nada y la imagen anterior se queda intacta.
 //   - Retroiluminacion (IO45) a nivel ALTO, o no se ve nada aunque pinte.
@@ -46,7 +58,7 @@ public:
   LGFX(void) {
     { auto cfg = _bus.config();
       cfg.port       = 0;
-      cfg.freq_write = 20000000;   // el panel aguanta hasta 20 MHz
+      cfg.freq_write = 20000000;   // 20 MHz, el maximo que da el fabricante
       cfg.pin_wr = PIN_LCD_WR; cfg.pin_rd = PIN_LCD_RD; cfg.pin_rs = PIN_LCD_RS;
       cfg.pin_d0  = 47; cfg.pin_d1  = 21; cfg.pin_d2  = 14; cfg.pin_d3  = 13;
       cfg.pin_d4  = 12; cfg.pin_d5  = 11; cfg.pin_d6  = 10; cfg.pin_d7  =  9;
@@ -67,7 +79,8 @@ public:
       cfg.invert     = false;
       cfg.rgb_order  = false;
       cfg.dlen_16bit = true;       // el bus envia en palabras de 16 bits
-      cfg.bus_shared = true;       // compartido con la ranura microSD
+      cfg.bus_shared = true;       // solo cuenta al dibujar desde ficheros;
+                                   // la microSD (sin usar) va por otro SPI
       _panel.config(cfg);
     }
     { auto cfg = _touch.config();

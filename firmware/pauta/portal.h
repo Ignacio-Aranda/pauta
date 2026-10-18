@@ -2,11 +2,13 @@
 //
 // Si no hay WiFi guardado (o no se puede conectar) la placa levanta su propio
 // punto de acceso y sirve una pagina donde elegir la red, escribir su clave y
-// pegar el token del bot. Al guardar, reinicia y se conecta.
+// pegar el token del bot. Al guardar, reinicia y se conecta. Si ya habia una
+// red guardada, pauta.ino la sigue probando mientras nadie use el portal.
 #pragma once
 #include <Arduino.h>
 
 void portalBegin();      // levanta el AP, el DNS y el servidor web
 void portalLoop();       // atiende peticiones; llamar a menudo
 bool portalSaved();      // true cuando el usuario ya ha guardado la configuracion
+bool portalInUse();      // true si alguien ha pedido una pagina hace menos de 10 min
 String portalApIp();

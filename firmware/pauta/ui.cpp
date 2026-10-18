@@ -5,6 +5,8 @@
 #include "settings.h"
 #include "telegram.h"
 #include "i18n.h"
+#include "utf8.h"
+#include "version.h"
 #include <WiFi.h>
 #include <time.h>
 
@@ -12,6 +14,7 @@ static LGFX        tft;
 static LGFX_Sprite cv(&tft);          // lienzo completo, en PSRAM
 static UiScreen    s_screen = UI_BOOT;
 static String      s_status;
+static UiLink      s_link = UI_LINK_TRYING;
 static uint32_t    s_lastRevision = 0;
 static bool        s_needsRedraw = true;
 static uint32_t    s_bootAt = 0;
@@ -29,6 +32,20 @@ static const float DECAY_TAU_MS = 130.0f;
 static const float VEL_STOP     = 0.02f;   // 20 px/s: por debajo, se para
 static const float VEL_MAX      = 3.0f;
 static const int   DRAG_SLOP    = 8;
+static const int   EDGE_FADE_H  = 18;      // alto del difuminado de los bordes
+
+// Una tarea que llega por Telegram cuando la lista ya no cabe caia por debajo
+// del borde y no se veia que hubiera entrado. Ahora la lista baja sola hasta
+// ella, pero solo si nadie la esta usando: moverla mientras alguien la lee o
+// la acaba de arrastrar seria peor que no mostrar la nueva.
+static const uint32_t REVEAL_MS      = 350;
+static const uint32_t TOUCH_QUIET_MS = 5000;
+// Un dedo que ya iba hacia un renglon cuando la lista arranco sola cae sobre
+// otro. Durante el desplazamiento y este rato despues, tocar solo la para.
+static const uint32_t REVEAL_GRACE_MS = 250;
+static bool     s_revealing = false;
+static float    s_scrollFrom = 0, s_scrollTo = 0;
+static uint32_t s_scrollAnimStart = 0;
 
 // --- Tactil -----------------------------------------------------------------
 static bool     s_touchDown = false;
@@ -37,11 +54,20 @@ static int      s_touchX = 0, s_touchY = 0;
 static int      s_lastY = 0;
 static bool     s_dragging = false;
 static uint16_t s_pressedId = 0;
-static uint32_t s_lockUntil = 0;
+// Se guarda cuando fue el ultimo toque y no hasta cuando dura el bloqueo: a
+// los 49 dias millis() da la vuelta a cero, y un "hasta" fijado antes de la
+// vuelta queda muy por encima, con la pantalla sorda hasta que millis() lo
+// alcance otra vez, semanas despues. La resta sin signo no tiene ese problema.
+static uint32_t s_lastTapMs = 0;
+// Ultima vez que habia un dedo en la pantalla, para cualquier gesto. A 0
+// hasta el primer toque: en los primeros segundos tras arrancar no hay nadie
+// a quien molestar.
+static uint32_t s_lastTouchMs = 0;
 
 // --- Reset por pulsacion larga sobre el logotipo ---------------------------
-// Mantener el dedo sobre el logo borra la configuracion y devuelve la placa
-// al portal, que es la unica forma de cambiar de WiFi o de token sin cable.
+// Mantener el dedo sobre el logo borra la configuracion (la lista no) y
+// devuelve la placa al portal, que es la unica forma de cambiar de WiFi o de
+// token sin cable.
 // Los primeros segundos no avisan (para no asustar con un roce) y despues
 // aparece una cuenta atras: soltar antes de que llegue a cero lo cancela.
 static const uint32_t HOLD_WARN_MS  = 3000;   // cuando aparece el aviso
@@ -55,6 +81,7 @@ static uint32_t s_animStart = 0;
 static uint16_t s_enterId = 0;        // entrada de tarea nueva
 static uint32_t s_enterStart = 0;
 static uint16_t s_maxSeenId = 0;
+static bool     s_seenInit = false;   // ya se ha visto la lista del arranque
 static const uint32_t ANIM_MS  = 260;
 static const uint32_t ENTER_MS = 340;
 
@@ -69,12 +96,34 @@ static void ring(int cx, int cy, int r, float thick, uint32_t color) {
   cv.fillArc(cx, cy, r - thick, r, 0, 360, color);
 }
 
+// toUpperCase solo entiende ASCII: "mié", "sáb" o "lista vacía" salian con
+// la tilde en minuscula. En UTF-8, las minusculas U+00E0..U+00FE son 0xC3
+// 0xA0..0xBE y su mayuscula esta justo 0x20 antes; la excepcion es 0xB7, que
+// es el signo de dividir y no tiene pareja.
+static void upperUtf8(String &s) {
+  s.toUpperCase();
+  for (size_t i = 0; i + 1 < s.length(); i++) {
+    if ((uint8_t)s[i] != 0xC3) continue;
+    uint8_t b = (uint8_t)s[i + 1];
+    if (b >= 0xA0 && b <= 0xBE && b != 0xB7) s.setCharAt(i + 1, (char)(b - 0x20));
+    i++;
+  }
+}
+
+// Bytes que ocupa la letra UTF-8 que empieza por c.
+static size_t utf8LeadLen(uint8_t c) {
+  if ((c & 0xE0) == 0xC0) return 2;
+  if ((c & 0xF0) == 0xE0) return 3;
+  if ((c & 0xF8) == 0xF0) return 4;
+  return 1;
+}
+
 // Texto con letras separadas, en mayusculas. Es el recurso tipografico que da
 // el aire editorial a las etiquetas pequeñas; LovyanGFX no tiene interletraje,
 // asi que se dibuja caracter a caracter.
 static int drawTracked(const String &text, int x, int y, int tracking) {
   String up = text;
-  up.toUpperCase();
+  upperUtf8(up);
 
   // Impone su propia alineacion en vez de heredar la del llamante: con el
   // datum centrado cada letra se dibujaria centrada en su propia posicion, y
@@ -85,11 +134,8 @@ static int drawTracked(const String &text, int x, int y, int tracking) {
   int cx = x, prevW = 0;
   String prefix;
   for (size_t i = 0; i < up.length(); ) {
-    // Respeta UTF-8: los acentos ocupan dos bytes.
-    size_t len = 1;
-    uint8_t c = (uint8_t)up[i];
-    if ((c & 0xE0) == 0xC0) len = 2;
-    else if ((c & 0xF0) == 0xE0) len = 3;
+    // Respeta UTF-8: una tilde ocupa dos bytes y un emoji, cuatro.
+    size_t len = utf8LeadLen((uint8_t)up[i]);
     String ch = up.substring(i, i + len);
 
     // El avance se mide EN CONTEXTO, no aislando la letra: en una fuente VLW
@@ -108,14 +154,91 @@ static int drawTracked(const String &text, int x, int y, int tracking) {
 
 static int trackedWidth(const String &text, int tracking) {
   String up = text;
-  up.toUpperCase();
+  upperUtf8(up);
   int n = 0;
   for (size_t i = 0; i < up.length(); ) {
-    uint8_t c = (uint8_t)up[i];
-    i += ((c & 0xE0) == 0xC0) ? 2 : (((c & 0xF0) == 0xE0) ? 3 : 1);
+    i += utf8LeadLen((uint8_t)up[i]);
     n++;
   }
   return cv.textWidth(up) + tracking * (n - 1);
+}
+
+// Sustituto para un codigo que la fuente no trae: rayas y guiones como '-',
+// las latinas con tilde, cedilla o trazo como su letra base y las que se
+// escriben con dos letras (ß, æ, œ...) como esas dos. Quitarlas sin mas
+// cambiaba el sentido: "2–3 kg" salia "23 kg" y "Plaça", "Plaa". Solo se
+// llama cuando falta el glifo, asi que las que si estan (á, ñ, ü...) no se
+// tocan y regenerar las fuentes con mas letras basta para que salgan tal cual.
+// Devuelve false si no hay sustituto y el codigo se quita.
+static bool glyphFallback(uint32_t cp, String &out) {
+  if ((cp >= 0x2010 && cp <= 0x2013) || cp == 0x2212) { out += '-'; return true; }
+  if (cp == 0x2015) { out += "—"; return true; }
+  static const struct { uint16_t cp; char two[3]; } PAIRS[] = {
+    {0xC6, "Ae"}, {0xE6, "ae"}, {0x152, "Oe"}, {0x153, "oe"}, {0xDF, "ss"},
+    {0xDE, "Th"}, {0xFE, "th"}, {0x132, "IJ"}, {0x133, "ij"},
+  };
+  for (const auto &p : PAIRS) {
+    if (p.cp == cp) { out += p.two; return true; }
+  }
+  // Una letra por codigo de Latin-1 y Latin Extended-A ('_' = sin sustituto).
+  static const char LAT[] =
+    "AAAAAA_CEEEEIIIIDNOOOOO_OUUUUY__"   // U+00C0
+    "aaaaaa_ceeeeiiiidnooooo_ouuuuy_y"   // U+00E0
+    "AaAaAaCcCcCcCcDdDdEeEeEeEeEeGgGg"   // U+0100
+    "GgGgHhHhIiIiIiIiIi__JjKkkLlLlLlL"   // U+0120
+    "lLlNnNnNnnNnOoOoOo__RrRrRrSsSsSs"   // U+0140
+    "SsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzs";  // U+0160
+  static_assert(sizeof(LAT) == 0x180 - 0xC0 + 1,
+                "una letra por codigo de U+00C0 a U+017F");
+  if (cp >= 0xC0 && cp < 0x180 && LAT[cp - 0xC0] != '_') {
+    out += LAT[cp - 0xC0];
+    return true;
+  }
+  return false;
+}
+
+// Lo que de verdad se puede pintar de un texto. Las fuentes solo traen ASCII
+// y unas pocas letras y signos (CHARS en tools/mkfont.py): un emoji o un
+// simbolo que no tienen salia como un rectangulo. Lo que no esta se sustituye
+// si se puede (glyphFallback) y si no se quita. Solo cambia lo que se pinta;
+// el texto guardado y lo que ve Telegram siguen intactos.
+static String printable(const char *s, const SmoothFont &f) {
+  size_t n = strlen(s);
+  String out;
+  out.reserve(n);
+  for (size_t i = 0; i < n; ) {
+    uint32_t cp;
+    size_t len = utf8SeqLen(s + i, n - i, &cp);
+    // Una secuencia rota se salta entera: el decodificador de LovyanGFX
+    // guarda estado entre llamadas y se quedaria a medias.
+    if (!len) { i++; continue; }
+    const char *seq = s + i;
+    i += len;
+    // Espacios especiales (el fino de algunos teclados, por ejemplo): la
+    // fuente no los tiene y quitarlos pegaria las palabras.
+    if (cp == 0xA0 || (cp >= 0x2000 && cp <= 0x200A) || cp == 0x202F ||
+        cp == 0x205F || cp == 0x3000) { cp = ' '; seq = " "; len = 1; }
+    // Estas seis estan en CHARS pero la TTF no las trae: el glifo existe y es
+    // el rectangulo de glifo ausente, asi que getUnicodeIndex no las delata.
+    if (cp == 0x2192) { out += "->"; continue; }
+    if (cp == 0x2190) { out += "<-"; continue; }
+    if (cp == 0x25CB || cp == 0x25CF || cp == 0x2713 || cp == 0x2717) continue;
+    // Por encima de 0xFFFF estan todos los emojis y los tonos de piel; el
+    // ZWJ y el keycap solo sirven para componerlos.
+    if (cp > 0xFFFF || cp == 0x200D || cp == 0x20E3) continue;
+    uint16_t idx;
+    if (f.font.gCount && !f.font.getUnicodeIndex((uint16_t)cp, &idx)) {
+      glyphFallback(cp, out);
+      continue;
+    }
+    // Lo quitado deja a veces dos espacios juntos o uno al principio.
+    if (cp == ' ' && (out.isEmpty() || out[out.length() - 1] == ' ')) continue;
+    out.concat(seq, len);
+  }
+  out.trim();
+  // Una tarea hecha solo de emojis no puede quedarse en un renglon vacio.
+  if (out.isEmpty()) out = "•";
+  return out;
 }
 
 // Recorta el texto al ancho dado, terminando en "…" si no cabe.
@@ -123,16 +246,39 @@ static String fit(const String &text, int maxW) {
   if (cv.textWidth(text) <= maxW) return text;
   String out = text;
   while (out.length() > 1 && cv.textWidth(out + "…") > maxW) {
-    out.remove(out.length() - 1);
+    // Quita letras enteras: un byte suelto de una tilde dejaria el
+    // decodificador de la fuente a medias y el "…" saldria como basura.
+    size_t n = out.length();
+    while (n > 1 && ((uint8_t)out[n - 1] & 0xC0) == 0x80) n--;
+    out.remove(n - 1);
   }
   out.trim();
   return out + "…";
 }
 
+// Como fit(), pero en versalitas separadas y recortando solo el trozo que va
+// en el %s de fmt. Es para el nombre de una red, que puede tener 32 letras:
+// lo que se pierde tiene que ser el, no la frase que lo explica.
+static String fitName(const char *fmt, const String &name, int maxW, int tracking) {
+  String part = name;
+  bool cut = false;
+  char buf[192];
+  for (;;) {
+    String shown = part;
+    if (cut) { shown.trim(); shown += "…"; }
+    snprintf(buf, sizeof(buf), fmt, shown.c_str());
+    if (part.length() <= 1 || trackedWidth(buf, tracking) <= maxW) return buf;
+    size_t n = part.length();
+    while (n > 1 && ((uint8_t)part[n - 1] & 0xC0) == 0x80) n--;
+    part.remove(n - 1);
+    cut = true;
+  }
+}
+
 static int   rowPitch()  { return ROW_H; }
 static int   contentH()  { return tasksCount() * rowPitch(); }
 static float maxScroll() {
-  int over = contentH() - LIST_H;
+  int over = contentH() - LIST_AREA_H;
   return over > 0 ? (float)over : 0.0f;
 }
 static void clampScroll() {
@@ -238,7 +384,7 @@ static void drawTaskRow(const Task &t, int y, bool pressed) {
   cv.setFont(&fBody.font);
   cv.setTextColor(t.done ? P.inkMute : P.ink);
   cv.setTextDatum(middle_left);
-  String label = fit(String(t.text), tw);
+  String label = fit(printable(t.text, fBody), tw);
   cv.drawString(label, tx, by);
   if (t.done) {
     // El tachado se traza segun avanza la animacion, de izquierda a derecha.
@@ -253,7 +399,7 @@ static void drawTaskRow(const Task &t, int y, bool pressed) {
 }
 
 static void drawEmptyState() {
-  int cy = LIST_TOP + LIST_H / 2;
+  int cy = LIST_TOP + LIST_AREA_H / 2;
   drawPautaMark(cv, SCR_W / 2 - 22, cy - 42, 44, 1.0f, P.rule, P.accent);
 
   cv.setTextDatum(middle_center);
@@ -263,8 +409,19 @@ static void drawEmptyState() {
 
   cv.setFont(&fMeta.font);
   cv.setTextColor(P.inkMute);
-  cv.drawString(T(S_BLANK_1), SCR_W / 2, cy + 48);
-  cv.drawString(T(S_BLANK_2), SCR_W / 2, cy + 66);
+  // Con el @usuario a la vista no hay que acordarse de como se llamaba el
+  // bot. Va solo en su renglon porque un nombre puede tener 32 letras; aun
+  // asi, uno de letras anchas se saldria del margen, y por eso el fit().
+  const char *bot = telegramBotName();
+  if (*bot) {
+    char line[64];
+    snprintf(line, sizeof(line), T(S_BLANK_BOT_1), bot);
+    cv.drawString(fit(line, SCR_W - 2 * MARGIN), SCR_W / 2, cy + 48);
+    cv.drawString(T(S_BLANK_BOT_2), SCR_W / 2, cy + 66);
+  } else {
+    cv.drawString(T(S_BLANK_1), SCR_W / 2, cy + 48);
+    cv.drawString(T(S_BLANK_2), SCR_W / 2, cy + 66);
+  }
   cv.setTextDatum(top_left);
 }
 
@@ -272,7 +429,7 @@ static void drawEmptyState() {
 // papel en vez de quedar seccionado. Solo aparece por el lado donde queda
 // contenido fuera de la ventana.
 static void drawEdgeFade() {
-  const int H = 18;
+  const int H = EDGE_FADE_H;
   if (s_scroll > 1) {
     for (int i = 0; i < H; i++) {
       uint8_t a = (uint8_t)(255 * (H - i) / H);
@@ -282,7 +439,7 @@ static void drawEdgeFade() {
   if (s_scroll < maxScroll() - 1) {
     for (int i = 0; i < H; i++) {
       uint8_t a = (uint8_t)(255 * (H - i) / H);
-      cv.fillRectAlpha(0, LIST_TOP + LIST_H - 1 - i, SCR_W, 1, a, P.paper);
+      cv.fillRectAlpha(0, LIST_TOP + LIST_AREA_H - 1 - i, SCR_W, 1, a, P.paper);
     }
   }
 }
@@ -292,7 +449,7 @@ static void drawScrollHint() {
   float m = maxScroll();
   if (m <= 0) return;
   const int x = SCR_W - 11;
-  int trackH = LIST_H - 12;
+  int trackH = LIST_AREA_H - 12;
   int thumbH = (int)((float)trackH * trackH / contentH());
   if (thumbH < 24) thumbH = 24;
   int thumbY = LIST_TOP + 6 + (int)((trackH - thumbH) * (s_scroll / m));
@@ -302,8 +459,15 @@ static void drawScrollHint() {
 
 // --- Pie --------------------------------------------------------------------
 
+// El ancho sale del propio texto, con 8 px de holgura a cada lado: con uno
+// fijo de 96 px, "LIMPIAR HECHAS" en versalitas separadas se salia por la
+// derecha y tocar la ultima silaba no hacia nada. Se mide con la fuente del
+// pie y se deja la que hubiera, porque tambien se llama desde el tactil.
 static void clearBtnRect(int &x, int &y, int &w, int &h) {
-  w = 96; h = 26;
+  const lgfx::IFont *prev = cv.getFont();
+  cv.setFont(&fMeta.font);
+  w = trackedWidth(T(S_CLEAR_DONE), 2) + 16; h = 26;
+  cv.setFont(prev);
   x = MARGIN - 8;
   y = SCR_H - FOOTER_H + (FOOTER_H - h) / 2;
 }
@@ -311,6 +475,50 @@ static void themeBtnRect(int &x, int &y, int &w, int &h) {
   w = 40; h = 26;
   x = SCR_W - MARGIN - w + 8;
   y = SCR_H - FOOTER_H + (FOOTER_H - h) / 2;
+}
+
+// Un fallo de conexion que dura mas de un minuto se dice con palabras: el
+// punto solo no distingue un router apagado de un token mal copiado. Antes
+// no, para no alarmar por un corte de unos segundos.
+static const uint32_t FAULT_SHOW_MS = 60000;
+static const int      FAULT_RIGHT   = 410;   // aire antes del sol y la luna
+static const int      FAULT_MAX_W   = 230;
+static const int      FAULT_DOT_GAP = 14;    // el punto va delante del texto
+
+// En el orden de TgFault, desde TG_FAULT_NO_WIFI.
+static const StrId FAULT_TEXT[] = {
+  S_FAULT_NO_WIFI, S_FAULT_NO_NET, S_FAULT_CERT, S_FAULT_TOKEN,
+  S_FAULT_CONFLICT, S_FAULT_WAIT, S_FAULT_SERVER,
+};
+static_assert(sizeof(FAULT_TEXT) / sizeof(FAULT_TEXT[0]) == TG_FAULT_SERVER,
+              "FAULT_TEXT necesita una frase por cada TgFault salvo NONE");
+
+// Aviso del pie, ya recortado, y si con el cabe "limpiar hechas". Si no
+// caben los dos, se oculta el boton mientras dure el fallo. Lo usan el
+// pintado y el tactil, para que un boton oculto no responda.
+static bool footerFault(String &label, bool &clearShown) {
+  clearShown = tasksDoneCount() > 0;
+  TgFault f = telegramFault(FAULT_SHOW_MS);
+  if (f == TG_FAULT_NONE) return false;
+
+  const lgfx::IFont *prev = cv.getFont();
+  cv.setFont(&fMeta.font);
+  const char *text = T(FAULT_TEXT[f - 1]);
+  int left = MARGIN;
+  if (clearShown) {
+    int x, y, w, h;
+    clearBtnRect(x, y, w, h);
+    left = x + w + 8;
+  }
+  int room = FAULT_RIGHT - FAULT_DOT_GAP - left;
+  if (clearShown && trackedWidth(text, 2) > room) {
+    clearShown = false;
+    room = FAULT_RIGHT - FAULT_DOT_GAP - MARGIN;
+  }
+  if (room > FAULT_MAX_W) room = FAULT_MAX_W;
+  label = fitName("%s", text, room, 2);
+  cv.setFont(prev);
+  return true;
 }
 
 // Sol y luna trazados con primitivas: no hay glifos para esto en la fuente y
@@ -334,9 +542,11 @@ static void drawFooter() {
   cv.fillRect(0, fy, SCR_W, FOOTER_H, P.paperSoft);
   cv.drawFastHLine(0, fy, SCR_W, P.rule);
 
-  if (tasksDoneCount() > 0) {
-    int x, y, w, h;
-    clearBtnRect(x, y, w, h);
+  String fault;
+  bool clearShown;
+  bool faulty = footerFault(fault, clearShown);
+
+  if (clearShown) {
     cv.setFont(&fMeta.font);
     cv.setTextColor(P.inkDim);
     cv.setTextDatum(top_left);
@@ -354,7 +564,17 @@ static void drawFooter() {
   else if (telegramState() == TG_OK)      dot = P.accent;
   else if (telegramState() == TG_ERROR)   dot = P.clay;
   else                                    dot = P.inkMute;
-  cv.fillSmoothCircle(SCR_W / 2, fy + FOOTER_H / 2, 3, dot);
+
+  // Con un fallo largo, el punto deja el centro y encabeza el aviso.
+  int dotX = SCR_W / 2;
+  if (faulty) {
+    cv.setFont(&fMeta.font);
+    cv.setTextColor(P.clay);
+    int x = FAULT_RIGHT - trackedWidth(fault, 2);
+    drawTracked(fault, x, fy + 12, 2);
+    dotX = x - FAULT_DOT_GAP + 3;
+  }
+  cv.fillSmoothCircle(dotX, fy + FOOTER_H / 2, 3, dot);
 }
 
 // --- Pantallas --------------------------------------------------------------
@@ -369,12 +589,12 @@ static void drawList() {
 
   // Solo se dibujan los renglones que asoman, recortando al area de la lista
   // para que no invadan cabecera ni pie al desplazarse.
-  cv.setClipRect(0, LIST_TOP, SCR_W, LIST_H);
+  cv.setClipRect(0, LIST_TOP, SCR_W, LIST_AREA_H);
   int first = (int)(s_scroll / rowPitch());
   if (first < 0) first = 0;
   for (int i = first; i < n; i++) {
     int y = LIST_TOP + i * rowPitch() - (int)s_scroll;
-    if (y > LIST_TOP + LIST_H) break;
+    if (y > LIST_TOP + LIST_AREA_H) break;
     Task t;
     if (!tasksGet(i, t)) break;
     drawTaskRow(t, y, s_pressedId == t.id);
@@ -422,7 +642,17 @@ static void drawPortal() {
 
   cv.setFont(&fMeta.font);
   cv.setTextColor(P.inkMute);
-  drawTracked(T(S_FIRST_RUN), MARGIN, 56, 2);
+  // Con una red guardada el portal no es la primera puesta en marcha: casi
+  // siempre es que se fue la luz y el router aun no responde. Se dice eso, y
+  // abajo a la izquierda, que hace mientras tanto.
+  bool known = settingsHasWifi();
+  if (known) {
+    String name = printable(settingsGet().ssid.c_str(), fMeta);
+    StrId head = s_link == UI_LINK_UP ? S_PORTAL_LINK_UP : S_PORTAL_NO_LINK;
+    drawTracked(fitName(T(head), name, SCR_W - 2 * MARGIN, 2), MARGIN, 56, 2);
+  } else {
+    drawTracked(T(S_FIRST_RUN), MARGIN, 56, 2);
+  }
 
   cv.setFont(&fBodyM.font);
   cv.setTextColor(P.ink);
@@ -447,6 +677,8 @@ static void drawPortal() {
   drawTracked(T(S_PASSWORD), MARGIN, 220, 2);
   cv.setFont(&fBodyM.font);
   cv.setTextColor(P.accent);
+  // Son 10 letras al azar: la peor ("mmmmmmmmmm") mide 180 px y hasta la
+  // tarjeta del QR quedan 200.
   cv.drawString(pass, MARGIN + 62, 216);
 
   // El QR va siempre sobre blanco: necesita ese contraste aunque el tema
@@ -464,6 +696,22 @@ static void drawPortal() {
   int w = trackedWidth(hint, 2);
   drawTracked(hint, qrX + qrSize / 2 - w / 2, 262, 2);
   cv.setTextDatum(top_left);
+
+  // A la altura de la pista del QR y sin pasar de su tarjeta.
+  if (known) {
+    StrId note = s_link == UI_LINK_UP     ? S_PORTAL_BACK
+               : s_link == UI_LINK_PAUSED ? S_PORTAL_PAUSED
+                                          : S_PORTAL_TRYING;
+    cv.setTextColor(s_link == UI_LINK_UP ? P.accent : P.inkMute);
+    drawTracked(fitName("%s", T(note), qrX - 10 - MARGIN - 12, 2), MARGIN, 262, 2);
+  }
+
+  // La version, abajo a la izquierda y apagada: es para quien la busque, no
+  // para la puesta en marcha. fMeta mide 18 px de alto: deja 8 px bajo el
+  // aviso de la linea 262 y 14 hasta el borde, y a esa altura ya no queda
+  // nada a la derecha con lo que pueda chocar.
+  cv.setTextColor(P.inkMute);
+  cv.drawString("v" PAUTA_VERSION, MARGIN, 288);
 }
 
 static void drawConnecting() {
@@ -477,7 +725,10 @@ static void drawConnecting() {
 
   cv.setFont(&fMeta.font);
   cv.setTextColor(P.inkMute);
-  cv.drawString(s_status, SCR_W / 2, SCR_H / 2 + 52);
+  // Es el nombre de la red, que puede llevar emojis como cualquier texto.
+  if (s_status.length()) {
+    cv.drawString(printable(s_status.c_str(), fMeta), SCR_W / 2, SCR_H / 2 + 52);
+  }
   cv.setTextDatum(top_left);
 
   // Un filete que va y viene, como un renglon escribiendose.
@@ -510,8 +761,11 @@ static bool inLogoZone(int x, int y) {
   return y < HEADER_H && x < SCR_W / 2;
 }
 
+// El borde de abajo va excluido: LIST_TOP + LIST_AREA_H ya es la primera
+// fila del pie, y un toque ahi tiene que ir a sus botones y no al renglon
+// que asoma cortado por encima.
 static uint16_t taskAt(int x, int y) {
-  if (y < LIST_TOP || y > LIST_TOP + LIST_H) return 0;
+  if (y < LIST_TOP || y >= LIST_TOP + LIST_AREA_H) return 0;
   int rel = y - LIST_TOP + (int)s_scroll;
   int idx = rel / rowPitch();
   Task t;
@@ -535,16 +789,26 @@ static void toggleTask(uint16_t id) {
   }
 }
 
-static void onTap(int x, int y) {
+// pressedId es el renglon que se ilumino al apoyar el dedo. Se tacha ese y no
+// el que haya ahora bajo el punto: si mientras tanto llega un /del o un
+// /clear por Telegram, los renglones se corren y el mismo punto cae sobre
+// otra tarea. Si la iluminada ya no existe, tasksToggle no la encuentra y no
+// se toca nada.
+static void onTap(int x, int y, uint16_t pressedId) {
   if (s_screen != UI_LIST) return;
 
-  uint16_t id = taskAt(x, y);
-  if (id) { toggleTask(id); s_needsRedraw = true; return; }
+  if (pressedId) { toggleTask(pressedId); s_needsRedraw = true; return; }
 
+  // Fuera del pie solo queda la lista, y sin renglon iluminado (el hueco bajo
+  // la ultima tarea) no se hace nada, aunque entretanto haya aparecido una
+  // tarea debajo del dedo.
   if (y >= SCR_H - FOOTER_H) {
     int bx, by, bw, bh;
     clearBtnRect(bx, by, bw, bh);
-    if (tasksDoneCount() > 0 && x >= bx && x <= bx + bw) {
+    String fault;
+    bool clearShown;
+    footerFault(fault, clearShown);
+    if (clearShown && x >= bx && x <= bx + bw) {
       int n = tasksClearDone();
       if (n) {
         char msg[96];
@@ -577,6 +841,9 @@ static void doReset() {
   cv.pushSprite(0, 0);
   delay(1400);
   settingsClear();
+  // La lista se queda, y con ella lo que hubiera llegado en el ultimo segundo
+  // y medio, que el guardado diferido aun no habia escrito.
+  tasksFlushNow();
   ESP.restart();
 }
 
@@ -615,6 +882,7 @@ static void drawResetOverlay(uint32_t held) {
 static void handleTouch() {
   lgfx::touch_point_t tp;
   bool down = tft.getTouch(&tp);
+  if (down) s_lastTouchMs = millis();
 
   if (down && !s_touchDown) {
     s_touchDown = true;
@@ -624,9 +892,17 @@ static void handleTouch() {
     s_lastY = tp.y;
     s_lastMoveMs = millis();
     s_scrollVel = 0;                     // tocar detiene la inercia en curso
+    // Si la lista se esta moviendo sola, o acaba de pararse, el renglon bajo
+    // el dedo no es el que se veia al apuntar: el toque solo la detiene. Sin
+    // renglon iluminado onTap no tacha nada, y los botones del pie, que no se
+    // mueven, siguen respondiendo.
+    bool justMoved = s_revealing ||
+                     (s_scrollAnimStart &&
+                      millis() - s_scrollAnimStart < REVEAL_MS + REVEAL_GRACE_MS);
+    s_revealing = false;                 // y el desplazamiento automatico
     s_holding = inLogoZone(tp.x, tp.y);
     s_holdStart = millis();
-    if (s_screen == UI_LIST) {
+    if (s_screen == UI_LIST && !justMoved) {
       s_pressedId = taskAt(tp.x, tp.y);
       if (s_pressedId) s_needsRedraw = true;
     }
@@ -663,6 +939,7 @@ static void handleTouch() {
   } else if (!down && s_touchDown) {
     s_touchDown = false;
     uint32_t held = millis() - s_touchStart;
+    uint16_t pressedId = s_pressedId;
     if (s_holding) { s_holding = false; s_needsRedraw = true; }
     if (s_pressedId) { s_pressedId = 0; s_needsRedraw = true; }
     if (s_dragging) {
@@ -670,9 +947,9 @@ static void handleTouch() {
       s_lastCoastMs = millis();
       // Un dedo parado justo antes de soltar no debe lanzar la lista.
       if (millis() - s_lastMoveMs > 90) s_scrollVel = 0;
-    } else if (held < 900 && millis() > s_lockUntil) {
-      s_lockUntil = millis() + 180;
-      onTap(s_touchX, s_touchY);
+    } else if (held < 900 && millis() - s_lastTapMs > 180) {
+      s_lastTapMs = millis();
+      onTap(s_touchX, s_touchY, pressedId);
     }
   }
 }
@@ -695,6 +972,34 @@ static void stepInertia() {
   float before = s_scroll;
   clampScroll();
   if (before != s_scroll) s_scrollVel = 0;   // ha topado con un extremo
+}
+
+// Baja la lista hasta que el renglon idx, el de una tarea recien llegada, se
+// vea entero. Las nuevas van siempre al final, asi que nunca hace falta
+// subir. Se cuenta el difuminado de abajo: un renglon medio fundido con el
+// papel no parece haber llegado. La lista no se reordena, para que los
+// numeros de /done N sigan siendo los de /list.
+static void revealRow(int idx) {
+  if (s_screen != UI_LIST || s_touchDown || coasting()) return;
+  if (s_lastTouchMs && millis() - s_lastTouchMs < TOUCH_QUIET_MS) return;
+  float to = (float)((idx + 1) * rowPitch() - LIST_AREA_H + EDGE_FADE_H);
+  float m = maxScroll();
+  if (to > m) to = m;
+  if (to <= s_scroll + 0.5f) return;   // ya se ve entera
+  s_scrollFrom = s_scroll;
+  s_scrollTo = to;
+  s_scrollAnimStart = millis();
+  s_revealing = true;
+}
+
+// Como la inercia, avanza segun el tiempo de verdad y una vez por fotograma.
+static void stepReveal() {
+  float t = (float)(millis() - s_scrollAnimStart) / REVEAL_MS;
+  s_scroll = s_scrollFrom + (s_scrollTo - s_scrollFrom) * easeOut(t);
+  // Un /del a mitad de camino acorta la lista y el destino puede quedar
+  // fuera.
+  clampScroll();
+  if (t >= 1.0f) s_revealing = false;
 }
 
 // --- API --------------------------------------------------------------------
@@ -732,6 +1037,12 @@ void uiSetStatusLine(const String &line) {
   s_needsRedraw = true;
 }
 
+void uiSetPortalLink(UiLink link) {
+  if (s_link == link) return;
+  s_link = link;
+  s_needsRedraw = true;
+}
+
 void uiLoop() {
   handleTouch();
 
@@ -739,17 +1050,26 @@ void uiLoop() {
   if (rev != s_lastRevision) {
     s_lastRevision = rev;
     // Si ha aparecido una tarea con id mayor que el ultimo visto, es nueva:
-    // se anima su entrada.
+    // se anima su entrada y se lleva a la vista. La primera pasada es la
+    // lista guardada que se acaba de cargar y en ella no hay nada nuevo:
+    // antes la ultima tarea entraba animada como si acabara de llegar.
+    // De un mensaje con varias lineas se busca la ultima.
+    bool boot = !s_seenInit;
+    s_seenInit = true;
     int n = tasksCount();
+    int newest = -1;
     Task t;
     for (int i = 0; i < n; i++) {
       if (tasksGet(i, t) && t.id > s_maxSeenId) {
         s_maxSeenId = t.id;
+        if (boot) continue;
         s_enterId = t.id;
         s_enterStart = millis();
+        newest = i;
       }
     }
     clampScroll();
+    if (newest >= 0) revealRow(newest);
     s_needsRedraw = true;
   }
 
@@ -757,6 +1077,7 @@ void uiLoop() {
                    (s_enterId && millis() - s_enterStart < ENTER_MS);
   bool waiting   = (s_screen == UI_BOOT || s_screen == UI_CONNECTING);
   bool moving    = coasting();
+  bool revealing = s_revealing;
   bool counting  = s_holding && millis() - s_holdStart >= HOLD_WARN_MS;
 
   // El reloj obliga a repintar al menos una vez por segundo.
@@ -767,10 +1088,11 @@ void uiLoop() {
   }
 
   static uint32_t lastFrame = 0;
-  if (s_needsRedraw || animating || waiting || moving || counting) {
+  if (s_needsRedraw || animating || waiting || moving || revealing || counting) {
     if (millis() - lastFrame >= 33) {        // ~30 fps como techo
       lastFrame = millis();
       if (moving) stepInertia();             // un paso por fotograma
+      if (revealing) stepReveal();
       s_needsRedraw = false;
       render();
       if (s_animId  && millis() - s_animStart  >= ANIM_MS)  s_animId = 0;

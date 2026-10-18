@@ -1,13 +1,24 @@
-# Cadena de herramientas: se instala con las instrucciones de docs/desarrollo.md
+# Cadena de herramientas: se instala con las instrucciones de docs/instalacion.md
 tools/adata/
-tools/adata2/
 tools/auser/
-tools/auser2/
-tools/libs119/
 tools/arduino-cli
+# Configuración local de arduino-cli, si alguien la crea: no se comparte
 tools/arduino-cli.yaml
 .venv/
 
+# Lo que deja 'arduino-cli compile --export-binaries' junto a cada sketch
+firmware/*/build/
+
 # Volcados de depuración y capturas en crudo: pueden contener credenciales
+# (una copia de la NVS lleva en claro la clave del WiFi y el token del bot)
 dump/
+*.bin
+*.elf
+*.map
+*.log
+nvs*.csv
+# Excepción para binarios que algún día se publiquen a propósito
+!releases/*.bin
+
+# Fuentes intermedias de tools/mkfont.py: lo que se compila son los .h
 *.vlw
