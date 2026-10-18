@@ -83,6 +83,12 @@ void setup() {
 }
 
 void loop() {
+  // Un tick de descanso por vuelta (CONFIG_FREERTOS_HZ=1000). Sin el, el
+  // nucleo 1 sondeaba el tactil por I2C sin parar y la tarea de reposo no
+  // llegaba a correr. Va el primero y sin condiciones para cubrir tambien el
+  // portal, que sale antes; el tope de 30 fps y el guardado diferido no notan
+  // este milisegundo.
+  delay(1);
   uiLoop();
   tasksFlushIfDirty();
 
