@@ -132,7 +132,7 @@ static String fit(const String &text, int maxW) {
 static int   rowPitch()  { return ROW_H; }
 static int   contentH()  { return tasksCount() * rowPitch(); }
 static float maxScroll() {
-  int over = contentH() - LIST_H;
+  int over = contentH() - LIST_AREA_H;
   return over > 0 ? (float)over : 0.0f;
 }
 static void clampScroll() {
@@ -253,7 +253,7 @@ static void drawTaskRow(const Task &t, int y, bool pressed) {
 }
 
 static void drawEmptyState() {
-  int cy = LIST_TOP + LIST_H / 2;
+  int cy = LIST_TOP + LIST_AREA_H / 2;
   drawPautaMark(cv, SCR_W / 2 - 22, cy - 42, 44, 1.0f, P.rule, P.accent);
 
   cv.setTextDatum(middle_center);
@@ -282,7 +282,7 @@ static void drawEdgeFade() {
   if (s_scroll < maxScroll() - 1) {
     for (int i = 0; i < H; i++) {
       uint8_t a = (uint8_t)(255 * (H - i) / H);
-      cv.fillRectAlpha(0, LIST_TOP + LIST_H - 1 - i, SCR_W, 1, a, P.paper);
+      cv.fillRectAlpha(0, LIST_TOP + LIST_AREA_H - 1 - i, SCR_W, 1, a, P.paper);
     }
   }
 }
@@ -292,7 +292,7 @@ static void drawScrollHint() {
   float m = maxScroll();
   if (m <= 0) return;
   const int x = SCR_W - 11;
-  int trackH = LIST_H - 12;
+  int trackH = LIST_AREA_H - 12;
   int thumbH = (int)((float)trackH * trackH / contentH());
   if (thumbH < 24) thumbH = 24;
   int thumbY = LIST_TOP + 6 + (int)((trackH - thumbH) * (s_scroll / m));
@@ -369,12 +369,12 @@ static void drawList() {
 
   // Solo se dibujan los renglones que asoman, recortando al area de la lista
   // para que no invadan cabecera ni pie al desplazarse.
-  cv.setClipRect(0, LIST_TOP, SCR_W, LIST_H);
+  cv.setClipRect(0, LIST_TOP, SCR_W, LIST_AREA_H);
   int first = (int)(s_scroll / rowPitch());
   if (first < 0) first = 0;
   for (int i = first; i < n; i++) {
     int y = LIST_TOP + i * rowPitch() - (int)s_scroll;
-    if (y > LIST_TOP + LIST_H) break;
+    if (y > LIST_TOP + LIST_AREA_H) break;
     Task t;
     if (!tasksGet(i, t)) break;
     drawTaskRow(t, y, s_pressedId == t.id);
@@ -511,7 +511,7 @@ static bool inLogoZone(int x, int y) {
 }
 
 static uint16_t taskAt(int x, int y) {
-  if (y < LIST_TOP || y > LIST_TOP + LIST_H) return 0;
+  if (y < LIST_TOP || y > LIST_TOP + LIST_AREA_H) return 0;
   int rel = y - LIST_TOP + (int)s_scroll;
   int idx = rel / rowPitch();
   Task t;
