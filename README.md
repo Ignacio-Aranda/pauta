@@ -24,8 +24,8 @@ como una libreta que se actualiza sola.
 </p>
 
 Le mandas un mensaje al bot y se apunta. Si mandas varias líneas, apunta una
-tarea por línea. En la pantalla tocas un renglón para tacharlo, y el bot te lo
-confirma.
+tarea por línea. Si una tarea es demasiado larga, la recorta y te avisa. En la
+pantalla tocas un renglón para tacharlo, y el bot te lo confirma.
 
 | En Telegram | |
 |---|---|

@@ -25,8 +25,9 @@ the thing you're meant to follow.
 </p>
 
 Send the bot a message and it gets jotted down. Send several lines and it adds
-one task per line. On the screen you tap a line to cross it off, and the bot
-confirms it back to you.
+one task per line. A task that's too long gets trimmed, and the bot tells you.
+On the screen you tap a line to cross it off, and the bot confirms it back to
+you.
 
 | On Telegram | |
 |---|---|

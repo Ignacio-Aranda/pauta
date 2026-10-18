@@ -1,4 +1,5 @@
 #include "model.h"
+#include "utf8.h"
 #include <Preferences.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
@@ -68,6 +69,10 @@ static void deserialize(const String &blob) {
     String txt = line.substring(t3 + 1);
     strlcpy(t.text, txt.c_str(), MAX_TASK_CHARS);
     if (t.id == 0) continue;
+    // Las versiones anteriores cortaban por bytes y podian guardar media
+    // letra al final. Se arregla aqui, en RAM; el siguiente save() la deja
+    // escrita bien sin tocar el formato.
+    if (utf8Clip(t.text)) Serial.printf("tarea %u: UTF-8 cortado, reparada\n", t.id);
     if (t.id >= s_nextId) s_nextId = t.id + 1;
     s_count++;
   }
@@ -114,7 +119,8 @@ int tasksDoneCount() {
   return n;
 }
 
-uint16_t tasksAdd(const char *text) {
+uint16_t tasksAdd(const char *text, bool *cut) {
+  if (cut) *cut = false;
   if (!text) return 0;
   // Los separadores del formato de guardado no pueden entrar en el texto.
   String clean(text);
@@ -131,6 +137,10 @@ uint16_t tasksAdd(const char *text) {
   t.done    = false;
   t.created = millis() / 1000;
   strlcpy(t.text, clean.c_str(), MAX_TASK_CHARS);
+  // El limite es en bytes: el corte puede caer a mitad de una tilde o de un
+  // emoji, y esa media letra rompia /list y el pintado.
+  utf8Clip(t.text);
+  if (cut) *cut = clean.length() >= MAX_TASK_CHARS;
   s_count++;
   markChanged();
   return t.id;

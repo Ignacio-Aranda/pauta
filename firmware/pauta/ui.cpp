@@ -123,7 +123,11 @@ static String fit(const String &text, int maxW) {
   if (cv.textWidth(text) <= maxW) return text;
   String out = text;
   while (out.length() > 1 && cv.textWidth(out + "…") > maxW) {
-    out.remove(out.length() - 1);
+    // Quita letras enteras: un byte suelto de una tilde dejaria el
+    // decodificador de la fuente a medias y el "…" saldria como basura.
+    size_t n = out.length();
+    while (n > 1 && ((uint8_t)out[n - 1] & 0xC0) == 0x80) n--;
+    out.remove(n - 1);
   }
   out.trim();
   return out + "…";

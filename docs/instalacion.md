@@ -140,6 +140,7 @@ firmware/pauta/
   board.h          pines y configuración del panel
   theme.h/.cpp     paleta, métricas, fuentes y logotipo
   i18n.h/.cpp      traducción de pantalla, bot y portal
+  utf8.h           validar y recortar texto UTF-8 sin partir letras
   model.h/.cpp     la lista: datos, persistencia en NVS, mutex
   settings.h/.cpp  WiFi, token, chat, idioma y tema, en NVS
   portal.h/.cpp    punto de acceso y portal cautivo

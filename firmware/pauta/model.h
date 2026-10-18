@@ -22,7 +22,9 @@ int      tasksPendingCount();
 int      tasksDoneCount();
 
 // Devuelve el id asignado, o 0 si la lista esta llena o el texto es vacio.
-uint16_t tasksAdd(const char *text);
+// Si cut no es nulo, indica si el texto no cabia y se ha recortado (siempre
+// por una letra entera, nunca a mitad de una secuencia UTF-8).
+uint16_t tasksAdd(const char *text, bool *cut = nullptr);
 bool     tasksToggle(uint16_t id, bool &newDoneState);
 bool     tasksSetDone(uint16_t id, bool done);
 bool     tasksRemove(uint16_t id);

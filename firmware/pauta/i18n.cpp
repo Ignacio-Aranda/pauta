@@ -63,6 +63,9 @@ static const char *const STR_ES[] = {
 
   "Guardado", "Conectando a ",
   "Ya puedes cerrar esta página y volver a tu WiFi de siempre.",
+
+  "Apuntada, pero recortada: era demasiado larga.",
+  "Apuntadas %d tareas. Alguna era demasiado larga y la he recortado.",
 };
 
 static const char *const STR_EN[] = {
@@ -96,6 +99,9 @@ static const char *const STR_EN[] = {
 
   "Saved", "Connecting to ",
   "You can close this page and go back to your usual WiFi.",
+
+  "Jotted down, but trimmed: it was too long.",
+  "Jotted down %d tasks. One or more were too long and got trimmed.",
 };
 
 static_assert(sizeof(STR_ES) / sizeof(STR_ES[0]) == STR_COUNT,

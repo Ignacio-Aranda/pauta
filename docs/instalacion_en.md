@@ -139,6 +139,7 @@ firmware/pauta/
   board.h          pins and panel configuration
   theme.h/.cpp     palette, metrics, fonts and logo
   i18n.h/.cpp      translations for screen, bot and portal
+  utf8.h           validating and trimming UTF-8 without splitting letters
   model.h/.cpp     the list: data, NVS persistence, mutex
   settings.h/.cpp  WiFi, token, chat, language and theme, in NVS
   portal.h/.cpp    access point and captive portal

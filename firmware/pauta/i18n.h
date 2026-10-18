@@ -31,6 +31,8 @@ enum StrId : uint16_t {
   S_SCREEN_DONE, S_SCREEN_REOPENED, S_SCREEN_CLEARED,
   // Portal web, pagina de confirmacion
   S_WEB_SAVED, S_WEB_CONNECTING_TO, S_WEB_CLOSE_HINT,
+  // Bot: tarea demasiado larga
+  S_BOT_ADDED_CUT, S_BOT_ADDED_MANY_CUT,
   STR_COUNT
 };
 

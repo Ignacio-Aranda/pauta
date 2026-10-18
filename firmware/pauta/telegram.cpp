@@ -3,6 +3,7 @@
 #include "model.h"
 #include "telegram_ca.h"
 #include "i18n.h"
+#include "utf8.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -50,13 +51,33 @@ static bool apiPost(const String &method, const String &jsonBody, JsonDocument *
     if (err) { s_lastError = String("json: ") + err.c_str(); ok = false; }
   }
   http.end();
+  // Sin esto, un envio rechazado (un 400 de Telegram, por ejemplo) no
+  // dejaba ningun rastro en la consola serie.
+  if (!ok) Serial.printf("telegram: %s\n", s_lastError.c_str());
   return ok;
+}
+
+// Telegram rechaza con un 400 el mensaje entero si lleva UTF-8 mal formado:
+// una sola tarea rota dejaba /list sin respuesta. Es la red de seguridad por
+// si algo se cuela pese al recorte del modelo: cada byte que no forma una
+// secuencia valida se cambia por '?'.
+static String utf8Safe(const String &in) {
+  const char *p = in.c_str();
+  size_t n = in.length();
+  String out;
+  out.reserve(n);
+  for (size_t i = 0; i < n; ) {
+    size_t len = utf8SeqLen(p + i, n - i);
+    if (len) { out.concat(p + i, len); i += len; }
+    else     { out += '?'; i++; }
+  }
+  return out;
 }
 
 static bool sendMessage(int64_t chatId, const String &text) {
   JsonDocument doc;
   doc["chat_id"] = chatId;
-  doc["text"]    = text;
+  doc["text"]    = utf8Safe(text);
   doc["disable_notification"] = true;
   String body;
   serializeJson(doc, body);
@@ -67,6 +88,7 @@ void telegramNotify(const String &text) {
   if (!s_outQueue) return;
   OutMsg m;
   strlcpy(m.text, text.c_str(), sizeof(m.text));
+  utf8Clip(m.text);                    // el corte no parte una letra
   xQueueSend(s_outQueue, &m, 0);
 }
 
@@ -147,14 +169,16 @@ static void handleText(int64_t chatId, const String &text) {
   if (text.startsWith("/")) { handleCommand(chatId, text); return; }
 
   // Varias lineas en un mensaje = una tarea por linea.
-  int added = 0, rejected = 0;
+  int added = 0, rejected = 0, trimmed = 0;
   int start = 0;
   while (start <= (int)text.length()) {
     int nl = text.indexOf('\n', start);
     String line = (nl < 0) ? text.substring(start) : text.substring(start, nl);
     line.trim();
     if (line.length()) {
-      if (tasksAdd(line.c_str())) added++; else rejected++;
+      bool cut = false;
+      if (tasksAdd(line.c_str(), &cut)) { added++; if (cut) trimmed++; }
+      else rejected++;
     }
     if (nl < 0) break;
     start = nl + 1;
@@ -166,10 +190,12 @@ static void handleText(int64_t chatId, const String &text) {
     snprintf(msg, sizeof(msg), T(S_BOT_FULL), MAX_TASKS);
     sendMessage(chatId, msg);
   } else if (added == 1) {
-    sendMessage(chatId, T(S_BOT_ADDED_ONE));
+    // El aviso de recorte no promete un numero de letras: el limite es en
+    // bytes y una tilde o un emoji ocupan mas de uno.
+    sendMessage(chatId, T(trimmed ? S_BOT_ADDED_CUT : S_BOT_ADDED_ONE));
   } else {
-    char msg[64];
-    snprintf(msg, sizeof(msg), T(S_BOT_ADDED_MANY), added);
+    char msg[128];
+    snprintf(msg, sizeof(msg), T(trimmed ? S_BOT_ADDED_MANY_CUT : S_BOT_ADDED_MANY), added);
     sendMessage(chatId, msg);
   }
 }
