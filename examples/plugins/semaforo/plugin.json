@@ -3,7 +3,7 @@
   "id": "semaforo",
   "version": "1.0.0",
   "kind": "recipe",
-  "min_firmware": "1.6.0",
+  "min_firmware": "1.5.0",
   "name": {"es": "Semáforo", "en": "Status lights"},
   "summary": {
     "es": "Vigila tus webs y servicios: código, tiempo de respuesta, certificado y páginas de estado. Avisa si fallan.",

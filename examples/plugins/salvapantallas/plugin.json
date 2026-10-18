@@ -3,7 +3,7 @@
   "id": "salvapantallas",
   "version": "1.0.0",
   "kind": "recipe",
-  "min_firmware": "1.7.0",
+  "min_firmware": "1.6.0",
   "name": {"es": "Salvapantallas", "en": "Screensaver"},
   "summary": {"es": "Tus fotos en la pantalla cuando no la usas. Mándalas al bot o cópialas a la microSD.",
               "en": "Your photos on screen while you are away. Send them to the bot or copy them to the microSD."},

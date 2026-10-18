@@ -3,7 +3,7 @@
   "id": "atajos",
   "version": "1.0.0",
   "kind": "recipe",
-  "min_firmware": "1.6.0",
+  "min_firmware": "1.5.0",
   "name": {"es": "Atajos", "en": "Shortcuts"},
   "summary": {
     "es": "Botonera en pantalla que manda atajos de teclado, teclas multimedia y textos a tu ordenador por el USB.",

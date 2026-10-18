@@ -3,7 +3,7 @@
   "id": "nicscom",
   "version": "1.0.0",
   "kind": "native",
-  "min_firmware": "1.5.0",
+  "min_firmware": "1.4.0",
   "name": {"es": "nicscom", "en": "nicscom"},
   "summary": {
     "es": "Pauta como un nodo más de nicscom: ve los avisos en grande, avisa con un toque y programa avisos por hora y día.",
