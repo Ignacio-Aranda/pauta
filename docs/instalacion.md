@@ -278,6 +278,10 @@ Olvida el WiFi, el token, el idioma, el tema y el chat vinculado, pero
 tendrás que escribirle otra vez a tu bot: la pantalla se vincula con el
 primer mensaje que le llegue, no hace falta que sea `/start`.
 
+Las órdenes de esta sección se ejecutan desde la raíz del proyecto, como las
+del paso 3. Cada bloque lleva lo que necesita, así que valen también en una
+terminal nueva, semanas después.
+
 ### Copia de seguridad antes de actualizar
 
 Aunque flashear no toque la NVS, antes de pasar a una versión nueva conviene
@@ -313,9 +317,10 @@ Por el USB nativo, las lecturas grandes a veces se cortan a medias con
 «A fatal error occurred: Packet content transfer stopped». La NVS es pequeña
 y sale bien; si aun así falla, repite la orden.
 
-Para devolverla, con el nombre de tu copia:
+Para devolverla, con la consola serie cerrada y el nombre de tu copia:
 
 ```bash
+ESPTOOL=$(find tools/adata -type f -name esptool | head -1)
 "$ESPTOOL" --port /dev/ttyACM0 write-flash 0x9000 dump/nvs-AAAA-MM-DD.bin
 ```
 
@@ -330,6 +335,8 @@ Para volver a una versión anterior, compila su etiqueta de git. La primera,
 de ahora, que fija las mismas versiones del core y las librerías:
 
 ```bash
+export ARDUINO_DIRECTORIES_DATA=$PWD/tools/adata
+export ARDUINO_DIRECTORIES_USER=$PWD/tools/auser
 mkdir -p /tmp/pauta-v1.0.0
 git archive v1.0.0 firmware/pauta | tar -x -C /tmp/pauta-v1.0.0
 cp firmware/pauta/sketch.yaml /tmp/pauta-v1.0.0/firmware/pauta/
@@ -351,13 +358,17 @@ se reutiliza ese trozo, y además deja la lista. Lo definitivo es borrar la
 flash entera y volver a flashear:
 
 ```bash
+export ARDUINO_DIRECTORIES_DATA=$PWD/tools/adata
+export ARDUINO_DIRECTORIES_USER=$PWD/tools/auser
+tools/arduino-cli compile firmware/pauta
 ESPTOOL=$(find tools/adata -type f -name esptool | head -1)
 "$ESPTOOL" --port /dev/ttyACM0 erase-flash
 tools/arduino-cli upload -p /dev/ttyACM0 firmware/pauta
 ```
 
-(Con `--profile v2` en la V2.0, o con el `--fqbn` que uses, como en el
-paso 3.)
+Se compila antes de borrar: si la compilación falla, la placa no se queda
+vacía. (Con `--profile v2` en la V2.0, o con el `--fqbn` que uses, en
+`compile` y en `upload`, como en el paso 3.)
 
 Arranca como recién sacada de la caja, en la primera puesta en marcha.
 

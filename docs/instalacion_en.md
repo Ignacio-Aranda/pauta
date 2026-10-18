@@ -285,6 +285,10 @@ reboots into the portal, and once you've set it up you'll need to write to
 your bot again: the screen pairs with the first message it gets, it doesn't
 have to be `/start`.
 
+The commands in this section are run from the project root, like those in
+step 3. Each block carries what it needs, so they also work in a fresh
+terminal, weeks later.
+
 ### Backing up before an update
 
 Even though flashing leaves NVS alone, it's worth saving it before moving to
@@ -320,9 +324,10 @@ Over the native USB port, large reads sometimes get cut off halfway with
 "A fatal error occurred: Packet content transfer stopped". NVS is small and
 reads fine; if it fails anyway, run the command again.
 
-To put it back, with your copy's name:
+To put it back, with the serial console closed and your copy's name:
 
 ```bash
+ESPTOOL=$(find tools/adata -type f -name esptool | head -1)
 "$ESPTOOL" --port /dev/ttyACM0 write-flash 0x9000 dump/nvs-YYYY-MM-DD.bin
 ```
 
@@ -337,6 +342,8 @@ didn't have `sketch.yaml` yet, so it's extracted on the side and given the
 current one, which pins the same core and library versions:
 
 ```bash
+export ARDUINO_DIRECTORIES_DATA=$PWD/tools/adata
+export ARDUINO_DIRECTORIES_USER=$PWD/tools/auser
 mkdir -p /tmp/pauta-v1.0.0
 git archive v1.0.0 firmware/pauta | tar -x -C /tmp/pauta-v1.0.0
 cp firmware/pauta/sketch.yaml /tmp/pauta-v1.0.0/firmware/pauta/
@@ -358,13 +365,17 @@ reused, and it keeps the list too. The sure way is to erase the whole flash
 and reflash it:
 
 ```bash
+export ARDUINO_DIRECTORIES_DATA=$PWD/tools/adata
+export ARDUINO_DIRECTORIES_USER=$PWD/tools/auser
+tools/arduino-cli compile firmware/pauta
 ESPTOOL=$(find tools/adata -type f -name esptool | head -1)
 "$ESPTOOL" --port /dev/ttyACM0 erase-flash
 tools/arduino-cli upload -p /dev/ttyACM0 firmware/pauta
 ```
 
-(With `--profile v2` on V2.0, or with whatever `--fqbn` you use, as in
-step 3.)
+It's built before erasing, so if the build fails the board isn't left
+empty. (With `--profile v2` on V2.0, or with whatever `--fqbn` you use, on
+both `compile` and `upload`, as in step 3.)
 
 It boots as if fresh out of the box, into first-time setup.
 
