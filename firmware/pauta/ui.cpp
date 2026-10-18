@@ -38,7 +38,11 @@ static int      s_touchX = 0, s_touchY = 0;
 static int      s_lastY = 0;
 static bool     s_dragging = false;
 static uint16_t s_pressedId = 0;
-static uint32_t s_lockUntil = 0;
+// Se guarda cuando fue el ultimo toque y no hasta cuando dura el bloqueo: a
+// los 49 dias millis() da la vuelta a cero, y un "hasta" fijado antes de la
+// vuelta queda muy por encima, con la pantalla sorda hasta que millis() lo
+// alcance otra vez, semanas despues. La resta sin signo no tiene ese problema.
+static uint32_t s_lastTapMs = 0;
 
 // --- Reset por pulsacion larga sobre el logotipo ---------------------------
 // Mantener el dedo sobre el logo borra la configuracion y devuelve la placa
@@ -736,8 +740,8 @@ static void handleTouch() {
       s_lastCoastMs = millis();
       // Un dedo parado justo antes de soltar no debe lanzar la lista.
       if (millis() - s_lastMoveMs > 90) s_scrollVel = 0;
-    } else if (held < 900 && millis() > s_lockUntil) {
-      s_lockUntil = millis() + 180;
+    } else if (held < 900 && millis() - s_lastTapMs > 180) {
+      s_lastTapMs = millis();
       onTap(s_touchX, s_touchY);
     }
   }
