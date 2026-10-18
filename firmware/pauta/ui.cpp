@@ -163,10 +163,45 @@ static int trackedWidth(const String &text, int tracking) {
   return cv.textWidth(up) + tracking * (n - 1);
 }
 
+// Sustituto para un codigo que la fuente no trae: rayas y guiones como '-',
+// las latinas con tilde, cedilla o trazo como su letra base y las que se
+// escriben con dos letras (ß, æ, œ...) como esas dos. Quitarlas sin mas
+// cambiaba el sentido: "2–3 kg" salia "23 kg" y "Plaça", "Plaa". Solo se
+// llama cuando falta el glifo, asi que las que si estan (á, ñ, ü...) no se
+// tocan y regenerar las fuentes con mas letras basta para que salgan tal cual.
+// Devuelve false si no hay sustituto y el codigo se quita.
+static bool glyphFallback(uint32_t cp, String &out) {
+  if ((cp >= 0x2010 && cp <= 0x2013) || cp == 0x2212) { out += '-'; return true; }
+  if (cp == 0x2015) { out += "—"; return true; }
+  static const struct { uint16_t cp; char two[3]; } PAIRS[] = {
+    {0xC6, "Ae"}, {0xE6, "ae"}, {0x152, "Oe"}, {0x153, "oe"}, {0xDF, "ss"},
+    {0xDE, "Th"}, {0xFE, "th"}, {0x132, "IJ"}, {0x133, "ij"},
+  };
+  for (const auto &p : PAIRS) {
+    if (p.cp == cp) { out += p.two; return true; }
+  }
+  // Una letra por codigo de Latin-1 y Latin Extended-A ('_' = sin sustituto).
+  static const char LAT[] =
+    "AAAAAA_CEEEEIIIIDNOOOOO_OUUUUY__"   // U+00C0
+    "aaaaaa_ceeeeiiiidnooooo_ouuuuy_y"   // U+00E0
+    "AaAaAaCcCcCcCcDdDdEeEeEeEeEeGgGg"   // U+0100
+    "GgGgHhHhIiIiIiIiIi__JjKkkLlLlLlL"   // U+0120
+    "lLlNnNnNnnNnOoOoOo__RrRrRrSsSsSs"   // U+0140
+    "SsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzs";  // U+0160
+  static_assert(sizeof(LAT) == 0x180 - 0xC0 + 1,
+                "una letra por codigo de U+00C0 a U+017F");
+  if (cp >= 0xC0 && cp < 0x180 && LAT[cp - 0xC0] != '_') {
+    out += LAT[cp - 0xC0];
+    return true;
+  }
+  return false;
+}
+
 // Lo que de verdad se puede pintar de un texto. Las fuentes solo traen ASCII
 // y unas pocas letras y signos (CHARS en tools/mkfont.py): un emoji o un
-// simbolo que no tienen salia como un rectangulo. Solo cambia lo que se
-// pinta; el texto guardado y lo que ve Telegram siguen intactos.
+// simbolo que no tienen salia como un rectangulo. Lo que no esta se sustituye
+// si se puede (glyphFallback) y si no se quita. Solo cambia lo que se pinta;
+// el texto guardado y lo que ve Telegram siguen intactos.
 static String printable(const char *s, const SmoothFont &f) {
   size_t n = strlen(s);
   String out;
@@ -192,7 +227,10 @@ static String printable(const char *s, const SmoothFont &f) {
     // ZWJ y el keycap solo sirven para componerlos.
     if (cp > 0xFFFF || cp == 0x200D || cp == 0x20E3) continue;
     uint16_t idx;
-    if (f.font.gCount && !f.font.getUnicodeIndex((uint16_t)cp, &idx)) continue;
+    if (f.font.gCount && !f.font.getUnicodeIndex((uint16_t)cp, &idx)) {
+      glyphFallback(cp, out);
+      continue;
+    }
     // Lo quitado deja a veces dos espacios juntos o uno al principio.
     if (cp == ' ' && (out.isEmpty() || out[out.length() - 1] == ' ')) continue;
     out.concat(seq, len);
