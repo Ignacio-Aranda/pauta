@@ -159,6 +159,8 @@ whole flash and reflash it; see the
 |---|---|
 | [Hardware](docs/hardware_en.md) | The board, the pins, and which revision you have |
 | [Installing](docs/instalacion_en.md) | Building, flashing and customising |
+| [Plugins](docs/plugins_en.md) | The plugin standard in short: native plugins, recipes and the Mini App (draft) |
+| [Plugin reference](docs/plugins-referencia_en.md) | The full specification of the standard, with every limit and rule |
 | [Changelog](CHANGELOG_en.md) | What changes in each version |
 
 ## License
