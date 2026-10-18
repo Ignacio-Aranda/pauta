@@ -232,7 +232,7 @@ El punto del pie dice cómo va la conexión con Telegram:
 | Síntoma | Causa probable | Qué hacer |
 |---|---|---|
 | La pantalla no pinta nada, ni basura. | Los pines de `board.h` son los de la otra revisión. | Comprueba tu revisión y los tres pines: [hardware.md](hardware.md#ajustar-el-firmware-a-tu-revisión). |
-| La pantalla no pinta o el firmware se queda sin memoria, y la consola dice `lienzo 480x320 en PSRAM: FALLO` o `PSRAM init failed`. | La opción PSRAM no es la de tu módulo. | V1.0 con `PSRAM=enabled` (perfil `v1`), V2.0 con `PSRAM=opi` (perfil `v2`). |
+| La pantalla no pinta o el firmware se queda sin memoria, y la consola dice `lienzo 480x320 en PSRAM: FALLO`. | La opción PSRAM no es la de tu módulo. | V1.0 con `PSRAM=enabled` (perfil `v1`), V2.0 con `PSRAM=opi` (perfil `v2`). |
 | La consola no saca nada. | Miras el otro puerto, o el firmware se compiló con el `CDCOnBoot` del otro. | USB nativo: `/dev/ttyACM0` y `CDCOnBoot=cdc`. CP2102: `/dev/ttyUSB0` y `CDCOnBoot=default`. Ver [hardware.md](hardware.md#los-dos-usb). |
 | `upload` no tiene permiso para abrir el puerto. | Tu usuario no está en el grupo `dialout`. | `sudo usermod -aG dialout $USER` y vuelve a entrar en la sesión. |
 | Al encender sale el portal aunque ya estaba configurada. | No encuentra tu WiFi: tras un apagón, el router tarda más en arrancar que ella. | Nada: sigue probando y vuelve sola a la lista. Si has cambiado la red o la contraseña, escanea el QR. Ver [Si no conecta con tu WiFi](#si-no-conecta-con-tu-wifi). |

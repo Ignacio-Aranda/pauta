@@ -79,9 +79,9 @@ With the wrong PSRAM option, the PSRAM doesn't start and there's no room for
 the screen's canvas: the screen doesn't draw, or the firmware runs out of
 memory. The serial console (how to open it is in
 [instalacion_en.md](instalacion_en.md#the-serial-console)) shows
-`lienzo 480x320 en PSRAM: FALLO (PSRAM libre 0 KB)` ("canvas ... FAILED"),
-and depending on which port you're watching, `PSRAM init failed` may show up
-before it. If you see either, check the PSRAM option before the pins.
+`lienzo 480x320 en PSRAM: FALLO (PSRAM libre 0 KB)` ("canvas ... FAILED").
+The firmware itself prints it on every boot, so it's the sign to trust: if
+you see it, check the PSRAM option before the pins.
 
 ## Pinout (V1.0)
 

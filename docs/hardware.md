@@ -81,10 +81,10 @@ Mabee, y de ahí que escribir en ellos no llegue nunca al panel.
 Con la opción PSRAM equivocada, la PSRAM no arranca y no hay sitio para el
 lienzo de la pantalla: la pantalla no pinta o el firmware se queda sin
 memoria. En la consola serie (cómo abrirla está en
-[instalacion.md](instalacion.md#la-consola-serie)) sale
-`lienzo 480x320 en PSRAM: FALLO (PSRAM libre 0 KB)`, y según el puerto por el
-que mires, antes puede salir también `PSRAM init failed`. Si ves cualquiera de
-los dos, revisa la opción PSRAM antes que los pines.
+[instalacion.md](instalacion.md#la-consola-serie)) sale la línea
+`lienzo 480x320 en PSRAM: FALLO (PSRAM libre 0 KB)`. La escribe el propio
+firmware en cada arranque, así que es la señal en la que fiarse: si la ves,
+revisa la opción PSRAM antes que los pines.
 
 ## Pinout (V1.0)
 

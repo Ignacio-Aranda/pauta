@@ -239,7 +239,7 @@ The footer dot tells you how the Telegram connection is doing:
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | The screen draws nothing at all, not even garbage. | The pins in `board.h` are the other revision's. | Check your revision and the three pins: [hardware_en.md](hardware_en.md#matching-the-firmware-to-your-revision). |
-| The screen doesn't draw or the firmware runs out of memory, and the console says `lienzo 480x320 en PSRAM: FALLO` or `PSRAM init failed`. | The PSRAM option doesn't match your module. | V1.0 with `PSRAM=enabled` (profile `v1`), V2.0 with `PSRAM=opi` (profile `v2`). |
+| The screen doesn't draw or the firmware runs out of memory, and the console says `lienzo 480x320 en PSRAM: FALLO`. | The PSRAM option doesn't match your module. | V1.0 with `PSRAM=enabled` (profile `v1`), V2.0 with `PSRAM=opi` (profile `v2`). |
 | The console shows nothing. | You're watching the other port, or the firmware was built with the other port's `CDCOnBoot`. | Native USB: `/dev/ttyACM0` and `CDCOnBoot=cdc`. CP2102: `/dev/ttyUSB0` and `CDCOnBoot=default`. See [hardware_en.md](hardware_en.md#the-two-usb-ports). |
 | `upload` isn't allowed to open the port. | Your user isn't in the `dialout` group. | `sudo usermod -aG dialout $USER` and log out and back in. |
 | It shows the portal at power-on even though it was already set up. | It can't find your WiFi: after a power cut, the router takes longer to boot than the board. | Nothing: it keeps trying and goes back to the list by itself. If you changed the network or its password, scan the QR code. See [If it can't reach your WiFi](#if-it-cant-reach-your-wifi). |
