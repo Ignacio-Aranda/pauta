@@ -369,8 +369,15 @@ static void drawScrollHint() {
 
 // --- Pie --------------------------------------------------------------------
 
+// El ancho sale del propio texto, con 8 px de holgura a cada lado: con uno
+// fijo de 96 px, "LIMPIAR HECHAS" en versalitas separadas se salia por la
+// derecha y tocar la ultima silaba no hacia nada. Se mide con la fuente del
+// pie y se deja la que hubiera, porque tambien se llama desde el tactil.
 static void clearBtnRect(int &x, int &y, int &w, int &h) {
-  w = 96; h = 26;
+  const lgfx::IFont *prev = cv.getFont();
+  cv.setFont(&fMeta.font);
+  w = trackedWidth(T(S_CLEAR_DONE), 2) + 16; h = 26;
+  cv.setFont(prev);
   x = MARGIN - 8;
   y = SCR_H - FOOTER_H + (FOOTER_H - h) / 2;
 }
@@ -580,8 +587,11 @@ static bool inLogoZone(int x, int y) {
   return y < HEADER_H && x < SCR_W / 2;
 }
 
+// El borde de abajo va excluido: LIST_TOP + LIST_AREA_H ya es la primera
+// fila del pie, y un toque ahi tiene que ir a sus botones y no al renglon
+// que asoma cortado por encima.
 static uint16_t taskAt(int x, int y) {
-  if (y < LIST_TOP || y > LIST_TOP + LIST_AREA_H) return 0;
+  if (y < LIST_TOP || y >= LIST_TOP + LIST_AREA_H) return 0;
   int rel = y - LIST_TOP + (int)s_scroll;
   int idx = rel / rowPitch();
   Task t;
