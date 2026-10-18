@@ -1,5 +1,22 @@
-// Root CA de api.telegram.org (Go Daddy Root Certificate Authority - G2).
-// Extraido de la cadena TLS real; caduca en 2037.
+// Raices de confianza para api.telegram.org, una detras de otra en el mismo
+// bufer: setCACert lo pasa entero a mbedTLS, que lee todos los PEM y acepta
+// la cadena que termine en cualquiera de ellos.
+//
+// 1. Go Daddy Root Certificate Authority - G2, valida hasta 2037. De ella
+//    cuelga hoy la hoja de api.telegram.org, que caduca el 13 de diciembre
+//    de 2026. Extraida de la cadena TLS real.
+// 2. GoDaddy TLS Root CA - R1, valida hasta 2040. GoDaddy ya emite bajo ella,
+//    asi que la hoja que sustituya a la actual puede colgar de aqui en vez de
+//    la G2. Es la raiz autofirmada, no la cruzada firmada por la G2: mbedTLS
+//    mira antes entre las raices de confianza, de modo que vale tanto si el
+//    servidor manda la cruzada como si no. Huella SHA-256:
+//    25:CF:3D:A8:E9:B9:7A:DD:BF:92:54:3C:2B:82:52:7C:
+//    8A:4E:2C:FF:20:62:A6:48:30:40:D4:B6:4A:CE:71:9F
+//
+// Los navegadores dejaran de aceptar la G2 para webs hacia 2027 y Telegram
+// cambiara de cadena antes o despues: conviene revisarla una vez al ano con
+// openssl s_client -connect api.telegram.org:443 -showcerts
+// y anadir aqui la raiz nueva si deja de colgar de una de estas dos.
 #pragma once
 static const char TELEGRAM_ROOT_CA[] PROGMEM = R"CERT(
 -----BEGIN CERTIFICATE-----
@@ -24,5 +41,36 @@ gIOrmgIttRD02JDHBHNA7XIloKmf7J6raBKZV8aPEjoJpL1E/QYVN8Gb5DKj7Tjo
 2GTzLH4U/ALqn83/B2gX2yKQOC16jdFU8WnjXzPKej17CuPKf1855eJ1usV2GDPO
 LPAvTK33sefOT6jEm0pUBsV/fdUID+Ic/n4XuKxe9tQWskMJDE32p2u0mYRlynqI
 4uJEvlz36hz1
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIIFWTCCA0GgAwIBAgIRANpi/54mGbElekgJNo7o4/cwDQYJKoZIhvcNAQELBQAw
+RjELMAkGA1UEBhMCVVMxFDASBgNVBAoTC0dvRGFkZHkuY29tMSEwHwYDVQQDExhH
+b0RhZGR5IFRMUyBSb290IENBIC0gUjEwHhcNMjUwODI4MTIwMDAwWhcNNDAwODI0
+MTE1OTU5WjBGMQswCQYDVQQGEwJVUzEUMBIGA1UEChMLR29EYWRkeS5jb20xITAf
+BgNVBAMTGEdvRGFkZHkgVExTIFJvb3QgQ0EgLSBSMTCCAiIwDQYJKoZIhvcNAQEB
+BQADggIPADCCAgoCggIBAMLrcp3XnknkTvY9I1IzsQA8K/vp5TJRiYsCZWMitXxG
+H+yD1+dPuC5nVzu6BLlXWZ8f7E7cs7lGBUeygeb2CsrESx1uFtB8R3JR4UOAMNE/
+KrlYFwHBydF1JhcttMEEkojBqt9If+Ks8Go2Be4rIAj495yFzArAPc8Ax2kyGgqf
+9Sl0S1SUbxkuvNRomsb3uNg+rcSWg4zUVixQijIZm2AIBxNW9gzaghs6dnog6rgq
+wBYKk7WNhZOfATkq/GHU9glnmiiMMeFPK2kqo9YNWk17NzEYmrBp6ELJwMwhuupX
+LifmoOAL2axvkO1ci66WKBxPB5OPgy5WfdhYp7l2Az8d9MDKWCYwPTpRjwf41AgG
+KhrwMjEJ+H/tG+wu7vWH0Bk+Bfl2gBtNyGjvObGJHMgJusPASDbWThBaw4PrA6sK
+TNPaQCYtVCYi6h/JXB39P2ilTixeC9hiEFmPkwplgjf/t/7CvF6XoCRIFkU2vUYN
+5WQ9upLYRTMZIVrHOxHOcxevvbD2jSuIz2ZydWWdwSzoQb8g5/bmhfrXwLPlCAZh
+hx+E5ljM/OLlkaySoi35mGE4MVOfld94J7m11UeY76t43RIGW0HF7fwm556C3thd
+70RZ3KWwSiOBJQGzDMzjY+R53kJnUljPSlSqDemUE1fsG7evOPgrZSXc8rP2WTAx
+AgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBhjAPBgNVHRMBAf8EBTADAQH/MB0GA1Ud
+DgQWBBTsUhGVcHMZyN7KSEOXSxw1JCJDUDANBgkqhkiG9w0BAQsFAAOCAgEAndbU
+wF1KXURZgNLhfC0UkO0qBS2tHXhqJ2AGVMrOkX2+WFwPZ4jOqDTQoobcOXRBlE6O
+eLSGYquyTEW43gWHVy6+UKP1jnBLhpcaib56F5Wp8Fi3eZpT+3MojZEofMtZg7rG
+Jmn6vf1QLztm66JBb7uh1yVruHZupfT0TXZ8Sbpf8xVVWnq+owgVzTFsfSjWyBps
+5G9e/IWYfl6r9rmAPmPdo8LqxUmJXfjL06RlZ2K7HghBQgefEuBjUkSXFR73SyZH
+f8IR+CRbwjV0hmhn2NWDos1MB9TLKm/C8HQ49acBybtLmsTai+i+RT/N6UB1TNTw
+Ts+eZ42z5Danmw+KDO7JI6m/WrlDOuDkyRmY2TKI8vvEeKHfaBehGHUMEWQZe2d2
+AHFvmAonhB10aXUhjAbUMZs4SCo241iuz28FMoVCC6pa07l8A84IRbUfu9OMRkmm
+Ydmd5Pa4ggfkhtJwFxMbR/3bhsDi8tRwkgS6XNOixXK/azf9TA2RqyOsiiJFjffO
+xS4nnYkLtgzqf7hs+Qe3D5UDWUgJyx8AYiwKJIMDlLz+CO8yYIx+YMsKS8jHvclI
+X5DePkFKKNWCUz5x2wlfPbXUPhTjsKO2m3F6009Gf4bQgBL60rzBOuo1Wp6fSlDE
+b9J1nSdKq7qIj1IJ5icFCDhzV+P1LjVv77My5Rw=
 -----END CERTIFICATE-----
 )CERT";

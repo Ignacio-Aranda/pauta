@@ -132,8 +132,10 @@ whole flash and reflash it; see the
   antialiased fonts**; the ones shipped with the graphics library are ASCII
   only. Anything those fonts lack, such as emoji, is left out on screen
   instead of showing up as a box; Telegram still shows it as sent.
-- The Telegram connection pins the root CA in the firmware rather than
-  accepting any certificate.
+- The Telegram connection only trusts the two root CAs pinned in the
+  firmware: GoDaddy's G2, which it chains to today, and R1, under which
+  GoDaddy already issues new certificates. It does not accept just any
+  certificate.
 
 ## Documentation
 

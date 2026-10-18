@@ -210,7 +210,7 @@ firmware/pauta/
   portal.h/.cpp    access point and captive portal
   telegram.h/.cpp  the bot, on its own task
   ui.h/.cpp        drawing and touch
-  telegram_ca.h    root CA for api.telegram.org
+  telegram_ca.h    root CAs (G2 and R1) for api.telegram.org
 
 firmware/disptest/ panel and touch self-test
 ```

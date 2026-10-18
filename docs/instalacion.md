@@ -210,7 +210,7 @@ firmware/pauta/
   portal.h/.cpp    punto de acceso y portal cautivo
   telegram.h/.cpp  el bot, en su propia tarea
   ui.h/.cpp        pintado y táctil
-  telegram_ca.h    CA raíz de api.telegram.org
+  telegram_ca.h    CA raíz (G2 y R1) de api.telegram.org
 
 firmware/disptest/ autocomprobación de panel y táctil
 ```
