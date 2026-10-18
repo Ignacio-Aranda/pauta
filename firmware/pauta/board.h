@@ -24,8 +24,9 @@
 // #include "../" hacia el otro no lo encontraria. Al cambiar de revision hay
 // que tocar las dos.
 //
-// Ademas hay dos pines que hay que pilotar A MANO antes de init(), porque
-// LovyanGFX declara pin_cs = -1 y no los toca:
+// Ademas hay dos pines que hay que pilotar A MANO antes de init(): aqui
+// abajo el panel va con pin_cs = -1 y sin control de retroiluminacion, asi
+// que LovyanGFX no toca ninguno de los dos:
 //   - CS del LCD (IO37) a nivel BAJO. Sin esto el panel ignora el bus entero:
 //     no se pinta nada y la imagen anterior se queda intacta.
 //   - Retroiluminacion (IO45) a nivel ALTO, o no se ve nada aunque pinte.

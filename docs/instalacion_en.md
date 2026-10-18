@@ -186,6 +186,47 @@ It never reboots on a timer, so a router that keeps dropping out can't trap it
 in a reboot loop. The serial console (115200 baud) logs what it does on lines
 starting with `portal:`.
 
+## Troubleshooting
+
+Nearly everything the board does gets written to the serial console, and the
+dot in the list footer sums up how the connection is doing. Start there.
+
+### The serial console
+
+With the board plugged into the native USB port and the two environment
+variables from step 3 exported:
+
+```bash
+tools/arduino-cli monitor -p /dev/ttyACM0 -c baudrate=115200
+```
+
+Ctrl+C quits it, and it has to be closed before flashing, or `upload` will
+fight it for the port. The `portal:` and `telegram:` lines show up whenever
+something changes, but the boot ones (`lienzo …`, `Pauta …`,
+`conectado, IP …`) only in the first few seconds: to see them, open the
+console right after `upload` finishes, which reboots the board. On the CP2102
+it's `/dev/ttyUSB0`, with the firmware built with `CDCOnBoot=default`
+(step 3). The console messages are in Spanish.
+
+### What to check first
+
+The footer dot tells you how the Telegram connection is doing:
+
+- **Olive**: connected.
+- **Grey**: connecting.
+- **Clay**: no WiFi or some error. If it lasts more than a minute, the footer
+  says what's wrong next to it (see [Notices in the footer](#notices-in-the-footer)).
+
+| Symptom | Likely cause | What to do |
+|---|---|---|
+| The screen draws nothing at all, not even garbage. | The pins in `board.h` are the other revision's. | Check your revision and the three pins: [hardware_en.md](hardware_en.md#matching-the-firmware-to-your-revision). |
+| The screen doesn't draw or the firmware runs out of memory, and the console says `lienzo 480x320 en PSRAM: FALLO` or `PSRAM init failed`. | The PSRAM option doesn't match your module. | V1.0 with `PSRAM=enabled` (profile `v1`), V2.0 with `PSRAM=opi` (profile `v2`). |
+| The console shows nothing. | You're watching the other port, or the firmware was built with the other port's `CDCOnBoot`. | Native USB: `/dev/ttyACM0` and `CDCOnBoot=cdc`. CP2102: `/dev/ttyUSB0` and `CDCOnBoot=default`. See [hardware_en.md](hardware_en.md#the-two-usb-ports). |
+| `upload` isn't allowed to open the port. | Your user isn't in the `dialout` group. | `sudo usermod -aG dialout $USER` and log out and back in. |
+| It shows the portal at power-on even though it was already set up. | It can't find your WiFi: after a power cut, the router takes longer to boot than the board. | Nothing: it keeps trying and goes back to the list by itself. If you changed the network or its password, scan the QR code. See [If it can't reach your WiFi](#if-it-cant-reach-your-wifi). |
+| The footer says **INVALID TOKEN**. | The token was pasted wrong, or the bot was deleted or got a new token. | Hold the logo for 8 seconds and paste the token again in the portal. |
+| The bot replies "This screen is already linked to another chat." | The screen went to another chat: the first one that wrote to it. | Hold the logo so it forgets the chat (and the WiFi and token; the list stays), set it up again and be the first to write to it. |
+
 ### Notices in the footer
 
 If the connection to Telegram fails for more than a minute straight, the list
@@ -312,16 +353,27 @@ firmware/pauta/
   sketch.yaml      pinned core and library versions (profiles v1 and v2)
   board.h          pins and panel configuration
   theme.h/.cpp     palette, metrics, fonts and logo
+  fonts/           the five pre-generated VLW fonts (FontBody.h, FontMeta.h…)
   i18n.h/.cpp      translations for screen, bot and portal
   utf8.h           validating and trimming UTF-8 without splitting letters
   model.h/.cpp     the list: data, NVS persistence, mutex
   settings.h/.cpp  WiFi, token, chat, language and theme, in NVS
   portal.h/.cpp    access point and captive portal
   telegram.h/.cpp  the bot, on its own task
-  ui.h/.cpp        drawing and touch
   telegram_ca.h    root CAs (G2 and R1) for api.telegram.org
+  ui.h/.cpp        drawing and touch
 
-firmware/disptest/ panel and touch self-test
+firmware/disptest/
+  disptest.ino     panel and touch self-test
+  board.h          copy of firmware/pauta's: change one, change the other
+  sketch.yaml      the same profiles, with LovyanGFX only
+
+tools/
+  mkfont.py        generates the fonts in fonts/ from the Noto TTFs
+  arduino-cli      installed in step 1; with adata/ and auser/, kept out of git
+
+docs/              this guide and the hardware one, with screenshots in img/
+brand/             logo and mark as SVG, day and night
 ```
 
 **Core split.** Networking lives on core 0 in its own task: Telegram's long

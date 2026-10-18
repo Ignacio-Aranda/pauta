@@ -40,9 +40,12 @@ static std::atomic<bool> s_botReady{false};
 static const int  POLL_TIMEOUT_S = 12;
 static const char *API_HOST = "https://api.telegram.org";
 
-// Cliente TLS reutilizado entre peticiones. Rehacer el handshake cada vez
-// costaba un par de segundos y bastante CPU; con keep-alive la conexion se
-// mantiene abierta entre sondeos.
+// Cliente TLS compartido por todas las peticiones: la CA y el timeout se
+// ponen una vez en telegramBegin(), y classifyFailure() le pregunta el ultimo
+// error de mbedTLS. La conexion en cambio no dura entre peticiones: aunque se
+// pida setReuse(true), cada HTTPClient es local y su destructor llama a
+// stop() (~HTTPClient en HTTPClient.cpp), asi que cada sondeo y cada envio
+// hacen el handshake TLS completo.
 static WiFiClientSecure s_client;
 
 struct OutMsg { char text[320]; };

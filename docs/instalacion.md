@@ -182,6 +182,46 @@ Nunca se reinicia por tiempo, así que un router que va y viene no la mete en
 un bucle de reinicios. En la consola serie (115200 baudios) cuenta lo que hace
 en líneas que empiezan por `portal:`.
 
+## Si algo falla
+
+Casi todo lo que hace la placa queda escrito en la consola serie, y el punto
+del pie de la lista resume cómo va la conexión. Empieza por ahí.
+
+### La consola serie
+
+Con la placa conectada por el USB nativo y las dos variables de entorno del
+paso 3 exportadas:
+
+```bash
+tools/arduino-cli monitor -p /dev/ttyACM0 -c baudrate=115200
+```
+
+Se sale con Ctrl+C, y hay que cerrarla antes de flashear, o `upload` se pelea
+con ella por el puerto. Las líneas de `portal:` y `telegram:` salen cada vez
+que algo cambia, pero las del arranque (`lienzo …`, `Pauta …`,
+`conectado, IP …`) solo en los primeros segundos: para verlas, abre la consola
+nada más terminar `upload`, que reinicia la placa. Por el CP2102 es
+`/dev/ttyUSB0`, con el firmware compilado con `CDCOnBoot=default` (paso 3).
+
+### Qué mirar primero
+
+El punto del pie dice cómo va la conexión con Telegram:
+
+- **Oliva**: conectado.
+- **Gris**: conectando.
+- **Arcilla**: sin WiFi o con algún error. Si dura más de un minuto, el pie
+  dice al lado qué falla (ver [Avisos en el pie](#avisos-en-el-pie)).
+
+| Síntoma | Causa probable | Qué hacer |
+|---|---|---|
+| La pantalla no pinta nada, ni basura. | Los pines de `board.h` son los de la otra revisión. | Comprueba tu revisión y los tres pines: [hardware.md](hardware.md#ajustar-el-firmware-a-tu-revisión). |
+| La pantalla no pinta o el firmware se queda sin memoria, y la consola dice `lienzo 480x320 en PSRAM: FALLO` o `PSRAM init failed`. | La opción PSRAM no es la de tu módulo. | V1.0 con `PSRAM=enabled` (perfil `v1`), V2.0 con `PSRAM=opi` (perfil `v2`). |
+| La consola no saca nada. | Miras el otro puerto, o el firmware se compiló con el `CDCOnBoot` del otro. | USB nativo: `/dev/ttyACM0` y `CDCOnBoot=cdc`. CP2102: `/dev/ttyUSB0` y `CDCOnBoot=default`. Ver [hardware.md](hardware.md#los-dos-usb). |
+| `upload` no tiene permiso para abrir el puerto. | Tu usuario no está en el grupo `dialout`. | `sudo usermod -aG dialout $USER` y vuelve a entrar en la sesión. |
+| Al encender sale el portal aunque ya estaba configurada. | No encuentra tu WiFi: tras un apagón, el router tarda más en arrancar que ella. | Nada: sigue probando y vuelve sola a la lista. Si has cambiado la red o la contraseña, escanea el QR. Ver [Si no conecta con tu WiFi](#si-no-conecta-con-tu-wifi). |
+| El pie dice **TOKEN NO VÁLIDO**. | El token está mal pegado, o el bot se ha borrado o ha cambiado de token. | Mantén pulsado el logo 8 segundos y vuelve a pegar el token en el portal. |
+| El bot te contesta «Esta pantalla ya está vinculada a otra conversación». | La pantalla se quedó con otro chat: el primero que le escribió. | Mantén pulsado el logo para que olvide el chat (y el WiFi y el token; la lista se queda), configúrala otra vez y escríbele tú el primero. |
+
 ### Avisos en el pie
 
 Si la conexión con Telegram falla más de un minuto seguido, el pie de la lista
@@ -308,16 +348,27 @@ firmware/pauta/
   sketch.yaml      versiones fijas del core y las librerías (perfiles v1 y v2)
   board.h          pines y configuración del panel
   theme.h/.cpp     paleta, métricas, fuentes y logotipo
+  fonts/           las cinco fuentes VLW ya generadas (FontBody.h, FontMeta.h…)
   i18n.h/.cpp      traducción de pantalla, bot y portal
   utf8.h           validar y recortar texto UTF-8 sin partir letras
   model.h/.cpp     la lista: datos, persistencia en NVS, mutex
   settings.h/.cpp  WiFi, token, chat, idioma y tema, en NVS
   portal.h/.cpp    punto de acceso y portal cautivo
   telegram.h/.cpp  el bot, en su propia tarea
-  ui.h/.cpp        pintado y táctil
   telegram_ca.h    CA raíz (G2 y R1) de api.telegram.org
+  ui.h/.cpp        pintado y táctil
 
-firmware/disptest/ autocomprobación de panel y táctil
+firmware/disptest/
+  disptest.ino     autocomprobación de panel y táctil
+  board.h          copia del de firmware/pauta: si cambias uno, cambia el otro
+  sketch.yaml      los mismos perfiles, solo con LovyanGFX
+
+tools/
+  mkfont.py        genera las fuentes de fonts/ desde los TTF de Noto
+  arduino-cli      se instala en el paso 1; con adata/ y auser/, fuera de git
+
+docs/              esta guía y la del hardware, con las capturas en img/
+brand/             logotipo y marca en SVG, de día y de noche
 ```
 
 **Reparto de núcleos.** La red vive en el núcleo 0, en su propia tarea: el

@@ -1,8 +1,8 @@
 // Cliente del bot de Telegram.
 //
 // Corre en su propia tarea de FreeRTOS anclada al nucleo 0, para que el sondeo
-// largo (getUpdates con timeout de 25 s) no congele el repintado ni el tactil,
-// que viven en el nucleo 1.
+// largo (getUpdates con timeout de 12 s, POLL_TIMEOUT_S en telegram.cpp) no
+// congele el repintado ni el tactil, que viven en el nucleo 1.
 #pragma once
 #include <Arduino.h>
 

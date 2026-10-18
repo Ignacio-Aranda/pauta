@@ -80,7 +80,8 @@ Mabee, y de ahí que escribir en ellos no llegue nunca al panel.
 
 Con la opción PSRAM equivocada, la PSRAM no arranca y no hay sitio para el
 lienzo de la pantalla: la pantalla no pinta o el firmware se queda sin
-memoria. En la consola serie (115200 baudios) sale
+memoria. En la consola serie (cómo abrirla está en
+[instalacion.md](instalacion.md#la-consola-serie)) sale
 `lienzo 480x320 en PSRAM: FALLO (PSRAM libre 0 KB)`, y según el puerto por el
 que mires, antes puede salir también `PSRAM init failed`. Si ves cualquiera de
 los dos, revisa la opción PSRAM antes que los pines.
@@ -103,9 +104,10 @@ configuración: el panel se resetea cuando se resetea el ESP32.
 
 ## Dos pines que hay que pilotar a mano
 
-LovyanGFX declara `pin_cs = -1` y no los toca, así que hay que ponerlos
-**antes** de `lcd.init()`. Lo hace `boardPreInit()` en `board.h`, y si adaptas
-este código a otra placa es fácil olvidarlo:
+La configuración del panel en `board.h` pone `pin_cs = -1` y no declara
+retroiluminación, así que LovyanGFX no toca ninguno de los dos y hay que
+ponerlos **antes** de `lcd.init()`. Lo hace `boardPreInit()`, también en
+`board.h`, y si adaptas este código a otra placa es fácil olvidarlo:
 
 ```cpp
 digitalWrite(PIN_LCD_CS, LOW);          // sin esto el panel ignora el bus

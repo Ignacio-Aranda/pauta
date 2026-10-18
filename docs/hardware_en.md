@@ -77,7 +77,8 @@ which is why writing to them never reaches the panel.
 
 With the wrong PSRAM option, the PSRAM doesn't start and there's no room for
 the screen's canvas: the screen doesn't draw, or the firmware runs out of
-memory. The serial console (115200 baud) shows
+memory. The serial console (how to open it is in
+[instalacion_en.md](instalacion_en.md#the-serial-console)) shows
 `lienzo 480x320 en PSRAM: FALLO (PSRAM libre 0 KB)` ("canvas ... FAILED"),
 and depending on which port you're watching, `PSRAM init failed` may show up
 before it. If you see either, check the PSRAM option before the pins.
@@ -100,9 +101,10 @@ configuration: the panel resets when the ESP32 does.
 
 ## Two pins you have to drive yourself
 
-LovyanGFX declares `pin_cs = -1` and never touches them, so they must be set
-**before** `lcd.init()`. `boardPreInit()` in `board.h` does it, and it's an
-easy thing to forget when porting this to another board:
+The panel configuration in `board.h` sets `pin_cs = -1` and declares no
+backlight, so LovyanGFX touches neither of them and they must be set
+**before** `lcd.init()`. `boardPreInit()`, also in `board.h`, does it, and
+it's an easy thing to forget when porting this to another board:
 
 ```cpp
 digitalWrite(PIN_LCD_CS, LOW);          // without this the panel ignores the bus
