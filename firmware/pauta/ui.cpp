@@ -31,6 +31,17 @@ static const float DECAY_TAU_MS = 130.0f;
 static const float VEL_STOP     = 0.02f;   // 20 px/s: por debajo, se para
 static const float VEL_MAX      = 3.0f;
 static const int   DRAG_SLOP    = 8;
+static const int   EDGE_FADE_H  = 18;      // alto del difuminado de los bordes
+
+// Una tarea que llega por Telegram cuando la lista ya no cabe caia por debajo
+// del borde y no se veia que hubiera entrado. Ahora la lista baja sola hasta
+// ella, pero solo si nadie la esta usando: moverla mientras alguien la lee o
+// la acaba de arrastrar seria peor que no mostrar la nueva.
+static const uint32_t REVEAL_MS      = 350;
+static const uint32_t TOUCH_QUIET_MS = 5000;
+static bool     s_revealing = false;
+static float    s_scrollFrom = 0, s_scrollTo = 0;
+static uint32_t s_scrollAnimStart = 0;
 
 // --- Tactil -----------------------------------------------------------------
 static bool     s_touchDown = false;
@@ -44,6 +55,10 @@ static uint16_t s_pressedId = 0;
 // vuelta queda muy por encima, con la pantalla sorda hasta que millis() lo
 // alcance otra vez, semanas despues. La resta sin signo no tiene ese problema.
 static uint32_t s_lastTapMs = 0;
+// Ultima vez que habia un dedo en la pantalla, para cualquier gesto. A 0
+// hasta el primer toque: en los primeros segundos tras arrancar no hay nadie
+// a quien molestar.
+static uint32_t s_lastTouchMs = 0;
 
 // --- Reset por pulsacion larga sobre el logotipo ---------------------------
 // Mantener el dedo sobre el logo borra la configuracion (la lista no) y
@@ -62,6 +77,7 @@ static uint32_t s_animStart = 0;
 static uint16_t s_enterId = 0;        // entrada de tarea nueva
 static uint32_t s_enterStart = 0;
 static uint16_t s_maxSeenId = 0;
+static bool     s_seenInit = false;   // ya se ha visto la lista del arranque
 static const uint32_t ANIM_MS  = 260;
 static const uint32_t ENTER_MS = 340;
 
@@ -371,7 +387,7 @@ static void drawEmptyState() {
 // papel en vez de quedar seccionado. Solo aparece por el lado donde queda
 // contenido fuera de la ventana.
 static void drawEdgeFade() {
-  const int H = 18;
+  const int H = EDGE_FADE_H;
   if (s_scroll > 1) {
     for (int i = 0; i < H; i++) {
       uint8_t a = (uint8_t)(255 * (H - i) / H);
@@ -817,6 +833,7 @@ static void drawResetOverlay(uint32_t held) {
 static void handleTouch() {
   lgfx::touch_point_t tp;
   bool down = tft.getTouch(&tp);
+  if (down) s_lastTouchMs = millis();
 
   if (down && !s_touchDown) {
     s_touchDown = true;
@@ -826,6 +843,7 @@ static void handleTouch() {
     s_lastY = tp.y;
     s_lastMoveMs = millis();
     s_scrollVel = 0;                     // tocar detiene la inercia en curso
+    s_revealing = false;                 // y el desplazamiento automatico
     s_holding = inLogoZone(tp.x, tp.y);
     s_holdStart = millis();
     if (s_screen == UI_LIST) {
@@ -900,6 +918,34 @@ static void stepInertia() {
   if (before != s_scroll) s_scrollVel = 0;   // ha topado con un extremo
 }
 
+// Baja la lista hasta que el renglon idx, el de una tarea recien llegada, se
+// vea entero. Las nuevas van siempre al final, asi que nunca hace falta
+// subir. Se cuenta el difuminado de abajo: un renglon medio fundido con el
+// papel no parece haber llegado. La lista no se reordena, para que los
+// numeros de /done N sigan siendo los de /list.
+static void revealRow(int idx) {
+  if (s_screen != UI_LIST || s_touchDown || coasting()) return;
+  if (s_lastTouchMs && millis() - s_lastTouchMs < TOUCH_QUIET_MS) return;
+  float to = (float)((idx + 1) * rowPitch() - LIST_AREA_H + EDGE_FADE_H);
+  float m = maxScroll();
+  if (to > m) to = m;
+  if (to <= s_scroll + 0.5f) return;   // ya se ve entera
+  s_scrollFrom = s_scroll;
+  s_scrollTo = to;
+  s_scrollAnimStart = millis();
+  s_revealing = true;
+}
+
+// Como la inercia, avanza segun el tiempo de verdad y una vez por fotograma.
+static void stepReveal() {
+  float t = (float)(millis() - s_scrollAnimStart) / REVEAL_MS;
+  s_scroll = s_scrollFrom + (s_scrollTo - s_scrollFrom) * easeOut(t);
+  // Un /del a mitad de camino acorta la lista y el destino puede quedar
+  // fuera.
+  clampScroll();
+  if (t >= 1.0f) s_revealing = false;
+}
+
 // --- API --------------------------------------------------------------------
 
 void uiBegin() {
@@ -948,17 +994,26 @@ void uiLoop() {
   if (rev != s_lastRevision) {
     s_lastRevision = rev;
     // Si ha aparecido una tarea con id mayor que el ultimo visto, es nueva:
-    // se anima su entrada.
+    // se anima su entrada y se lleva a la vista. La primera pasada es la
+    // lista guardada que se acaba de cargar y en ella no hay nada nuevo:
+    // antes la ultima tarea entraba animada como si acabara de llegar.
+    // De un mensaje con varias lineas se busca la ultima.
+    bool boot = !s_seenInit;
+    s_seenInit = true;
     int n = tasksCount();
+    int newest = -1;
     Task t;
     for (int i = 0; i < n; i++) {
       if (tasksGet(i, t) && t.id > s_maxSeenId) {
         s_maxSeenId = t.id;
+        if (boot) continue;
         s_enterId = t.id;
         s_enterStart = millis();
+        newest = i;
       }
     }
     clampScroll();
+    if (newest >= 0) revealRow(newest);
     s_needsRedraw = true;
   }
 
@@ -966,6 +1021,7 @@ void uiLoop() {
                    (s_enterId && millis() - s_enterStart < ENTER_MS);
   bool waiting   = (s_screen == UI_BOOT || s_screen == UI_CONNECTING);
   bool moving    = coasting();
+  bool revealing = s_revealing;
   bool counting  = s_holding && millis() - s_holdStart >= HOLD_WARN_MS;
 
   // El reloj obliga a repintar al menos una vez por segundo.
@@ -976,10 +1032,11 @@ void uiLoop() {
   }
 
   static uint32_t lastFrame = 0;
-  if (s_needsRedraw || animating || waiting || moving || counting) {
+  if (s_needsRedraw || animating || waiting || moving || revealing || counting) {
     if (millis() - lastFrame >= 33) {        // ~30 fps como techo
       lastFrame = millis();
       if (moving) stepInertia();             // un paso por fotograma
+      if (revealing) stepReveal();
       s_needsRedraw = false;
       render();
       if (s_animId  && millis() - s_animStart  >= ANIM_MS)  s_animId = 0;

@@ -55,6 +55,10 @@ pegatina, te pide que se lo escribas.
 | Sol / luna | Cambiar entre papel de día y de noche |
 | Mantener pulsado el logo | Olvidar WiFi y token, y volver al portal (la lista se queda) |
 
+Si la lista no cabe entera y llega una tarea nueva, la pantalla baja sola
+hasta enseñarla. Si la has tocado hace menos de 5 segundos se queda quieta,
+para no moverte lo que estabas leyendo.
+
 Si la conexión con Telegram falla durante más de un minuto, el pie dice qué
 pasa con palabras (sin WiFi, token no válido…); qué significa cada aviso está
 en la [guía de instalación](docs/instalacion.md#avisos-en-el-pie). Con la

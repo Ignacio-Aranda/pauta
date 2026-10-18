@@ -56,6 +56,10 @@ and it asks you to write it instead.
 | Sun / moon | Switch between day and night paper |
 | Hold the logo | Forget WiFi and token, and go back to the portal (the list stays) |
 
+If the list doesn't fit and a new task arrives, the screen scrolls down on its
+own to show it. If you touched it less than 5 seconds ago it stays put, so it
+doesn't move what you were reading.
+
 If the connection to Telegram fails for more than a minute, the footer says
 what's wrong in words (no WiFi, invalid token…); the
 [installation guide](docs/instalacion_en.md#notices-in-the-footer) explains
