@@ -605,12 +605,19 @@ static void toggleTask(uint16_t id) {
   }
 }
 
-static void onTap(int x, int y) {
+// pressedId es el renglon que se ilumino al apoyar el dedo. Se tacha ese y no
+// el que haya ahora bajo el punto: si mientras tanto llega un /del o un
+// /clear por Telegram, los renglones se corren y el mismo punto cae sobre
+// otra tarea. Si la iluminada ya no existe, tasksToggle no la encuentra y no
+// se toca nada.
+static void onTap(int x, int y, uint16_t pressedId) {
   if (s_screen != UI_LIST) return;
 
-  uint16_t id = taskAt(x, y);
-  if (id) { toggleTask(id); s_needsRedraw = true; return; }
+  if (pressedId) { toggleTask(pressedId); s_needsRedraw = true; return; }
 
+  // Fuera del pie solo queda la lista, y sin renglon iluminado (el hueco bajo
+  // la ultima tarea) no se hace nada, aunque entretanto haya aparecido una
+  // tarea debajo del dedo.
   if (y >= SCR_H - FOOTER_H) {
     int bx, by, bw, bh;
     clearBtnRect(bx, by, bw, bh);
@@ -733,6 +740,7 @@ static void handleTouch() {
   } else if (!down && s_touchDown) {
     s_touchDown = false;
     uint32_t held = millis() - s_touchStart;
+    uint16_t pressedId = s_pressedId;
     if (s_holding) { s_holding = false; s_needsRedraw = true; }
     if (s_pressedId) { s_pressedId = 0; s_needsRedraw = true; }
     if (s_dragging) {
@@ -742,7 +750,7 @@ static void handleTouch() {
       if (millis() - s_lastMoveMs > 90) s_scrollVel = 0;
     } else if (held < 900 && millis() - s_lastTapMs > 180) {
       s_lastTapMs = millis();
-      onTap(s_touchX, s_touchY);
+      onTap(s_touchX, s_touchY, pressedId);
     }
   }
 }
