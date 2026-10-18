@@ -270,6 +270,70 @@ reboots into the portal, and once you've set it up you'll need to write to
 your bot again: the screen pairs with the first message it gets, it doesn't
 have to be `/start`.
 
+### Backing up before an update
+
+Even though flashing leaves NVS alone, it's worth saving it before moving to
+a new version: if something goes wrong, you put it back as it was and get
+your WiFi, token, paired chat and list back. Reading it changes nothing on
+the board. It's done with the `esptool` that `arduino-cli` installs with the
+core inside `tools/adata` (it's there from the first build onwards), with the
+serial console closed:
+
+```bash
+ESPTOOL=$(find tools/adata -type f -name esptool | head -1)
+mkdir -p dump
+"$ESPTOOL" --port /dev/ttyACM0 read-flash 0x9000 0x5000 dump/nvs-$(date +%F).bin
+```
+
+That leaves the copy in `dump/nvs-YYYY-MM-DD.bin`, with today's date.
+`0x9000` and `0x5000` are the start and size of the NVS partition in the
+scheme Pauta uses (`app3M_fat9M_16MB`), so the file must be exactly 20480
+bytes.
+
+Depending on how the core was installed, `esptool` lives in
+`tools/adata/internal/esp32_esptool_py_5.3.1_…/` (with the `sketch.yaml`
+profiles, the usual case if you followed this guide) or in
+`tools/adata/packages/esp32/tools/esptool_py/5.3.1/` (with `core install`),
+and the `find` picks up either. The first thing it prints is its version:
+these commands are esptool 5's; in version 4 they were `read_flash` and
+`write_flash`.
+
+**That file holds your WiFi password and the bot token in plain text.**
+`dump/` is in `.gitignore` so it can't be pushed by mistake; don't share it.
+
+Over the native USB port, large reads sometimes get cut off halfway with
+"A fatal error occurred: Packet content transfer stopped". NVS is small and
+reads fine; if it fails anyway, run the command again.
+
+To put it back, with your copy's name:
+
+```bash
+"$ESPTOOL" --port /dev/ttyACM0 write-flash 0x9000 dump/nvs-YYYY-MM-DD.bin
+```
+
+It overwrites the whole NVS: everything goes back to how it was on the day of
+the copy, and whatever you changed since is lost, tasks included. Only do it
+if something went wrong.
+
+### Going back to an earlier version
+
+To go back to an earlier version, build its git tag. The first one, `v1.0.0`,
+didn't have `sketch.yaml` yet, so it's extracted on the side and given the
+current one, which pins the same core and library versions:
+
+```bash
+mkdir -p /tmp/pauta-v1.0.0
+git archive v1.0.0 firmware/pauta | tar -x -C /tmp/pauta-v1.0.0
+cp firmware/pauta/sketch.yaml /tmp/pauta-v1.0.0/firmware/pauta/
+tools/arduino-cli compile /tmp/pauta-v1.0.0/firmware/pauta
+tools/arduino-cli upload -p /dev/ttyACM0 /tmp/pauta-v1.0.0/firmware/pauta
+```
+
+(If you cloned before the tag existed, fetch tags with `git fetch --tags`. On
+V2.0, change the pins in `/tmp/pauta-v1.0.0`'s `board.h` first and add
+`--profile v2`.) The list and the settings stay in NVS, and the earlier
+version reads them just the same.
+
 ### Giving it away or selling it
 
 The board doesn't encrypt its flash, so anyone with it and a USB cable can
@@ -279,7 +343,8 @@ reused, and it keeps the list too. The sure way is to erase the whole flash
 and reflash it:
 
 ```bash
-esptool --port /dev/ttyACM0 erase-flash
+ESPTOOL=$(find tools/adata -type f -name esptool | head -1)
+"$ESPTOOL" --port /dev/ttyACM0 erase-flash
 tools/arduino-cli upload -p /dev/ttyACM0 firmware/pauta
 ```
 

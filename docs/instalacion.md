@@ -265,6 +265,70 @@ Olvida el WiFi, el token, el idioma, el tema y el chat vinculado, pero
 tendrás que escribirle otra vez a tu bot: la pantalla se vincula con el
 primer mensaje que le llegue, no hace falta que sea `/start`.
 
+### Copia de seguridad antes de actualizar
+
+Aunque flashear no toque la NVS, antes de pasar a una versión nueva conviene
+guardarla: si algo sale mal, la devuelves tal cual y recuperas el WiFi, el
+token, el chat vinculado y la lista. Leerla no cambia nada en la placa. Se
+hace con el `esptool` que `arduino-cli` instala con el core dentro de
+`tools/adata` (está desde la primera compilación), con la consola serie
+cerrada:
+
+```bash
+ESPTOOL=$(find tools/adata -type f -name esptool | head -1)
+mkdir -p dump
+"$ESPTOOL" --port /dev/ttyACM0 read-flash 0x9000 0x5000 dump/nvs-$(date +%F).bin
+```
+
+Deja la copia en `dump/nvs-AAAA-MM-DD.bin`, con la fecha del día. `0x9000` y
+`0x5000` son el inicio y el tamaño de la partición NVS en el esquema que usa
+Pauta (`app3M_fat9M_16MB`), así que el archivo tiene que medir exactamente
+20480 bytes.
+
+Según cómo se instaló el core, `esptool` está en
+`tools/adata/internal/esp32_esptool_py_5.3.1_…/` (con los perfiles de
+`sketch.yaml`, lo normal siguiendo esta guía) o en
+`tools/adata/packages/esp32/tools/esptool_py/5.3.1/` (con `core install`), y
+el `find` encuentra cualquiera de los dos. Lo primero que escribe es su
+versión: estas órdenes son de esptool 5, y en la 4 se llamaban `read_flash` y
+`write_flash`.
+
+**Ese archivo lleva en claro la contraseña de tu WiFi y el token del bot.**
+`dump/` está en `.gitignore` para que no se suba por error; no lo compartas.
+
+Por el USB nativo, las lecturas grandes a veces se cortan a medias con
+«A fatal error occurred: Packet content transfer stopped». La NVS es pequeña
+y sale bien; si aun así falla, repite la orden.
+
+Para devolverla, con el nombre de tu copia:
+
+```bash
+"$ESPTOOL" --port /dev/ttyACM0 write-flash 0x9000 dump/nvs-AAAA-MM-DD.bin
+```
+
+Sobrescribe la NVS entera: todo vuelve a como estaba el día de la copia, y se
+pierde lo que cambiaste después, tareas incluidas. Solo hace falta si algo ha
+ido mal.
+
+### Volver a una versión anterior
+
+Para volver a una versión anterior, compila su etiqueta de git. La primera,
+`v1.0.0`, aún no traía `sketch.yaml`, así que se saca aparte y se le pone el
+de ahora, que fija las mismas versiones del core y las librerías:
+
+```bash
+mkdir -p /tmp/pauta-v1.0.0
+git archive v1.0.0 firmware/pauta | tar -x -C /tmp/pauta-v1.0.0
+cp firmware/pauta/sketch.yaml /tmp/pauta-v1.0.0/firmware/pauta/
+tools/arduino-cli compile /tmp/pauta-v1.0.0/firmware/pauta
+tools/arduino-cli upload -p /dev/ttyACM0 /tmp/pauta-v1.0.0/firmware/pauta
+```
+
+(Si clonaste antes de que existiera la etiqueta, trae las etiquetas con
+`git fetch --tags`. En la V2.0, cambia antes los pines en el `board.h` de
+`/tmp/pauta-v1.0.0` y añade `--profile v2`.) La lista y la configuración
+siguen en la NVS, y la versión anterior las lee igual.
+
 ### Regalarla o venderla
 
 La placa no cifra su memoria, así que cualquiera con ella y un cable USB puede
@@ -274,7 +338,8 @@ se reutiliza ese trozo, y además deja la lista. Lo definitivo es borrar la
 flash entera y volver a flashear:
 
 ```bash
-esptool --port /dev/ttyACM0 erase-flash
+ESPTOOL=$(find tools/adata -type f -name esptool | head -1)
+"$ESPTOOL" --port /dev/ttyACM0 erase-flash
 tools/arduino-cli upload -p /dev/ttyACM0 firmware/pauta
 ```
 
