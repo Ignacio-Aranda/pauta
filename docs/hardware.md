@@ -43,6 +43,9 @@ cambia estas tres líneas:
 #define PIN_LCD_RS  36   // V1.0 → 17 en V2.0
 ```
 
+Y compila con `--profile v2`, que pone la PSRAM en modo octal: lo explica
+[instalacion.md](instalacion.md#3-compilar-y-flashear).
+
 El motivo del cambio: la V2.0 pasó al módulo N16R8, y su PSRAM octal ocupa los
 GPIO 35-37. En la V1.0 esos pines están libres y en la V2.0 el LCD tuvo que
 mudarse a otros. En la V1.0, los IO17/IO18 que usa la V2.0 son el conector

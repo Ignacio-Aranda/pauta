@@ -42,6 +42,9 @@ change these three lines:
 #define PIN_LCD_RS  36   // V1.0 → 17 on V2.0
 ```
 
+And build with `--profile v2`, which sets the PSRAM to octal mode: see
+[instalacion_en.md](instalacion_en.md#3-build-and-flash).
+
 Why it moved: V2.0 switched to the N16R8 module, whose octal PSRAM occupies
 GPIO 35-37. On V1.0 those pins are free; on V2.0 the LCD had to move
 elsewhere. And on V1.0, the IO17/IO18 that V2.0 uses are the Mabee connector,

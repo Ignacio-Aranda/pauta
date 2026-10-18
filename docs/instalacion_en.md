@@ -3,27 +3,38 @@
 ## 1. Set up the toolchain
 
 You don't need the Arduino IDE. It builds with `arduino-cli`, which you can
-install inside the project itself so nothing on your system is touched:
+install inside the project itself so nothing on your system is touched. Ask
+for version 1.5.1, which is the one it's been tested with:
 
 ```bash
 mkdir -p tools && cd tools
-curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$PWD sh
+curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$PWD sh -s 1.5.1
 cd ..
+tools/arduino-cli version   # should say "Version: 1.5.1"
 ```
 
-Install the ESP32 core and the two libraries:
+The ESP32 core and the libraries aren't installed by hand.
+`firmware/pauta/sketch.yaml` pins the versions the firmware has been tested
+with, and `arduino-cli` downloads them by itself the first time you build
+(in step 3):
 
-```bash
-export ARDUINO_DIRECTORIES_DATA=$PWD/tools/adata
-export ARDUINO_DIRECTORIES_USER=$PWD/tools/auser
-URL=https://espressif.github.io/arduino-esp32/package_esp32_index.json
+| What | Version |
+|---|---|
+| `esp32:esp32` core | 3.3.12 |
+| LovyanGFX | 1.2.33 |
+| ArduinoJson | 7.4.3 |
 
-tools/arduino-cli core update-index --additional-urls $URL
-tools/arduino-cli core install esp32:esp32 --additional-urls $URL
-tools/arduino-cli lib install LovyanGFX ArduinoJson
-```
+It's a big download (about 6 GB once unpacked); the first run takes a while.
+It's kept inside `tools/adata`, apart from whatever `core install` or
+`lib install` set up, so upgrading the core on your own doesn't change what
+gets built. If you already had the core installed from before, that first
+build installs it again separately: that's expected and only happens once.
 
-It's a big download; the first run takes a while.
+### Moving to newer versions
+
+Versions only change on purpose. To try others, change the numbers in
+`firmware/pauta/sketch.yaml` (and in `firmware/disptest/sketch.yaml`), build
+and test on the board before calling the change good.
 
 ## 2. Match your board revision
 
@@ -37,14 +48,25 @@ will draw nothing at all.**
 ```bash
 export ARDUINO_DIRECTORIES_DATA=$PWD/tools/adata
 export ARDUINO_DIRECTORIES_USER=$PWD/tools/auser
-FQBN="esp32:esp32:esp32s3:CDCOnBoot=cdc,PSRAM=enabled,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB"
 
-tools/arduino-cli compile --fqbn "$FQBN" firmware/pauta
-tools/arduino-cli upload -p /dev/ttyACM0 --fqbn "$FQBN" firmware/pauta
+tools/arduino-cli compile firmware/pauta
+tools/arduino-cli upload -p /dev/ttyACM0 firmware/pauta
 ```
 
-If you're plugged into the CP2102 port (`/dev/ttyUSB0`), swap `CDCOnBoot=cdc`
-for `CDCOnBoot=default`.
+With no other options it uses the `v1` profile from `sketch.yaml`, the one
+for V1.0. On V2.0, besides changing the pins in `board.h`, add
+`--profile v2` to both commands: it sets the PSRAM to octal mode
+(`PSRAM=opi`), which is what its module has. That profile builds, but it
+hasn't been tested on a real V2.0.
+
+```bash
+tools/arduino-cli compile --profile v2 firmware/pauta
+tools/arduino-cli upload --profile v2 -p /dev/ttyACM0 firmware/pauta
+```
+
+The `firmware/disptest` self-test has its own `sketch.yaml` with the same
+profiles: build and flash it the same way, swapping `firmware/pauta` for
+`firmware/disptest`.
 
 On Linux, if the port gives permission denied, your user needs to be in the
 `dialout` group:
@@ -52,6 +74,41 @@ On Linux, if the port gives permission denied, your user needs to be in the
 ```bash
 sudo usermod -aG dialout $USER   # log out and back in
 ```
+
+### Through the CP2102 port
+
+If you're plugged into the CP2102 port (`/dev/ttyUSB0`), the console has to
+go out through the UART instead of native USB (`CDCOnBoot=default`), and the
+profiles don't include that variant. Pass the whole FQBN with `--fqbn`: it
+wins over the profile's, and the core and libraries are still the ones in
+`sketch.yaml`.
+
+```bash
+FQBN="esp32:esp32:esp32s3:CDCOnBoot=default,PSRAM=enabled,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB"
+
+tools/arduino-cli compile --fqbn "$FQBN" firmware/pauta
+tools/arduino-cli upload -p /dev/ttyUSB0 --fqbn "$FQBN" firmware/pauta
+```
+
+On V2.0, also swap `PSRAM=enabled` for `PSRAM=opi`. Don't reach for
+`--board-options CDCOnBoot=default`: arduino-cli 1.5.1 tacks it onto the end
+of the profile's FQBN and fails with "Invalid FQBN".
+
+### With the Arduino IDE
+
+The Arduino IDE doesn't use the profiles in `sketch.yaml`, so picking the
+versions is up to you: install the `esp32` 3.3.12 core from the Boards
+Manager (with the URL
+`https://espressif.github.io/arduino-esp32/package_esp32_index.json` in
+Preferences) and LovyanGFX 1.2.33 and ArduinoJson 7.4.3 from the Library
+Manager. Then pick the **ESP32S3 Dev Module** board and, under Tools:
+
+| Option | Value |
+|---|---|
+| USB CDC On Boot | Enabled (Disabled if you're on the CP2102 port) |
+| PSRAM | QSPI PSRAM on V1.0, OPI PSRAM on V2.0 |
+| Flash Size | 16MB (128Mb) |
+| Partition Scheme | 16M Flash (3MB APP/9.9MB FATFS) |
 
 ## 4. Set the screen up
 
@@ -148,8 +205,11 @@ and reflash it:
 
 ```bash
 esptool --port /dev/ttyACM0 erase-flash
-tools/arduino-cli upload -p /dev/ttyACM0 --fqbn "$FQBN" firmware/pauta
+tools/arduino-cli upload -p /dev/ttyACM0 firmware/pauta
 ```
+
+(With `--profile v2` on V2.0, or with whatever `--fqbn` you use, as in
+step 3.)
 
 It boots as if fresh out of the box, into first-time setup.
 
@@ -224,6 +284,7 @@ the olive accent loses contrast, so each was tuned separately.
 ```
 firmware/pauta/
   pauta.ino        startup and state machine
+  sketch.yaml      pinned core and library versions (profiles v1 and v2)
   board.h          pins and panel configuration
   theme.h/.cpp     palette, metrics, fonts and logo
   i18n.h/.cpp      translations for screen, bot and portal

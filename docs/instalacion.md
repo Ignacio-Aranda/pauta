@@ -3,27 +3,38 @@
 ## 1. Preparar el entorno
 
 No hace falta el Arduino IDE. Se compila con `arduino-cli`, que puedes
-instalar dentro del propio proyecto para no tocar nada del sistema:
+instalar dentro del propio proyecto para no tocar nada del sistema. Pide la
+versión 1.5.1, que es con la que se ha probado:
 
 ```bash
 mkdir -p tools && cd tools
-curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$PWD sh
+curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$PWD sh -s 1.5.1
 cd ..
+tools/arduino-cli version   # tiene que decir «Version: 1.5.1»
 ```
 
-Instala el core de ESP32 y las dos librerías:
+El core de ESP32 y las librerías no se instalan a mano.
+`firmware/pauta/sketch.yaml` fija las versiones con las que se ha probado el
+firmware, y `arduino-cli` las descarga solo la primera vez que compilas (en
+el paso 3):
 
-```bash
-export ARDUINO_DIRECTORIES_DATA=$PWD/tools/adata
-export ARDUINO_DIRECTORIES_USER=$PWD/tools/auser
-URL=https://espressif.github.io/arduino-esp32/package_esp32_index.json
+| Qué | Versión |
+|---|---|
+| Core `esp32:esp32` | 3.3.12 |
+| LovyanGFX | 1.2.33 |
+| ArduinoJson | 7.4.3 |
 
-tools/arduino-cli core update-index --additional-urls $URL
-tools/arduino-cli core install esp32:esp32 --additional-urls $URL
-tools/arduino-cli lib install LovyanGFX ArduinoJson
-```
+Es una descarga grande (unos 6 GB ya descomprimida), la primera vez tarda. Se
+guarda dentro de `tools/adata`, aparte de lo que instalen `core install` o
+`lib install`, así que actualizar el core por tu cuenta no cambia lo que se
+compila. Si ya tenías el core instalado de antes, esa primera compilación lo
+vuelve a instalar aparte: es normal y solo pasa una vez.
 
-Es una descarga grande, la primera vez tarda.
+### Subir de versión
+
+Las versiones solo cambian a propósito. Para probar otras, cambia los números
+en `firmware/pauta/sketch.yaml` (y en `firmware/disptest/sketch.yaml`),
+compila y prueba en la placa antes de dar el cambio por bueno.
 
 ## 2. Ajustar la revisión de tu placa
 
@@ -37,14 +48,24 @@ la pantalla no pintará nada.**
 ```bash
 export ARDUINO_DIRECTORIES_DATA=$PWD/tools/adata
 export ARDUINO_DIRECTORIES_USER=$PWD/tools/auser
-FQBN="esp32:esp32:esp32s3:CDCOnBoot=cdc,PSRAM=enabled,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB"
 
-tools/arduino-cli compile --fqbn "$FQBN" firmware/pauta
-tools/arduino-cli upload -p /dev/ttyACM0 --fqbn "$FQBN" firmware/pauta
+tools/arduino-cli compile firmware/pauta
+tools/arduino-cli upload -p /dev/ttyACM0 firmware/pauta
 ```
 
-Si conectas por el puerto del CP2102 (`/dev/ttyUSB0`), cambia `CDCOnBoot=cdc`
-por `CDCOnBoot=default`.
+Sin más opciones usa el perfil `v1` de `sketch.yaml`, el de la V1.0. En la
+V2.0, además de cambiar los pines en `board.h`, añade `--profile v2` a las
+dos órdenes: pone la PSRAM en modo octal (`PSRAM=opi`), que es la que lleva
+su módulo. Ese perfil compila, pero no se ha probado en una V2.0 real.
+
+```bash
+tools/arduino-cli compile --profile v2 firmware/pauta
+tools/arduino-cli upload --profile v2 -p /dev/ttyACM0 firmware/pauta
+```
+
+La autocomprobación de `firmware/disptest` tiene su propio `sketch.yaml` con
+los mismos perfiles: se compila y se flashea igual, cambiando
+`firmware/pauta` por `firmware/disptest`.
 
 En Linux, si el puerto da permiso denegado, tu usuario tiene que estar en el
 grupo `dialout`:
@@ -52,6 +73,39 @@ grupo `dialout`:
 ```bash
 sudo usermod -aG dialout $USER   # hay que cerrar sesión y volver a entrar
 ```
+
+### Por el puerto del CP2102
+
+Si conectas por el puerto del CP2102 (`/dev/ttyUSB0`), la consola tiene que
+salir por el UART en vez de por el USB nativo (`CDCOnBoot=default`), y los
+perfiles no traen esa variante. Pasa el FQBN entero con `--fqbn`: manda sobre
+el del perfil, y el core y las librerías siguen siendo los de `sketch.yaml`.
+
+```bash
+FQBN="esp32:esp32:esp32s3:CDCOnBoot=default,PSRAM=enabled,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB"
+
+tools/arduino-cli compile --fqbn "$FQBN" firmware/pauta
+tools/arduino-cli upload -p /dev/ttyUSB0 --fqbn "$FQBN" firmware/pauta
+```
+
+En la V2.0, cambia también `PSRAM=enabled` por `PSRAM=opi`. No sirve
+`--board-options CDCOnBoot=default`: arduino-cli 1.5.1 lo pega detrás del FQBN
+del perfil y falla con «Invalid FQBN».
+
+### Con el Arduino IDE
+
+El Arduino IDE no usa los perfiles de `sketch.yaml`, así que las versiones
+las eliges tú: instala el core `esp32` 3.3.12 desde el gestor de placas (con
+la URL `https://espressif.github.io/arduino-esp32/package_esp32_index.json`
+en Preferencias) y LovyanGFX 1.2.33 y ArduinoJson 7.4.3 desde el gestor de
+librerías. Luego elige la placa **ESP32S3 Dev Module** y, en Herramientas:
+
+| Opción | Valor |
+|---|---|
+| USB CDC On Boot | Enabled (Disabled si conectas por el CP2102) |
+| PSRAM | QSPI PSRAM en la V1.0, OPI PSRAM en la V2.0 |
+| Flash Size | 16MB (128Mb) |
+| Partition Scheme | 16M Flash (3MB APP/9.9MB FATFS) |
 
 ## 4. Configurar la pantalla
 
@@ -148,8 +202,11 @@ flash entera y volver a flashear:
 
 ```bash
 esptool --port /dev/ttyACM0 erase-flash
-tools/arduino-cli upload -p /dev/ttyACM0 --fqbn "$FQBN" firmware/pauta
+tools/arduino-cli upload -p /dev/ttyACM0 firmware/pauta
 ```
+
+(Con `--profile v2` en la V2.0, o con el `--fqbn` que uses, como en el
+paso 3.)
 
 Arranca como recién sacada de la caja, en la primera puesta en marcha.
 
@@ -224,6 +281,7 @@ oliva del acento pierde contraste, así que en cada uno se ajustó por separado.
 ```
 firmware/pauta/
   pauta.ino        arranque y máquina de estados
+  sketch.yaml      versiones fijas del core y las librerías (perfiles v1 y v2)
   board.h          pines y configuración del panel
   theme.h/.cpp     paleta, métricas, fuentes y logotipo
   i18n.h/.cpp      traducción de pantalla, bot y portal
