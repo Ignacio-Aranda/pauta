@@ -43,6 +43,12 @@ static const uint32_t RETRY_MAX_MS   = 300000;
 // Un router que acaba de arrancar puede dar IP y caerse otra vez.
 static const uint32_t LINK_STABLE_MS = 10000;
 
+// Reintentos propios con la lista en pantalla: ver wifiRetry().
+static const uint32_t WIFI_RETRY_FIRST_MS = 15000;
+static const uint32_t WIFI_RETRY_MAX_MS   = 60000;
+// Tiempo sin WL_CONNECTED tras el que se rehace la conexion entera.
+static const uint32_t WIFI_RESET_MS       = 120000;
+
 // Huso de España peninsular, con los cambios de hora incluidos en la regla.
 static const char *TZ_SPAIN = "CET-1CEST,M3.5.0,M10.5.0/3";
 
@@ -172,6 +178,55 @@ static void portalRetry() {
   }
 }
 
+// Reconexion con la lista en pantalla: si se cae el WiFi, el cliente de
+// Telegram se queda esperando solo, pero hay que volver a levantar la
+// conexion. Antes, cada 5 s sin WL_CONNECTED se hacia disconnect() y
+// begin(), y status() no vale WL_CONNECTED hasta tener IP: se cortaban a
+// medias los intentos que ya estaban asociados esperandola, los propios y
+// los del reconectado del core. Ahora es un respaldo cada vez mas espaciado,
+// con el mismo criterio que portalRetry(). Hace falta igual: el core no
+// reconecta si el router rechaza la clave.
+static void wifiRetry() {
+  static bool     down = false;
+  static uint32_t downSince = 0;     // caida, o ultima vez que se rehizo
+  static uint32_t lastTry = 0;
+  static uint32_t gap = WIFI_RETRY_FIRST_MS;
+  uint32_t now = millis();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (down) Serial.printf("wifi de vuelta, IP %s\n", WiFi.localIP().toString().c_str());
+    down = false;
+    gap = WIFI_RETRY_FIRST_MS;
+    return;
+  }
+  // El primer intento propio espera un hueco entero: al caerse, el core ya
+  // esta reconectando.
+  if (!down) {
+    Serial.println("wifi caido");
+    down = true;
+    downSince = now;
+    lastTry = now;
+  }
+  if (now - lastTry < gap) return;
+  lastTry = now;
+
+  const Settings &cfg = settingsGet();
+  if (now - downSince >= WIFI_RESET_MS) {
+    // Respaldo para una IP perdida con la asociacion viva o un driver
+    // atascado: ahi no basta con esperar.
+    Serial.println("wifi caido 2 min o mas, rehago la conexion");
+    WiFi.disconnect();
+    WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
+    downSince = now;
+  } else if (!WiFi.STA.connected()) {
+    // Sin disconnect delante, que sin asociacion no hace falta. Y nada si
+    // ya esta asociado y solo espera la IP, porque begin() lo desconectaria.
+    Serial.println("wifi caido, reintentando");
+    WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
+  }
+  gap = gap * 2 > WIFI_RETRY_MAX_MS ? WIFI_RETRY_MAX_MS : gap * 2;
+}
+
 void setup() {
   // Antes que cualquier otra llamada a WiFi. Sin esto el driver guardaba su
   // propia copia de la red y la clave en "nvs.net80211", que el reset del logo
@@ -237,15 +292,5 @@ void loop() {
     return;
   }
 
-  // Reconexion: si se cae el WiFi, el cliente de Telegram se queda esperando
-  // solo, pero hay que volver a levantar la conexion.
-  static uint32_t lastCheck = 0;
-  if (millis() - lastCheck > 5000) {
-    lastCheck = millis();
-    if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("wifi caido, reintentando");
-      WiFi.disconnect();
-      WiFi.begin(settingsGet().ssid.c_str(), settingsGet().pass.c_str());
-    }
-  }
+  wifiRetry();
 }
