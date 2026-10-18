@@ -154,6 +154,7 @@
              "tone": [
                {"if": [["item.status", "eq", "stale"]], "v": "mute"},
                {"if": [["item.st", "eq", "fail"]], "v": "clay"},
+               {"if": [["item.st", "in", ["slow", "warn"]]], "v": "ochre"},
                {"v": "dim"}
              ]
            },

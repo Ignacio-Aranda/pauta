@@ -49,6 +49,7 @@
       "properties": {
         "lang": {"enum": ["es", "en"]},
         "theme": {"enum": ["day", "night", "auto"]},
+        "bright": {"type": "integer", "minimum": 10, "maximum": 100, "multipleOf": 10},
         "loc": {"$ref": "manifest.schema.json#/$defs/locationValue"},
         "tz": {"$ref": "manifest.schema.json#/$defs/tzValue"},
         "idle": {"type": "integer", "minimum": 0, "maximum": 240},

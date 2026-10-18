@@ -52,7 +52,7 @@ Los ejemplos están en [`examples/`](../examples/): los seis plugins de referenc
 | Fase | Firmware | Qué entra |
 |---|---|---|
 | F0 Cimientos | 1.2.0 | Host de plugins, registro, `mkmanifests.py` (manifiestos y recetas), FAT montada con su comprobación y su escritura segura ([§10.2](#102-fat-interna-976-mb-el-almacén-por-defecto)), secretos apartados, cola de eventos, marcas de fallo y modo seguro. La CI compila en cada cambio los dos perfiles de `sketch.yaml`, `v1` y `v1-hid` ([§7.10](#710-teclado-hid)), y se mide en la placa la RAM interna de los dos binarios ([§7.12](#712-memoria)). **Núcleo del motor de recetas** ([§13.17](#1317-cómo-lo-ejecuta-el-firmware)): lector y validador, plantillas y filtros, condiciones y casos, variables y tablas, las órdenes generales, la cabecera, el pie, la línea de estado y los bloques de página que no dependen de ningún motor (`big`, `buttons`, `rows`, `text`, `list`, `progress`, `spark`, `gap`). Se prueba con recetas de prueba en el host falso del PC y en una compilación de pruebas; el firmware publicado no trae ninguna. El almacén de la lista pasa a ser un módulo del sistema y **Pauta se reescribe como plugin**. Por fuera no cambia nada: es la prueba de fuego |
-| F1 Páginas y Pomodoro | 1.3.0 | Deslizar entre páginas, línea de estado, avisos y **alarmas** ([§13.8](#138-alarmas-avisos-con-histéresis)), reposo con reloj, menú del sistema, interfaz sin WiFi, fuente `Digits96`, **motor `timer`** y la receta de serie **Pomodoro** |
+| F1 Páginas y Pomodoro | 1.3.0 | Deslizar entre páginas, línea de estado, avisos y **alarmas** ([§13.8](#138-alarmas-avisos-con-histéresis)), reposo con reloj, menú del sistema con su subpágina «Pantalla» (y el brillo, si IO45 admite PWM), interfaz sin WiFi, fuente `Digits96`, **motor `timer`** y la receta de serie **Pomodoro** |
 | F2 Mini App y OTA | 1.4.0 | Primero, medir el límite de la URL y comprobar el formato de las fotos de Telegram ([§15](#15-conformidad)). Después: la tarea `net` con el hueco TLS del sistema (tiempo, OTA y catálogo), teclado del bot, Mini App, emparejamiento y estado cifrado y comprimido, ubicación, zona horaria y tiempo en la cabecera, secretos cifrados, bloqueo con PIN, **OTA firmada** y el **catálogo firmado**, con la instalación de recetas desde la Mini App ([P22](#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1)) |
 | F3 nicscom | 1.5.0 | Servicio MQTT, capa crítica, programador declarativo y **nicscom** (nativo) |
 | F4 Oficina | 1.6.0 | Teclado HID (variante `v1-hid`) con las órdenes `hid.*` y el bloque `grid`; recadero HTTP/TLS para los plugins (`http()`, `probe` y `net.user`) con el **motor `monitor`**; recetas de serie **Atajos** y **Semáforo** |
@@ -408,8 +408,10 @@ y=320 └───────────────────────�
 
 ### 5.3 Cabecera (la pinta el sistema)
 
-- **Izquierda.** El icono de la página visible (17 px, en x=26, y=20, el tamaño del logotipo de hoy), su título en `Title23` (16 caracteres como mucho, en x=53, y=18) y su subtítulo en versalitas `Meta13` (28 caracteres como mucho, en x=54, y=48). Los da `header()`. Antes de llamarla, el sistema rellena `title` con el `name` del manifiesto en el idioma actual, `icon` con su `icon`, `subtitle` vacío y `progress` = −1, así que un plugin solo cambia lo que quiere. Con Pauta salen su logotipo en dos colores, «Pauta» y «3 PENDIENTES», como hoy.
-- **Derecha.** La hora en `Clock36`, alineada a x=454, y=14. Debajo, en y=56, la fecha y el tiempo: «SÁB 18 OCT · 17° ☀», con un icono de 12 px. Si el dato del tiempo tiene más de 2 horas, la temperatura sale en `InkMute`. Con más de 6 horas, solo se ve la fecha. Sin hora de NTP no se pinta el reloj, como hoy.
+Es la cabecera **1b** de las maquetas, la que eligió el dueño: la hora grande a la derecha y, debajo, la fecha y el tiempo en pequeño. La variante con el tiempo junto a la hora queda descartada.
+
+- **Izquierda.** El icono de la página visible (17 px, en x=26, y=20, el tamaño del logotipo de hoy), su título en `Title23` (16 caracteres como mucho, en x=53, y=18) y su subtítulo en versalitas `Meta13` y `InkMute` (28 caracteres como mucho, en x=54, y=48). El subtítulo se recorta con «…» para dejar 16 px de aire antes de la fecha. Los da `header()`. Antes de llamarla, el sistema rellena `title` con el `name` del manifiesto en el idioma actual, `icon` con su `icon`, `subtitle` vacío y `progress` = −1, así que un plugin solo cambia lo que quiere. Con Pauta salen su logotipo en dos colores, «Pauta» y «3 PENDIENTES», como hoy.
+- **Derecha.** La hora en `Clock36`, alineada a x=454, y=14. Debajo, en y=56 y alineados también a x=454, la fecha y el tiempo en versalitas `Meta13`: «SÁB 18 OCT · 17° ☀». La fecha va en `InkMute`, y la temperatura y su icono de 12 px, en `InkDim`. Si el dato del tiempo tiene más de 2 horas, la temperatura y el icono pasan a `InkMute`. Con más de 6 horas, solo se ve la fecha. Sin hora de NTP no se pinta el reloj, como hoy.
 - **Filete inferior** (y=77): la barra de progreso de la página, un valor de 0 a 1 o −1 si no hay. Se tiñe de acento en esa proporción, como hoy con las tareas hechas.
 - **Textos de fuera.** El sistema pasa el título y el subtítulo por `printable()` con la fuente de la cabecera ([§5.9](#59-guía-visual)).
 - **Gestos.** La mitad izquierda (x<240) es la zona del logotipo. Un toque abre el **menú del sistema** ([§5.8](#58-menú-del-sistema), desde F1) y mantener el dedo 8 s sigue siendo el reset de fábrica, salvo con la pantalla bloqueada. Mantener el reloj 2 s bloquea la pantalla, si hay PIN.
@@ -432,45 +434,53 @@ y=320 └───────────────────────�
 - **Cuándo se pide `glance()`.** En cada rotación, cada segundo si la línea que se ve es `Live`, y cuando llama a `ctx.redraw()` un plugin cuya página no está a la vista (entonces solo se repinta su línea).
 - **Si no cabe todo.** El texto de un fallo de conexión gana: el botón de acción se esconde mientras dure, como en la 1.1.0. Una línea de estado, en cambio, se recorta, siempre por el texto y nunca por el valor («DESCANSO LA… 1:00:00»), y el botón se queda entero.
 - **Derecha:** el sol o la luna para cambiar el tema, como hoy.
-- **Indicador de páginas:** filetes de 10×2 px apoyados en la raya superior del pie, separados 6 px. El de la página actual mide 18×2 px y va en acento. Solo sale si hay dos páginas o más.
+- **Indicador de páginas:** filetes de 10×2 px en `InkMute`, apoyados en la raya superior del pie y separados 6 px. El de la página actual mide 18×2 px y va en acento. Solo sale si hay dos páginas o más, y **no se pinta mientras se ve una banda** (caería en sus dos últimos píxeles y parecería un subrayado de su texto) ni mientras la página visible tiene `holdPage` (entonces no se puede deslizar).
 - **Medida:** los botones del pie ocupan todo su alto (34 px) y al menos 60 px de ancho. Es la única excepción, heredada de la 1.1.0, a la regla de 44 px. Tocar el pie nunca abre la ventana del teclado HID ([§7.10](#710-teclado-hid)).
 
 ### 5.5 Avisos y capas
 
 | Nivel | Cómo se ve | Duración (`sec` = 0) | En reposo | Con la pantalla bloqueada |
 |---|---|---|---|---|
-| `info` | Banda de 480×46 justo encima del pie | 4 s | Banda encima del reposo, sin despertarlo | Se ve |
-| `warn` | La misma banda, con filete de arcilla | Hasta tocarla o 10 min | Igual, sin despertar | Se ve |
+| `info` | Banda de 480×46 justo encima del pie, con un filete `Rule` de 1 px arriba | 4 s | Banda encima del reposo, sin despertarlo | Se ve |
+| `warn` | La misma banda, con una franja de 2 px arriba, en arcilla (o en acento, con `stripe`) | Hasta tocarla o 10 min | Igual, sin despertar | Se ve |
 | `critical` | Capa a pantalla completa | 30 s (de 3 a 60) o hasta tocarla | **Despierta** la pantalla | Se ve; tocarla la cierra, pero no desbloquea |
 
-- **Campos de un aviso** (`struct Alert`, [§12.1](#121-la-interfaz)): `level`; `title` (40 caracteres como mucho); `body` (120 como mucho); `big` (una cifra corta para la capa crítica, en `Digits96`); `icon`; `pixels` (8×8 colores reales, opcional) y `pixelsRound`; `key` (un aviso nuevo con la misma clave sustituye al anterior); `sec` (0 = la duración de su nivel); `priv` (con la pantalla bloqueada solo se ve el título); `bandAfter` (al acabar, la capa crítica deja una banda `warn`, que conserva la clave del aviso); `open` (tocarlo abre la página del plugin); `flash` (solo `critical`: la retroiluminación parpadea 3 veces).
+- **Campos de un aviso** (`struct Alert`, [§12.1](#121-la-interfaz)): `level`; `title` (40 caracteres como mucho); `body` (120 como mucho); `big` (una cifra corta para la capa crítica, en `Digits96`); `icon`; `pixels` (8×8 colores reales, opcional) y `pixelsRound`; `key` (un aviso nuevo con la misma clave sustituye al anterior); `sec` (0 = la duración de su nivel); `priv` (con la pantalla bloqueada solo se ve el título); `bandAfter` (al acabar, la capa crítica deja una banda `warn`, que conserva la clave del aviso); `open` (tocarlo abre la página del plugin); `flash` (solo `critical`: la retroiluminación parpadea 3 veces); `stripe` (el color de la franja de un `warn` o de la capa: `Clay`, por defecto, o `Accent`; nicscom pide el acento); `status` (un estado con forma que la banda pinta delante en lugar del icono, como el disco de caída de un aviso que no salió).
 - **Se copia todo.** `ctx.alert()` copia en la cola el título, el cuerpo y los 64 colores (unos 420 bytes por entrada), así que el plugin puede usar un búfer local y desactivarse sin dejar punteros colgando. `paintCritical()` recibe esa copia.
 - **Las claves son de cada plugin.** El sistema las combina con el índice del plugin, así que la `key` 1 del Pomodoro no choca con la 1 de nicscom. `ctx.clearAlert(key)` solo borra las suyas. `ctx.keyOf("k3f7a2")` da siempre el mismo número de 16 bits para el `id` de un elemento de lista.
 - **Textos.** El sistema pasa el título y el cuerpo por `printable()` con la fuente de la banda o de la capa.
 - **La banda tapa el final de la página.** Mide 480×46 y ocupa las filas y=162 a 207 de la página. Mientras se ve:
   - el sistema manda `Event::Insets` con `n` = 46, y `ctx.bottomInset()` devuelve 46 (0 cuando desaparece). El `ListView` añade ese margen abajo, para que la última fila se pueda subir por encima de la banda, y una página con controles por debajo de y=162 los recoloca ([§5.9](#59-guía-visual));
-  - los toques que caen dentro de la banda **nunca llegan a la página**: un `Tap` la cierra (o abre la página del plugin si lleva `open`). En reposo o con la pantalla bloqueada, tocar una banda solo la cierra: no despierta el reposo ni saca el teclado del PIN.
-- **Capa crítica.** La banda inferior de 44 px la pinta el sistema: icono, título, hora, el contador si hay varias («1/3») y «TOCA PARA CERRAR», con un filete de arcilla de 2 px arriba. El resto (480×276) lo pinta el plugin en `paintCritical()`. Si no la implementa:
-  - con `pixels`, el sistema pinta el dibujo a 32 px por LED (256×256), con el título al lado en `Title23`;
+  - los toques que caen dentro de la banda **nunca llegan a la página**: un `Tap` la cierra (o abre la página del plugin si lleva `open`). En reposo o con la pantalla bloqueada, tocar una banda solo la cierra: no despierta el reposo ni saca el teclado del PIN;
+  - el indicador de páginas del pie no se pinta ([§5.4](#54-pie-y-línea-de-estado-los-pinta-el-sistema)).
+- **Cómo se pinta la banda.** Fondo `PaperSoft` y, arriba, su filete o su franja. A la izquierda, en x=26, el dibujo (`pixels`, a 4 px por LED: 32×32), el estado con forma (`status`) o el icono, de unos 20 px. Después, el título en `BodyMedium19` y, detrás, en versalitas `InkDim`, el cuerpo o, si no lleva, el nombre del plugin y la hora («NICSCOM · 16:24»). A la derecha, «TOCA PARA CERRAR» en versalitas `InkDim`, salvo en un `info`, que se va solo. El título se recorta con «…» antes de pisar lo demás. El icono va en `InkDim`, en acento si el aviso lleva `stripe` = `Accent`, y `check` va siempre en acento, porque significa «hecho».
+- **Capa crítica.** La banda inferior de 44 px la pinta el sistema: icono, título en `BodyMedium19`, la hora y el contador si hay varias, en versalitas («16:24 · 1/3»), y «TOCA PARA CERRAR», con una franja de 2 px arriba, en arcilla o, con `stripe` = `Accent`, en acento. El resto (480×276) lo pinta el plugin en `paintCritical()`. Si no la implementa:
+  - con `pixels`, el sistema pinta el dibujo a 32 px por LED (256×256, en x=26, y=10) y, a su derecha, el nombre del plugin en versalitas `InkDim` y el título en `Title23`;
   - sin `pixels` y con `big`, el título en `Title23` arriba y la cifra en `Digits96` en el centro (el Pomodoro: «A DESCANSAR» y «05:00»);
   - sin ninguno de los dos, el icono a 48 px, el título en `Title23` y el cuerpo en `Body19`.
 
   Si el plugin que lanza la capa tiene una línea `Live`, el sistema la pinta en `Meta13` debajo de la cifra y la refresca cada segundo: durante los 30 s del aviso del Pomodoro se ve «DESCANSO 04:58», y no solo el «05:00» que se copió al lanzarlo.
-- **Dibujos de LEDs** (`pixels`, en la capa y en `Canvas::pixels`). `0x000000` significa LED apagado: se pinta como un anillo hueco en `RuleSoft`, no como un cuadro negro. Con `pixelsRound` (cierto por defecto) los LEDs encendidos son círculos llenos, como en la matriz real, y con el tema de día llevan un filete de 1 px en `Rule` para que los colores claros se vean sobre el papel.
+- **Dibujos de LEDs** (`pixels`, en la capa, en la banda y en `Canvas::pixels`). Se pintan en el orden recibido y con sus colores reales. Con `pixelsRound` (cierto por defecto), cada LED encendido es un círculo lleno con un radio de 0,42 veces la celda, como en la matriz real.
+  - **Apagados.** `0x000000` es un LED apagado, que nunca se pinta como un cuadro negro. Cómo se ve depende solo del tamaño de la celda: con 16 px o más (la capa, a 32), un anillo en `RuleSoft`; de 5 a 15 px (la lista de canales de nicscom, a 5), un punto de 2 px en `Rule`; con menos de 5 px (la banda y el editor de nicscom, a 4), nada.
+  - **Filete de contraste.** Cada LED encendido que da menos de 2:1 contra el fondo de su superficie (`Paper` en la página y la capa, `PaperSoft` en las bandas) lleva un filete de 1 px en `InkMute`, **en los dos temas**: si no, de día desaparecen el blanco y los azules claros, y de noche, los colores oscuros. Los filetes se pintan antes que los LEDs, así que entre dos vecinos solo asoman en la rendija y la silueta no engorda.
+
+  `Canvas::pixels()` aplica estas reglas solo, sin parámetros nuevos.
 - **Varias capas críticas.** Van en cola por orden de llegada, cada una con su `sec`. Una con la misma clave sustituye a la anterior en su sitio y no vuelve a gastar cupo. Mientras se ve una capa, el brillo sube al 100 %. Un toque que empieza sobre la capa se queda en ella hasta levantar el dedo, así que nunca llega a la página de debajo; y uno que empieza justo después de que la capa se cierre sola tampoco (la guarda de 400 ms del [§6.1](#61-táctil)). Si la capa despertó el reposo, al acabar la última se vuelve al reposo, y un aviso no reinicia la cuenta de inactividad.
 - **Tocar un aviso con `open`.** Con la pantalla desbloqueada, lo cierra y abre la página del plugin, que recibe `Event::AlertTap` con la clave en `tag`. Si el aviso había despertado el reposo, la pantalla se queda despierta en esa página y la cuenta de inactividad empieza de cero. Con la pantalla bloqueada solo lo cierra.
 - **La pantalla de confirmación va por encima de todo** ([§8.2](#82-reglas)), también de la capa crítica: mientras se ve, los avisos esperan en la cola y salen después.
 - **`flash`** enciende y apaga la retroiluminación (IO45, que ya es una salida) tres veces; no necesita PWM. Hay que **medir** que no moleste ni deje marcas en la pantalla.
+- **Capa o banda, a elección del dueño.** Un plugin que avisa con una capa crítica puede ofrecer un ajuste para que su aviso salga como banda `warn`, que no despierta el reposo. Lo hacen el Pomodoro y nicscom, los dos con un ajuste `alert` que vale `full` (a pantalla completa) o `band` (banda). El de nicscom sale además en la subpágina «Pantalla» del menú del sistema ([§5.8](#58-menú-del-sistema)), porque el dueño lo quiere a mano.
 - **Cola y topes.** Caben 8 avisos en cola. Cada plugin tiene un tope de 6 avisos `warn` o `critical` por minuto y 20 por hora; los `info` no cuentan, y sustituir uno con la misma clave tampoco. Al pasarse, un `critical` baja a banda `warn` y un `warn` se funde con el anterior del mismo plugin («y 3 más»). **Nunca se tira un aviso sin decirlo.** `critical` exige el permiso `alert.critical`.
 
 ### 5.6 Reposo
 
 - **Cuándo entra.** Tras `sys.idle` minutos sin tocar (0 = nunca; el valor por defecto lo decide [P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso)), dentro de una franja nocturna (por ejemplo, de 23:30 a 07:00), a mano desde el menú del sistema, al bloquear la pantalla o con `ctx.previewIdle()`. El plugin recibe `Event::IdleOn` con el motivo en `n` (`Timeout`, `Night`, `Manual`, `Lock` o `Preview`), y `ctx.idleReason()` lo devuelve mientras dure. Si el reposo ya estaba puesto cuando empieza la franja nocturna, llega otro `IdleOn` con `Night`, y al acabar la franja, otro con el motivo de antes; la pantalla sigue en reposo, y con las fotos si las hay.
+- **Dos estilos.** El dueño eligió ofrecer los dos de las maquetas, a elegir: el **reloj sobre papel** y la **foto a pantalla completa con faja**. Se eligen con `sys.idle_by`, en la Mini App o en la subpágina «Pantalla» del menú del sistema ([§5.8](#58-menú-del-sistema)), donde «Reloj» es `clock` y «Foto», un proveedor de reposo.
 - **Qué pinta.** Un único **proveedor de reposo**, el que diga `sys.idle_by` ([P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)): con `auto`, el valor por defecto, es el único plugin activo con `surfaces.idle` si hay exactamente uno, y si no, el reloj; con `clock`, siempre el reloj; o el `id` de un plugin con `surfaces.idle`. Así, activar el Salvapantallas lo convierte solo en el proveedor.
-  - **Por defecto, el reloj del sistema:** la hora en `Digits96`, debajo la fecha y el tiempo en `Meta13` y, debajo, las líneas de estado `Live` y `Sticky` y la de la app de serie («3 PENDIENTES»). Así la lista no desaparece del todo ([P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso)). Si hay exactamente una línea `Live`, el reloj la pinta grande, en `Clock36`, en vez de en `Meta13`. Sin hora válida (sin NTP), la cifra grande pasa a ser esa cuenta, o «--:--» si no hay ninguna.
-  - **Un plugin** con `surfaces.idle` y el permiso `idle`, como el Salvapantallas (en una receta, con el motor `slideshow`, [§13.12](#1312-motores-photos-y-slideshow-fotos-y-reposo)). Pinta los 480×320 en `paintIdle()`, que tiene que volver en 40 ms. El sistema solo la llama tras `ctx.redraw()`, durante una transición pedida con `ctx.animate()` (a 10 fotogramas por segundo como mucho) o cuando cambia una capa; nunca cada segundo por sistema.
+  - **Por defecto, el reloj sobre papel**, que pinta el sistema: la hora en `Digits96`, centrada (las cifras van de y=65 a y=136); un filete `Rule` entre márgenes en y=152; debajo, centrados y en versalitas `Meta13` `InkDim` con su icono de 13 px, la fecha, el tiempo y, si va a llover, la hora de la lluvia («LUN 19 OCT · 17° ☀ · LLUVIA 17H»: la primera de las próximas 12 horas con una probabilidad del 50 % o más, [§7.3](#73-ubicación-y-tiempo)); y más abajo, igual de pequeñas, las líneas de estado `Live` y `Sticky` y la de la app de serie («3 PENDIENTES»), cada una con su icono. Así la lista no desaparece del todo ([P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso)). Sin hora válida (sin NTP), la cifra grande pasa a ser la cuenta de la línea `Live`, o «--:--» si no hay ninguna.
+  - **Un plugin** con `surfaces.idle` y el permiso `idle`, como el Salvapantallas (en una receta, con el motor `slideshow`, [§13.12](#1312-motores-photos-y-slideshow-fotos-y-reposo)). Pinta los 480×320 en `paintIdle()`, que tiene que volver en 40 ms. El sistema solo la llama tras `ctx.redraw()`, durante una transición pedida con `ctx.animate()` (a 10 fotogramas por segundo como mucho) o cuando cambia una capa; nunca cada segundo por sistema. La **foto con faja** es lo que pinta el Salvapantallas con sus valores de fábrica (la faja con la hora, la fecha y el tiempo, abajo); en sus ajustes se puede quitar la faja o subirla.
   - **`ctx.idleReady(bool)`.** Si el proveedor no dice que está listo en 1 s desde `IdleOn`, o dice que no tiene nada que enseñar (por ejemplo, ninguna foto), el sistema pinta su reloj. Un `idleReady(true)` que llega tarde cambia del reloj a las fotos sin despertar la pantalla.
-- **Faja del reloj** (`ctx.idleOverlay()`). El proveedor puede pedir que el sistema pinte encima una faja de lado a lado de 480×44, abajo o arriba, en `PaperSoft` al 85 % de opacidad y con su filete, igual que el pie: se lee sobre cualquier foto y sigue pareciendo papel. Lleva la hora en `Clock36` y, si se pide, la fecha y el tiempo en `Meta13` con su icono, con las mismas reglas de dato viejo que la cabecera, y la línea de estado `Live` si la hay. El sistema la refresca cada minuto (o cada segundo con una línea `Live`) sin llamar al plugin, con una copia aparte del fondo de la franja que tapa (480×44, 42 KB de PSRAM), así que no necesita leer el hueco de imagen.
+- **Faja del reloj** (`ctx.idleOverlay()`). El proveedor puede pedir que el sistema pinte encima una faja de lado a lado de 480×44, abajo o arriba, en `PaperSoft` al **92 %** de opacidad y con su filete `Rule`, igual que el pie: se lee sobre cualquier foto, también de noche sobre las zonas claras, y sigue pareciendo papel. Lleva la hora en `Clock36` a la izquierda (x=26) y, si se pide, la fecha y el tiempo en versalitas `Meta13`, en dos líneas a partir de x=132: arriba la fecha en `Ink`, y debajo la temperatura, su icono y la hora de la lluvia en `InkDim`, con las mismas reglas de dato viejo que la cabecera. A la derecha, alineada a x=454, va la línea de estado `Live` con su icono, si la hay. El sistema la refresca cada minuto (o cada segundo con una línea `Live`) sin llamar al plugin, con una copia aparte del fondo de la franja que tapa (480×44, 42 KB de PSRAM), así que no necesita leer el hueco de imagen.
 - **Mandan `sys.live_idle` y `sys.live_lock`.** Si hay una línea `Live` y la opción que toca está activa, el sistema pinta siempre una faja mínima de 480×44 con esa línea, aunque el proveedor no pida faja. Lo que pide el proveedor (en el Salvapantallas, `overlay`) solo decide si además salen la hora, la fecha y el tiempo.
 - **El hueco de imagen completa** (`Slot::Full`, [§7.11](#711-imágenes)) es del plugin que resulta de `sys.idle_by` mientras esté activo, también fuera del reposo, para que tenga la foto preparada al entrar. Fuera del reposo prepara una sola foto tras cada `IdleOff`, no una cada `every`. La capa crítica nunca usa ese hueco.
 - **Dos memorias.** El lienzo conserva la foto que se ve y el hueco recibe la siguiente: mientras la tarea `io` escribe en el hueco, la pantalla sigue enseñando la foto actual (el sistema solo deja de copiar del hueco), y la faja y las bandas se refrescan con normalidad. Así una foto de la tarjeta que tarda en descodificarse no deja la pantalla en blanco.
@@ -479,14 +489,18 @@ y=320 └───────────────────────�
 - **Salir.** El primer toque solo despierta y vuelve a la página que se veía.
 - **Línea viva en reposo y bloqueo.** En la parte de sistema de la Mini App, el dueño elige si las líneas `Live` salen en el reposo (`sys.live_idle`, sí por defecto) y con la pantalla bloqueada (`sys.live_lock`, sí por defecto). Una línea con `priv` no sale con la pantalla bloqueada.
 - **Todo sigue en marcha.** Temporizadores, programaciones, MQTT y peticiones siguen llegando en reposo; lo único que se corta son los toques a las páginas.
-- **Brillo.** Si se comprueba que la retroiluminación (IO45, que es un pin de arranque) admite PWM (encenderla a pulsos para atenuarla) **(medir)**, el reposo baja el brillo al 30 %. Una capa crítica lo sube al 100 % mientras dura.
+- **Brillo.** Lo elige el dueño con `sys.bright`, del 10 al 100 % de 10 en 10, en la Mini App o en la subpágina «Pantalla» del menú. Depende de que la retroiluminación (IO45, que es un pin de arranque) admita PWM (encenderla a pulsos para atenuarla) **(medir en F1)**. Si no lo admite, ese firmware no trae `bright` en su manifiesto del sistema ni el renglón «Brillo», y la pantalla va siempre al 100 %. En reposo, el brillo baja al 30 % (o se queda en `bright`, si es menor). Una capa crítica lo sube al 100 % mientras dura.
 
 ### 5.7 Bloqueo con PIN
 
 - **Se configura en la Mini App.** PIN de 4 a 8 cifras, que viaja en un sobre sellado y se confirma con un toque en la pantalla ([§9.7](#97-cómo-se-meten-los-secretos-el-sobre-sellado), [§8.2](#82-reglas)). Se bloquea a mano (manteniendo el reloj 2 s o desde el menú), a una hora (franja «de 19:00 a 08:00») o tras N minutos sin uso (0 = nunca).
 - **Aviso al configurarlo.** La Mini App enseña, y obliga a marcar «Lo entiendo» (el atributo `ack` del campo, [§9.1](#91-tipos-de-campo)), este texto: «Si olvidas el PIN y no has activado “Desbloquear desde Telegram”, la única forma de recuperar la placa es borrarla entera por USB, y se pierde todo, también la lista». La pantalla de confirmación de la placa lo repite.
 - **Bloquear implica reposo.** El proveedor de reposo recibe `IdleOn` (motivo `Lock`) antes de `Locked`, y al desbloquear, `Unlocked` y después `IdleOff`.
-- **Qué se ve.** El proveedor de reposo, o solo el reloj del sistema si así lo pide `sys.lock_show` ([P18](#p18-con-la-pantalla-bloqueada-se-ven-las-fotos-o-solo-el-reloj)), con un candado en la esquina superior derecha (con la faja del reloj arriba, el candado va dentro de ella, a la izquierda de la hora). Al tocar aparece, durante 30 s, un teclado numérico de 3×4 teclas de 88×52 px sobre un panel de papel de alto completo a la derecha, con los puntos del PIN a la izquierda. Mientras se ve el teclado, el sistema no llama a `paintIdle()` y la foto se queda quieta.
+- **Qué se ve.** El proveedor de reposo, o solo el reloj del sistema si así lo pide `sys.lock_show` ([P18](#p18-con-la-pantalla-bloqueada-se-ven-las-fotos-o-solo-el-reloj)), con un candado de 17 px en la esquina superior derecha (con la faja del reloj arriba, el candado va dentro de ella, a la izquierda de la hora). Al tocar aparece, durante 30 s, un panel de `PaperSoft` de alto completo a la derecha, de x=216 a x=480 y separado por un filete `Rule`:
+  - arriba, el estado: un título en `BodyMedium19` («PIN incorrecto»), los puntos del PIN, un filete y, en versalitas, los intentos que quedan («QUEDAN 2 INTENTOS») y, en `InkDim`, lo que viene después («LUEGO, 30 S DE ESPERA»);
+  - abajo, un teclado numérico de 3×4 teclas de 88×52 px con filetes compartidos: las cifras en `Title23`, borrar con el icono `backspace` en `InkDim` y aceptar con `check` en acento.
+
+  **Los detalles de estado van en el verde de acento** de todo el sistema, no en arcilla (decisión del dueño): el candado, los puntos del PIN, «PIN incorrecto» y los intentos. Es acento sobre `PaperSoft`, que se admite porque el estado se distingue también por la forma ([§5.9](#59-guía-visual)). Con el reloj de reposo debajo, mientras se ve el teclado el reloj se recoge en los 216 px de la izquierda: la hora en `Clock36`, la fecha y, en renglones de 46 px, el tiempo con la lluvia, la línea viva y la de la app de serie. Con una foto debajo, el sistema no llama a `paintIdle()` mientras se ve el teclado, y la foto se queda quieta.
 - **Orden de las capas,** de abajo arriba: el proveedor de reposo, la faja del reloj, la banda de aviso (justo encima de la faja), el candado, el panel del teclado y, encima de todo, la capa crítica.
 - **Qué sigue funcionando.** Los plugins siguen en marcha (el Pomodoro cuenta, nicscom recibe), pero sus páginas no se ven y ningún toque les llega. El teclado HID no teclea y suelta cualquier tecla pulsada. El bot de Telegram funciona, y `/unlock` solo desbloquea si el dueño ha activado esa opción, que viene apagada; encenderla pide un toque en la pantalla ([P27](#p27-encender-desbloquear-desde-telegram-con-un-toque)).
 - **Avisos.** Se ven todos los niveles. Los marcados `priv` solo enseñan el título. Tocar una capa crítica la cierra, pero no desbloquea ni abre la página del plugin.
@@ -507,34 +521,52 @@ y=320 └───────────────────────�
 
 ### 5.8 Menú del sistema
 
-Es una página del sistema de 480×208 que se abre tocando la zona del logotipo (desde F1). Sus renglones se desplazan con el mismo `ListView` que la lista:
+Es una página del sistema de 480×208 que se abre tocando la zona del logotipo (desde F1). Es **una sola lista de renglones**, como la propia Pauta (la **4b** de las maquetas, la que eligió el dueño; la de dos columnas queda descartada), y se desplaza con el mismo `ListView`. La cabecera lleva el logotipo, «Menú» y cuántos plugins hay activos («6 DE 6 ACTIVOS»); el pie, «VOLVER» y la línea de estado de siempre.
 
-- **Plugins:** una checklist. Tocar un renglón activa o desactiva el plugin, y una pulsación larga lleva a «Borrar datos» (y, en una receta instalada, a «Desinstalar»).
-- **Bloquear ahora** y **Reposo ahora**.
-- **Modo seguro:** solo aparece si está activo. Desde aquí se sale o se reactivan los plugins uno a uno.
-- **Actualizar:** «Hay una versión nueva: 1.5.0 · [Instalar]», solo si la hay, o «Buscar actualización» ([§7.13](#713-ota-firmada)).
-- **Dispositivos emparejados:** cuántos hay, «EMPAREJAR» (enseña durante 2 minutos el código de un solo uso y su QR) y «OLVIDAR TODOS» ([§9.4](#94-emparejar-dispositivos)).
-- **Fallo de conexión:** el texto del fallo cuando el pie no lo enseña ([§5.4](#54-pie-y-línea-de-estado-los-pinta-el-sistema)).
-- **Ajustes:** «Abre ⚙ Ajustes en el chat del bot».
-- **Acerca de:** versión y variante, IP, chat vinculado (sí o no), huella de la clave de la placa (16 caracteres hexadecimales, [§9.7](#97-cómo-se-meten-los-secretos-el-sobre-sellado)) y atribuciones, como «Tiempo: Open-Meteo.com (CC BY 4.0)». Si la 1.1.0 vinculó un grupo, avisa de que la Mini App no se puede abrir ahí ([§6.2](#62-telegram)).
+- **Plugins**, arriba: una checklist con la casilla de la lista y el nombre en `Body19` (en `InkDim` si está apagado); el de inicio lleva «INICIO» a la derecha. Tocar un renglón activa o desactiva el plugin, y una pulsación larga lleva a «Borrar datos» (y, en una receta instalada, a «Desinstalar»).
+- **Acciones**, tras un filete `Rule`, más fuerte que los `RuleSoft` de los renglones. Cada una lleva su icono de 17 px en `InkDim`, el nombre en `Body19` y, a la derecha, una nota en versalitas `InkDim`, un botón o un chevron:
+  - **Bloquear ahora** y **Reposo ahora**.
+  - **Modo seguro:** solo aparece si está activo. Desde aquí se sale o se reactivan los plugins uno a uno.
+  - **Actualizar:** «Versión nueva: 1.6.0», con el botón «INSTALAR», solo si la hay, o «Buscar actualización» ([§7.13](#713-ota-firmada)).
+  - **Dispositivos emparejados:** cuántos hay, con el botón «OLVIDAR TODOS», y «Emparejar un dispositivo», que enseña durante 2 minutos el código de un solo uso y su QR ([§9.4](#94-emparejar-dispositivos)).
+  - **Fallo de conexión:** el texto del fallo cuando el pie no lo enseña ([§5.4](#54-pie-y-línea-de-estado-los-pinta-el-sistema)).
+  - **Pantalla:** abre la subpágina de abajo. A la derecha dice «REPOSO · AVISOS · TEMA» y lleva un chevron.
+  - **Ajustes:** «EN EL CHAT DEL BOT». Tocarlo recuerda «Abre ⚙ Ajustes en el chat del bot».
+  - **Acerca de:** a la derecha, la versión y la variante («V1.5.0 · HID»). Tocarlo enseña también la IP, el chat vinculado (sí o no), la huella de la clave de la placa (16 caracteres hexadecimales, [§9.7](#97-cómo-se-meten-los-secretos-el-sobre-sellado)) y las atribuciones, como «Tiempo: Open-Meteo.com (CC BY 4.0)». Si la 1.1.0 vinculó un grupo, avisa de que la Mini App no se puede abrir ahí ([§6.2](#62-telegram)).
+- **Botones dentro de un renglón** («INSTALAR», «OLVIDAR TODOS»): son celdas de alto completo entre filetes ([§5.9](#59-guía-visual)), todas del mismo ancho, para que sus filetes caigan en la misma x.
 
-Configurar sigue siendo cosa de la Mini App. La pantalla solo hace lo imprescindible, más el programador de nicscom, que se edita en la propia página de nicscom.
+**Subpágina «Pantalla».** Reúne lo que se cambia con la placa delante (la 4c de las maquetas). La cabecera lleva el icono `monitor`, «Pantalla» y «MENÚ · AJUSTES»; el pie, «VOLVER», que vuelve al menú. Cada renglón, de 46 px, lleva la etiqueta en versalitas `InkDim` a la izquierda (en dos líneas como mucho) y las opciones con la casilla de la lista en dos columnas fijas, en x=146 y x=362. Tocar una opción la elige al momento. Caben cuatro renglones sin desplazar:
+
+| Renglón | Opciones | Qué cambia |
+|---|---|---|
+| REPOSO | Reloj · Foto | `sys.idle_by` ([§5.6](#56-reposo)): «Reloj» es `clock`, y «Foto», `auto` (o el `id` del proveedor que ya estuviera elegido). Sin proveedor activo o sin fotos, sale el reloj |
+| AVISOS DE NICSCOM | Pantalla completa · Banda | El ajuste `alert` de nicscom ([A.2](#a2-nicscom-nativo-f3)), que lleva `screen`. Solo sale con nicscom activo |
+| TEMA | Día · Noche | `sys.theme`, igual que el sol y la luna del pie. Con `auto`, sale marcado el tema del momento y la etiqueta lleva debajo «AUTO»; tocar uno lo fija |
+| BRILLO | − · barra · cifra · + | `sys.bright`, de 10 en 10 ([§5.6](#56-reposo)). «−» y «+» son celdas de 44×44 entre filetes; en medio, una barra de filete con el nivel en acento y la cifra («70 %»). Solo sale si el firmware regula el brillo |
+
+- **Renglones de los plugins.** Cada campo de ajustes con `screen` ([§9.1](#91-tipos-de-campo)) añade un renglón, por el orden de los plugins y antes de «TEMA». La etiqueta es el texto de `screen`, y las opciones, las dos del campo. En la v1 solo lo usa nicscom. Con más de cuatro renglones, la subpágina se desplaza.
+- **Cómo se guarda.** Igual que un cambio de la Mini App: se escribe en menos de 10 s y sube la revisión; el plugin recibe `Event::Settings` con la clave, y la Mini App, el refresco del [§9.2](#92-cómo-se-abre-un-solo-botón). No pide toque de confirmación, porque ya se está tocando la placa: por eso un campo con `confirm` no puede llevar `screen`.
+
+Configurar sigue siendo cosa de la Mini App. La pantalla solo hace lo imprescindible (P12): activar y desactivar plugins, bloquear, el reposo, salir del modo seguro, el programador de nicscom, que se edita en la propia página de nicscom, y los ajustes de la subpágina «Pantalla», que el dueño quiso tener a mano en el menú.
 
 ### 5.9 Guía visual
 
-**Roles de color.** El plugin nombra el rol y nunca el color. Los valores salen de `theme.cpp`:
+**Roles de color.** El plugin nombra el rol y nunca el color. Los valores salen de `theme.cpp`, al que se añaden los dos roles nuevos, `ClayText` y `Ochre`:
 
 | Rol (`pauta::Role`) | Día | Noche | Uso |
 |---|---|---|---|
-| `Paper` / `PaperSoft` | F3EEE4 / FBF8F2 | 17150F / 201D16 | Fondo / cabecera, pie y bandas |
+| `Paper` / `PaperSoft` | F3EEE4 / FBF8F2 | 17150F / 201D16 | Fondo / cabecera, pie, bandas y la faja del reposo (esta, al 92 %) |
 | `RowPress` | E7E0D2 | 2E2A20 | Lo que está pulsado |
 | `Rule` / `RuleSoft` | D8CFBE / E6DFD2 | 3A352A / 2A261D | Filetes |
 | `Ink` / `InkDim` / `InkMute` | 241F19 / 6B6255 / A19685 | F0EADC / A79C88 / 6E6555 | Texto en tres pesos |
-| `Accent` / `OnAccent` | 6B7A55 / F8F5EF | A3B47F / 1A180F | Hecho, progreso, «bien» / lo que va encima del acento |
-| `Clay` | B0603C | D98A5F | Solo avisos y fallos |
+| `Accent` / `OnAccent` | 6B7A55 / F8F5EF | A3B47F / 1A180F | Hecho, progreso, «bien», los detalles del bloqueo y la franja de los avisos de nicscom / lo que va encima del acento |
+| `Clay` / `ClayText` | B0603C / A25837 | D98A5F / D98A5F | Avisos y fallos: `Clay` en formas, filetes y franjas, y `ClayText` en el texto |
+| `Ochre` | 84682D | D9B25F | «Lenta» y «atención»: el `Warn` de los estados con forma |
 
-- **Un solo acento por página.** Se refiere a `Accent`. `Clay` no cuenta como acento: es el color de los avisos y los fallos, y puede convivir con él.
-- **Los estados se distinguen también por la forma** (`pauta::Status`, que pinta `canvas.status()`): `Ok` = círculo lleno en `Accent`; `Warn` = anillo en `Clay`; `Fail` = círculo lleno en `Clay`; `Unknown` (sin datos) = anillo en `InkMute`; `Stale` (dato viejo) = la forma de su estado en `InkMute`. Si hace falta un tercer color para «atención», lo decide [P21](#p21-colores-del-semáforo).
+- **Un solo acento por página.** Se refiere a `Accent`. `Clay` y `Ochre` no cuentan como acento: son los colores de los avisos, los fallos y la lentitud, y pueden convivir con él.
+- **El verde de acento es el del sistema.** Los detalles de estado que no son un fallo van en `Accent`, no en arcilla: el candado, los puntos y los intentos del bloqueo ([§5.7](#57-bloqueo-con-pin)) y la franja de los avisos de nicscom, en la capa y en la banda ([A.2](#a2-nicscom-nativo-f3)). Lo decidió el dueño con las maquetas.
+- **Contraste.** El texto pide 4,5:1 contra su fondo. Por eso hay un `ClayText`: de día, la `Clay` da 3,96:1 sobre `Paper` y `ClayText`, 4,55:1; de noche son el mismo color. El ocre da 4,54:1 sobre `Paper` de día y 9,1:1 de noche (el B08A3C que se barajó antes daba 2,8:1). Hay **una excepción documentada: acento sobre `PaperSoft`** (4,36:1 de día), que solo se admite en estados que también se distinguen por la forma o el relleno, como los del bloqueo. Lo que hay que leer para usar una página no va en `InkMute` (2,5:1): la posición «1 DE 6» y los chevrons van en `InkDim`.
+- **Los estados se distinguen también por la forma** (`pauta::Status`, que pinta `canvas.status()`): `Ok` = disco `Accent` con la marca de verificación en `OnAccent`; `Warn` = disco `Ochre` con una raya; `Fail` = disco `Clay` con una cruz (la raya y la cruz, en el color del fondo); `Unknown` (sin datos) = anillo en `InkMute`; `Stale` (dato viejo) = la forma de su estado en `InkMute`. Es la 8b de las maquetas: el dueño eligió el ocre para «lenta» en el Semáforo ([A.6](#a6-semáforo-de-webs-y-servicios-receta-f4)).
 - **Dato caducado:** en `InkMute` y con «hace 20 min», no tachado, porque en `Meta13` una raya encima se lee mal.
 - **Colores reales** solo dentro de `pixels` e `image`.
 
@@ -548,9 +580,10 @@ Configurar sigue siendo cosa de la Mini App. La pantalla solo hace lo imprescind
 - El texto fijo de pantalla de un plugin (manifiesto y la tabla de pantalla de `strings.h`) tiene que estar entero dentro de `CHARS` ([`tools/mkfont.py`](../tools/mkfont.py), 134 glifos). `mkmanifests.py` lo comprueba. Los textos que solo van al bot (la tabla `BOT_*` de `strings.h` y el campo `help`) admiten cualquier UTF-8, emojis incluidos ([§14](#14-idiomas)).
 - `✓ ✗ ● ○` están en `CHARS`, pero la TTF no los trae: se usan los iconos.
 
-**Iconos.** Un juego cerrado, dibujado con primitivas como hoy el sol y la luna, de 12 a 48 px. Son 47 en la v1, más `none` (sin icono; un botón sin icono pinta su etiqueta un punto más grande):
+**Iconos.** Un juego cerrado, dibujado con primitivas como hoy el sol y la luna, de 10 a 48 px. Son 51 en la v1, más `none` (sin icono; un botón sin icono pinta su etiqueta un punto más grande):
 
 - generales: `pauta` (el logotipo, en dos colores), `check`, `cross`, `plus`, `minus`, `play`, `pause`, `next`, `prev`, `stop`, `reset`, `timer`, `bell`, `alert`, `lock`, `gear`, `clock`, `search`, `photo`, `lights`, `antenna`;
+- para moverse y escribir: `left` y `right` (las flechas ◀ ▶ del editor de nicscom), `chevron` (el de los renglones que abren algo, de 10 px) y `backspace` (borrar, en el teclado del PIN). `Canvas` no tiene triángulos sueltos, así que las flechas son iconos y se dibujan con las mismas primitivas que los demás;
 - oficina (para Atajos): `keyboard`, `mic`, `mic_off`, `volume`, `volume_off`, `camera`, `camera_off`, `hangup`, `hand`, `monitor`, `window`, `globe`, `mail`, `terminal`, `folder`, `copy`, `paste`, `screenshot`;
 - tiempo: `sun`, `moon`, `cloud`, `sun_cloud`, `rain`, `snow`, `storm` y `fog`, que salen del código WMO (la tabla internacional de códigos meteorológicos) que da Open-Meteo.
 
@@ -562,11 +595,12 @@ Nunca se usan emojis en la pantalla. La Mini App lleva una copia en SVG de los m
 - `bigNumber`: cifra en `Digits96` o `Clock36`, con un pie en versalitas.
 - `progress`: barra hecha de filete. `spark`: minigráfica hecha de filetes.
 - `status` y `dot`: los estados con forma.
-- `button`: filete de 1 px, radio de 9 px como mucho, sin sombra, con icono opcional; pulsado, en `RowPress`.
+- `button`: filete de 1 px, radio de 9 px como mucho, sin sombra, con icono opcional; pulsado, en `RowPress`. **Dentro de un renglón**, un botón es una **celda** de alto completo (45 px sobre su filete) y al menos 88 px de ancho, alineada a x=454 y cerrada a la izquierda por un filete `RuleSoft` de filete a filete, como las teclas del PIN: así se ve lo que de verdad se toca, y no una caja de 32 px. La etiqueta va en versalitas `Ink`. Pulsada, toda la celda en `RowPress`; esperando respuesta, en `RowPress` y con la etiqueta en `InkDim`; apagada, con la etiqueta en `InkMute`. Lo usan «AVISAR» de nicscom e «INSTALAR» y «OLVIDAR TODOS» del menú.
 - `checkbox`: la casilla de la lista de hoy (círculo de 9 px que se llena con la marca de verificación), con su animación.
 - `mark`: el logotipo de Pauta en dos colores, con su trazado animado.
 - `ListView`: renglones con la inercia, el difuminado y el revelado de `ui.cpp`, reutilizable ([§12.2](#122-clases-de-servicio-y-listview)).
-- `pixels`: rejilla de colores reales, de 16×16 como mucho.
+- **Estado vacío:** como el de la lista vacía de la 1.1.0, un icono grande en `Rule`, una frase en `BodyMedium19` y una línea en versalitas `InkDim` («Aún no hay canales · ESPERANDO /TOPICS»).
+- `pixels`: rejilla de colores reales, de 16×16 como mucho, con las reglas de los LEDs del [§5.5](#55-avisos-y-capas).
 - `image`: una imagen ya descodificada ([§7.11](#711-imágenes)).
 
 Las recetas usan estos mismos bloques por su nombre ([§13.5](#135-la-página-vistas-y-bloques)): `big`, `buttons`, `grid` (una rejilla de `button`), `list` (un `ListView` con `row`), `rows`, `text`, `image`, `progress` y `spark`.
@@ -576,6 +610,7 @@ Las recetas usan estos mismos bloques por su nombre ([§13.5](#135-la-página-vi
 - Página de 480×208. El contenido mide 428 px de ancho entre márgenes de 26, o 202 px en media columna.
 - Los bloques con controles o renglones van en múltiplos de 46 px, la altura del renglón (`ROW_H`): 46, 92, 138 o 184. `big`, `progress` y `gap` tienen alto libre, siempre que nada que se toque quede por debajo de y=162.
 - Todo lo que se toca mide al menos 44×44 px (salvo el pie). El texto mide 13 px como mínimo.
+- **Texto en renglones.** Un nombre que llega de fuera (los de los canales de nicscom miden hasta 64 caracteres) se recorta con «…» (`fit()`) hasta lo que tenga a su derecha, sea la hora, una nota o el chevron, y nunca lo pisa. Los días van en formato cerrado, para que el renglón tenga un ancho máximo conocido: «L-V», «L-D», «S-D» o las letras seguidas («LXV»), que es lo que da `ctx.formatDays()`.
 - **Zona de la banda.** Ningún control imprescindible queda por debajo de y=162 de la página mientras se ve una banda: o la página lo pone más arriba, o lo recoloca al recibir `Event::Insets`. `pauta-sim` lo comprueba con una banda pintada.
 - Sin tarjetas ni sombras.
 - Los decimales van con coma en español («17,5°») y con punto en inglés.
@@ -1128,6 +1163,7 @@ Todos los campos llevan `key` (`^[a-z][a-z0-9_]{0,15}$`), `type` y `label` {es,e
 - `confirm`: cambiarlo exige un toque en la pantalla ([§8.2](#82-reglas)). Vale en campos sueltos, en una lista entera (cualquier cambio en ella, también reordenarla o devolverla a lo de fábrica) y en subcampos de una lista. En un `bool`, solo al encenderlo;
 - `keep_hidden`: el campo se conserva aunque `visible_if` lo oculte, y cuenta siempre en el peor caso de `/cfg`. Lo usan las fotos elegidas del Salvapantallas, para no perder 30 fotos marcadas a mano al pasar a «Todas»;
 - `ack` {es,en}: un aviso que la Mini App enseña con una casilla «Lo entiendo», que hay que marcar antes de enviar un cambio de ese campo. Lo usa el PIN ([§5.7](#57-bloqueo-con-pin));
+- `screen` {es,en}, de 24 caracteres como mucho: el campo se puede cambiar también desde la subpágina «Pantalla» del menú del sistema ([§5.8](#58-menú-del-sistema)), con ese texto como etiqueta del renglón. Solo vale en un `select` de primer nivel con exactamente dos opciones (`options`, no `options_from`), sin `visible_if`, `confirm` ni `private`, y en un solo campo por plugin. `mkmanifests.py` comprueba con los anchos reales de la fuente que la etiqueta cabe en dos líneas de versalitas de 108 px y que cada opción cabe en su columna (unos 170 px la primera y 64 la segunda, en `Body19`). Lo usa nicscom: «Avisos de nicscom»;
 - `bound_to`: solo en los secretos ([§7.7](#77-secretos));
 - `scope`: solo en `host` y `url`. `"public"` (solo Internet; por defecto en `url`), `"private"` (solo la red local: IP privada o `.local`) o `"any"`. `"private"` y `"any"` exigen `lan`, como permiso o como permiso opcional.
 
@@ -1155,7 +1191,7 @@ Todos los campos llevan `key` (`^[a-z][a-z0-9_]{0,15}$`), `type` y `label` {es,e
 **Listas.**
 
 - **`id` de cada elemento:** 6 caracteres en base32 con el alfabeto de RFC 4648 en minúsculas (`^[a-z2-7]{6}$`), único dentro de su lista. Lo genera quien crea el elemento: la Mini App o la placa, si se crea en la pantalla. Los elementos que trae `default` declaran su `id` fijo en el manifiesto, y sus campos `text` pueden ir en `{es,en}`: el sistema los pasa al idioma del sistema la primera vez que crea el elemento y desde entonces son un texto más.
-- **`item_label`** se pinta igual en la Mini App y en la pantalla: `days` como «L-V», «L M X» o «Todos»; `time` como «08:30»; `select` con el texto de la opción; `bool` como punto lleno o hueco. `ctx.formatDays(máscara)` da el mismo texto para los días.
+- **`item_label`** se pinta igual en la Mini App y en la pantalla: `days` en formato cerrado, como «L-V», «L-D», «S-D» o las letras seguidas («LXV», [§5.9](#59-guía-visual)); `time` como «08:30»; `select` con el texto de la opción; `bool` como punto lleno o hueco. `ctx.formatDays(máscara)` da el mismo texto para los días.
 - **`unique`**: lista de subcampos que no se pueden repetir juntos (`["ch", "at"]` en nicscom, `["page", "slot"]` en Atajos). Lo validan la Mini App y la placa **sobre el estado final del envío**, después de aplicar todas sus operaciones sobre esa lista, nunca entre una y otra: así, intercambiar dos botones de casilla (dos `item.set`) funciona. Qué pasa si un choque deja la lista a medias está en [§9.5](#95-la-vuelta-senddata).
 - **`sort_by`**: el subcampo por el que se enseña ordenada (nicscom ordena por hora). **`order: "manual"`** permite cambiar el orden con `item.order` ([§9.5](#95-la-vuelta-senddata)), como el de las webs del Semáforo, que es el de su página. No vale con `ui: grid`, donde la posición la deciden la página y la casilla (`mkmanifests.py` lo rechaza).
 - **`ui`**: una pista de presentación para la Mini App. `{"widget": "grid", "rows": "rows", "cols": "cols", "page": "page", "slot": "slot"}` hace que pinte la lista como una rejilla con las filas y columnas de esos campos ([§9.6](#96-la-mini-app)). Una Mini App que no conozca la pista pinta la lista de siempre. Una lista con `ui: grid` **nunca viaja por trozos**: la Mini App necesita la lista entera para pintar la rejilla, arrastrar y comprobar `unique`. `mkmanifests.py` rechaza la que, en el peor caso, no cabría sola en la URL de dos pasos con el presupuesto fijado en F2 (con 2048 caracteres, los 16 botones de Atajos dan unos 1.800).
@@ -1184,7 +1220,7 @@ Todos los campos llevan `key` (`^[a-z][a-z0-9_]{0,15}$`), `type` y `label` {es,e
 - **Lo normal será abrir en dos pasos.** Con el presupuesto provisional, una placa típica (los seis plugins con las listas a medias) da 1.902 B de estado comprimido, más que los 1.383 que caben ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)): al llenar la URL, el Semáforo y el Salvapantallas van como `"@"`, y con todas las listas llenas también Atajos (medido con los estados de prueba). Así que nicscom, Atajos, el Semáforo y el Salvapantallas se abrirán a menudo en dos pasos. Se acepta mientras no se mida (F2). Si el presupuesto medido es bajo, la alternativa es una segunda fila fija de botones para esos plugins, con cuidado con el tope del teclado (`REPLY_MARKUP_TOO_LONG`).
 - **Refresco.** Un teclado de respuesta no se puede editar, solo sustituir.
   - Cuando cambia la revisión, el siguiente mensaje del bot (por ejemplo, el «Guardado») lleva el teclado nuevo, y `/settings` lo vuelve a mandar.
-  - Si se edita en la pantalla una lista que ve la Mini App, o cambia una lista de opciones de la placa que use algún campo, el bot manda en silencio un mensaje corto con el teclado nuevo («Ajustes al día»), como mucho uno cada 2 minutos y nunca antes de 10 minutos desde que salió un botón de dos pasos, y borra el anterior. Así la Mini App no se abre con datos viejos. Las listas de tipo `status` nunca lo provocan. Y si el cambio ya trae una respuesta del bot (por ejemplo, «10 fotos guardadas»), esa respuesta lleva el teclado nuevo y no hay mensaje aparte.
+  - Si se edita en la pantalla una lista que ve la Mini App, se cambia un ajuste desde la subpágina «Pantalla» del menú ([§5.8](#58-menú-del-sistema)) o cambia una lista de opciones de la placa que use algún campo, el bot manda en silencio un mensaje corto con el teclado nuevo («Ajustes al día»), como mucho uno cada 2 minutos y nunca antes de 10 minutos desde que salió un botón de dos pasos, y borra el anterior. Así la Mini App no se abre con datos viejos. Las listas de tipo `status` nunca lo provocan. Y si el cambio ya trae una respuesta del bot (por ejemplo, «10 fotos guardadas»), esa respuesta lleva el teclado nuevo y no hay mensaje aparte.
   - Se borra el mensaje que llevaba el teclado anterior, para no llenar el chat. Vale el teclado del último mensaje que lleve uno, y borrar un mensaje **anterior** no quita el teclado nuevo: Escritorio y Android solo lo quitan si se borra el mensaje que lleva el teclado actual (leído en su código; en iOS queda por **comprobar** en F2). Normas: nunca se borra el mensaje que lleva el teclado actual; un bot solo puede borrar mensajes de menos de 48 horas, así que un `deleteMessage` que falla por eso se da por hecho; y se borran varios a la vez con `deleteMessages` (de 1 a 100 ids).
   - El mensaje `web_app_data` del dueño también se borra tras aplicarlo: el Bot API deja a un bot borrar en un chat privado los mensajes que recibe, también los de servicio, si tienen menos de 48 horas.
   - **Escritorio y los mensajes viejos.** Telegram Desktop no guarda el historial en disco, carga 30 mensajes al abrir el chat y busca el teclado solo entre los cargados. Por eso, si desde el último mensaje con teclado el bot ha mandado unos 20 mensajes, el siguiente vuelve a llevar el teclado (con la misma URL); y las respuestas del sistema (`/start`, `/help`, «Guardado») lo llevan siempre. Se **mide** en F2 (leído en el código, sin probar).
@@ -1388,7 +1424,7 @@ Para leer el estado cifrado y firmar sus envíos, cada móvil u ordenador se emp
 
 - **Dónde está.** En la carpeta `miniapp/` del repositorio, publicada en `https://ignacio-aranda.github.io/pauta/miniapp/`. Lleva su HTML, JS y CSS, la copia fijada de `telegram-web-app.js`, `tz.json` (598 zonas, generado desde tzdata, [§7.3](#73-ubicación-y-tiempo)), los iconos en SVG, `fw/latest.json` (la OTA, [§7.13](#713-ota-firmada)) y un `fw/<versión>/manifests.json` por firmware, con el manifiesto del sistema, los de los plugins y las tablas generadas (campos, distribuciones de teclado y anchos de las letras de `Meta13` para las vistas previas). Estos últimos no cambian nunca, así que una placa vieja siempre encuentra los suyos. Las fichas, incluidos los plugins de firmwares más nuevos («llega con la 1.6.0»), salen del índice firmado del catálogo ([§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)), servido desde la misma Pages. No usa ningún framework y pesa menos de 150 KB sin contar los manifiestos ni la copia de `telegram-web-app.js`, que ocupa ella sola 119.731 B (19.100 B con gzip). Telegram cambia ese archivo a menudo (la última versión, del 6 de octubre de 2026), así que se fija una copia de la Bot API 9.0 o posterior y se renueva su SRI con cada actualización.
 - **Qué pinta.** Los formularios salen solos del manifiesto, sin programar una pantalla por plugin. Tiene tres partes:
-  - **Sistema**: ubicación, servidor de hora, reposo y vuelta al inicio, bloqueo y PIN (con el aviso del [§5.7](#57-bloqueo-con-pin)), qué se ve bloqueada, líneas vivas, inicio y orden, receptor de fotos, distribución y velocidad del teclado, desbloqueo por Telegram, dispositivos emparejados, actualizaciones y modo seguro;
+  - **Sistema**: ubicación, servidor de hora, tema y brillo, reposo (reloj o foto) y vuelta al inicio, bloqueo y PIN (con el aviso del [§5.7](#57-bloqueo-con-pin)), qué se ve bloqueada, líneas vivas, inicio y orden, receptor de fotos, distribución y velocidad del teclado, desbloqueo por Telegram, dispositivos emparejados, actualizaciones y modo seguro;
   - **Plugins**: fichas con permisos, botón de activar y, para las recetas del catálogo, «Instalar» y «Desinstalar» ([P22](#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1));
   - **una pantalla por plugin**.
 - **Rejilla.** Una lista con la pista `ui: grid` se pinta como la botonera de verdad, con sus etiquetas e iconos: se toca una casilla para editarla o se arrastra para moverla. La etiqueta se previsualiza con los anchos reales de la fuente, con su «…» si no cabe. Enseña «16 de 16 botones», avisa de que cualquier cambio en los botones se confirma en la pantalla y, antes de bajar filas, columnas o páginas, avisa de los botones que quedarían fuera y ofrece recolocarlos en las primeras casillas libres.
@@ -1417,17 +1453,18 @@ Los bytes exactos están en el perfil `pauta-crypto-v1` ([§9.9](#99-perfil-crip
 
 ### 9.8 El manifiesto del sistema
 
-El sistema no es un plugin, pero sus ajustes se describen con los mismos tipos de campo ([§9.1](#91-tipos-de-campo)), para que la Mini App los pinte con el mismo motor de formularios. El manifiesto del sistema va en `fw/<versión>/manifests.json`, junto con los de los plugins, y se valida con [`system.schema.json`](../schemas/system.schema.json); el de referencia está en [`examples/system/system.json`](../examples/system/system.json). Sus claves son **las mismas** en `/sys/system.json`, en `sys` del estado de la URL ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)) y en la operación `sys` ([§9.5](#95-la-vuelta-senddata)).
+El sistema no es un plugin, pero sus ajustes se describen con los mismos tipos de campo ([§9.1](#91-tipos-de-campo)), para que la Mini App los pinte con el mismo motor de formularios. El manifiesto del sistema va en `fw/<versión>/manifests.json`, junto con los de los plugins, y se valida con [`system.schema.json`](../schemas/system.schema.json); el de referencia está en [`examples/system/system.json`](../examples/system/system.json). Sus claves son **las mismas** en `/sys/system.json`, en `sys` del estado de la URL ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)) y en la operación `sys` ([§9.5](#95-la-vuelta-senddata)), y el esquema solo admite las de esta tabla. Son 25: el tope de 24 campos de un plugin no se le aplica (su esquema admite 32).
 
 | Clave | Tipo | Por defecto | Qué es | Dónde se usa |
 |---|---|---|---|---|
 | `lang` | `select`: `es`, `en` | `es` | Idioma de la placa, el bot y la Mini App. Se guarda en `tdcfg/lang`, como hoy | [§14](#14-idiomas) |
-| `theme` | `select`: `day`, `night`, `auto` | `night` | Tema. `day` y `night` se guardan en `tdcfg/dark`, como hoy; `auto` sigue el `is_day` del tiempo de la cabecera y no escribe en NVS en cada cambio ([P24](#p24-las-claves-del-sistema)) | [§5.9](#59-guía-visual) |
+| `theme` | `select`: `day`, `night`, `auto` | `night` | Tema. `day` y `night` se guardan en `tdcfg/dark`, como hoy; `auto` sigue el `is_day` del tiempo de la cabecera y no escribe en NVS en cada cambio ([P24](#p24-las-claves-del-sistema)). También en la subpágina «Pantalla» | [§5.8](#58-menú-del-sistema), [§5.9](#59-guía-visual) |
+| `bright` | `number` (%) de 10 a 100, de 10 en 10 | 100 | Brillo de la pantalla; en reposo baja al 30 %. Solo existe en los firmwares que regulan la retroiluminación. También en la subpágina «Pantalla» | [§5.6](#56-reposo), [§5.8](#58-menú-del-sistema) |
 | `loc` | `location`: `{n, lat, lon, tz}` | — | Ciudad del tiempo de la cabecera, con coordenadas de 2 decimales y su zona IANA | [§7.3](#73-ubicación-y-tiempo) |
 | `tz` | `tz`: `{iana, posix}` | `Europe/Madrid` y `CET-1CEST,M3.5.0,M10.5.0/3` | La zona horaria que se aplica. Al elegir ciudad, la Mini App propone la suya | [§7.2](#72-hora-y-zona-horaria) |
 | `ntp` | `host` | vacío | Servidor de hora propio ([P24](#p24-las-claves-del-sistema)) | [§7.2](#72-hora-y-zona-horaria) |
 | `idle` | `number` (min) de 0 a 240 | 10 ([P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso)) | Reposo tras ese tiempo sin tocar; 0 = nunca | [§5.6](#56-reposo) |
-| `idle_by` | `select` de `system.idle` | `auto` | Qué sale en reposo: `auto` (el único plugin activo con `surfaces.idle`, si hay exactamente uno; si no, el reloj), `clock` o el `id` de un plugin ([P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)) | [§5.6](#56-reposo) |
+| `idle_by` | `select` de `system.idle` | `auto` | Qué sale en reposo, con los dos estilos del [§5.6](#56-reposo): el reloj sobre papel (`clock`) o la foto con faja de un proveedor (`auto`: el único plugin activo con `surfaces.idle`, si hay exactamente uno, y si no, el reloj; o el `id` de un plugin) ([P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)). También en la subpágina «Pantalla», como «Reloj» o «Foto» | [§5.6](#56-reposo), [§5.8](#58-menú-del-sistema) |
 | `night` | `bool` | no | Reposo en una franja nocturna | [§5.6](#56-reposo) |
 | `night_from` / `night_to` | `time` | 23:30 / 07:00 | La franja | [§5.6](#56-reposo) |
 | `live_idle` | `bool` | sí | Líneas vivas en el reposo ([P24](#p24-las-claves-del-sistema)) | [§5.6](#56-reposo) |
@@ -1444,9 +1481,10 @@ El sistema no es un plugin, pero sus ajustes se describen con los mismos tipos d
 | `kb` | `select`: `es`, `es-mac`, `us` | `es` | Distribución del teclado del ordenador | [§7.10](#710-teclado-hid) |
 | `kb_speed` | `select`: `50`, `20`, `10` | `20` | Teclas por segundo ([P24](#p24-las-claves-del-sistema)) | [§7.10](#710-teclado-hid) |
 
-- **Claves pendientes.** `home_min`, `live_idle`, `live_lock`, `lock_show`, `ntp`, `kb_speed` y el valor `auto` de `theme` dependen de [P24](#p24-las-claves-del-sistema); `idle_by`, de [P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos). Las otras 17 claves están fijadas.
+- **Claves pendientes.** `home_min`, `live_idle`, `live_lock`, `lock_show`, `ntp`, `kb_speed` y el valor `auto` de `theme` dependen de [P24](#p24-las-claves-del-sistema); `idle_by`, de [P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos). Las otras 18 claves están fijadas; entre ellas, `bright`, el brillo de la subpágina «Pantalla», que sale de las elecciones del dueño sobre las maquetas.
+- **Desde la pantalla.** `idle_by` («Reloj» o «Foto»), `theme` («Día» o «Noche») y `bright` se cambian también en la subpágina «Pantalla» del menú ([§5.8](#58-menú-del-sistema)). El cambio se guarda como uno de la Mini App y la Mini App lo recibe con el refresco del [§9.2](#92-cómo-se-abre-un-solo-botón). Los renglones del sistema los fija el firmware, así que un campo del manifiesto del sistema no lleva `screen`.
 - **`tz` va aparte de `loc`.** La ciudad dice dónde mirar el tiempo; la zona, qué hora pintar. Casi siempre coinciden, y la Mini App rellena las dos a la vez, pero así una placa puede enseñar el tiempo de Málaga con la hora de Canarias.
-- **Listas de opciones del sistema.** `system.pages` (los plugins activos con página), `system.photos` (los plugins con el permiso `photos`, más `auto` y `none`) y `system.idle` (los plugins con `surfaces.idle`, más `auto` y `clock`) las pone la propia Mini App a partir del estado; solo valen en este manifiesto. Por eso `auto`, `clock` y `none` no pueden ser el `id` de un plugin ([§3](#3-manifiesto)).
+- **Listas de opciones del sistema.** `system.pages` (los plugins activos con página), `system.photos` (los plugins con el permiso `photos`, más `auto` y `none`) y `system.idle` (los plugins con `surfaces.idle`, más `auto` y `clock`, que la Mini App enseña como «Automático» y «Reloj sobre papel») las pone la propia Mini App a partir del estado; solo valen en este manifiesto. Por eso `auto`, `clock` y `none` no pueden ser el `id` de un plugin ([§3](#3-manifiesto)).
 - **Sin permisos.** El sistema no los necesita: `ntp` admite una IP de la red local sin el permiso `lan`.
 
 ### 9.9 Perfil criptográfico `pauta-crypto-v1`
@@ -1633,14 +1671,14 @@ namespace pauta {
 
 enum class Err : int8_t { Ok, Denied, Quota, Busy, NoNet, NoMem, Invalid, NotReady };
 enum class Role : uint8_t { Paper, PaperSoft, RowPress, Rule, RuleSoft,
-                            Ink, InkDim, InkMute, Accent, OnAccent, Clay };
+                            Ink, InkDim, InkMute, Accent, OnAccent, Clay, ClayText, Ochre };
 enum class Font : uint8_t { Meta13, Body19, BodyMedium19, Title23, Clock36, Digits96 };
 enum class Align : uint8_t { TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight };
 enum class Level : uint8_t { Info, Warn, Critical };
 enum class Status : uint8_t { None, Ok, Warn, Fail, Unknown, Stale };   // §5.9
 enum class Icon : uint8_t {
   None, Pauta, Check, Cross, Plus, Minus, Play, Pause, Next, Prev, Stop, Reset, Timer, Bell,
-  Alert, Lock, Gear, Clock, Search, Photo, Lights, Antenna,
+  Alert, Lock, Gear, Clock, Search, Photo, Lights, Antenna, Left, Right, Chevron, Backspace,
   Keyboard, Mic, MicOff, Volume, VolumeOff, Camera, CameraOff, Hangup, Hand, Monitor, Window,
   Globe, Mail, Terminal, Folder, Copy, Paste, Screenshot,
   Sun, Moon, Cloud, SunCloud, Rain, Snow, Storm, Fog };
@@ -1683,6 +1721,8 @@ struct Alert {                       // ctx.alert() lo copia todo
   uint16_t key = 0;                  // de cada plugin
   uint16_t sec = 0;                  // 0 = el de su nivel: 4 s, 10 min o 30 s
   bool priv = false;  bool bandAfter = false;  bool open = false;  bool flash = false;
+  Role stripe = Role::Clay;          // franja de warn y de la capa: Clay o Accent (§5.5)
+  Status status = Status::None;      // estado con forma delante, en lugar del icono
 };
 struct Notify { bool loud = false; uint16_t ttlS = 0; uint16_t key = 0; bool dropOverQuota = false; };
 struct ReplyToken { uint16_t id = 0; };
@@ -2164,11 +2204,11 @@ Err Nicscom::begin(Context &c) {
 void Nicscom::onEvent(const Event &e) {
   switch (e.kind) {
     case Event::MqttMsg:
-      if (endsWith(e.a, "/post"))        onPost(e.a);        // capa crítica, o banda si es su eco
+      if (endsWith(e.a, "/post"))        onPost(e.a);        // capa o banda según alert; info si es su eco
       else if (endsWith(e.a, "/config")) keepDrawing(e);     // exige 64 × "#rrggbb"
       else if (!strcmp(e.a, "/topics"))  setChannels(e);     // ^[A-Za-z0-9_-]{1,64}$, los 60 primeros
       break;
-    case Event::MqttState:                                   // «USUARIO O CLAVE INCORRECTOS»…
+    case Event::MqttState:                                   // «CONTRASEÑA INCORRECTA»…
       ctx->setStatus(whyText((MqttWhy)e.tag));  ctx->redraw();
       break;
     case Event::Timer:
@@ -2186,9 +2226,9 @@ void Nicscom::post(const char *ch, bool scheduled) {
   snprintf(topic, sizeof topic, "/%s/post", ch);
   Err e = ctx->mqtt().publish(topic, "1", 1);
   // Publicar en "/topics" o en "/AGUA/config" daría Err::Denied: no están en mqtt.pub.
-  if (e == Err::Ok) markSent(ch);                    // su eco en 2 s será «AVISADO AGUA 12:03»
+  if (e == Err::Ok) markSent(ch);                    // «ENVIANDO…»; su eco en 2 s: «Avisado AGUA 12:03»
   else if (scheduled) queueRetry(ch);                // cada 5 s durante 60 s; después, «no salió»
-  else logMissed(ch, e);                             // «AGUA no salió: sin conexión»
+  else logMissed(ch, e);                             // banda «No salió AGUA · SIN BROKER»
 }
 ```
 
@@ -2348,7 +2388,7 @@ Las claves que empiezan por `x_` son experimentos y el firmware las ignora, como
 
 **Duraciones.** Un número o un hueco seguido de `s`, `m` o `h`: `"25m"`, `"{{cfg.work}}m"`, `"{{cfg.every_s}}s"`. Así una receta convierte minutos en segundos sin aritmética.
 
-**Valores con forma fija.** Los tonos de texto son `ink`, `dim`, `mute`, `accent` y `clay` (los roles `Ink`, `InkDim`, `InkMute`, `Accent` y `Clay` de [§5.9](#59-guía-visual)); los estados con forma, `ok`, `warn`, `fail`, `unknown`, `stale` y `none`; los iconos, los del juego del sistema. En esos sitios vale el nombre, un hueco que lo dé o unos casos.
+**Valores con forma fija.** Los tonos de texto son `ink`, `dim`, `mute`, `accent`, `clay` y `ochre` (los roles `Ink`, `InkDim`, `InkMute`, `Accent`, `Clay` y `Ochre` de [§5.9](#59-guía-visual); en un texto, `clay` se pinta con `ClayText`); los estados con forma, `ok`, `warn`, `fail`, `unknown`, `stale` y `none`; los iconos, los del juego del sistema. En esos sitios vale el nombre, un hueco que lo dé o unos casos.
 
 ### 13.4 Condiciones y casos
 
@@ -2442,7 +2482,7 @@ Cada comando y cada acción del manifiesto tiene su manejador, y no hay manejado
 
 | Orden | Hace | Parámetros | Necesita |
 |---|---|---|---|
-| `alert` | Un aviso en la pantalla ([§5.5](#55-avisos-y-capas)) | `level` (`info`, `warn`, `critical`), `title` (40), `body` (120), `big` (cifra corta, solo `critical`), `icon`, `key`, `sec`, `priv`, `band_after`, `open`, `flash` | `alert.critical` para `critical` |
+| `alert` | Un aviso en la pantalla ([§5.5](#55-avisos-y-capas)) | `level` (`info`, `warn`, `critical`), `title` (40), `body` (120), `big` (cifra corta, solo `critical`), `icon`, `key`, `sec`, `priv`, `band_after`, `open`, `flash`, `stripe` (`clay` o `accent`), `status` | `alert.critical` para `critical` |
 | `alert.clear` | Quita un aviso suyo | `key` | — |
 | `notify` | Un mensaje por Telegram ([§7.8](#78-avisos-y-notificaciones)), con cupo | `text`, o `each` + `line` (+ `head`, `empty`, `max_lines`); `loud`, `ttl_s`, `key` | `notify`; `loud` exige `alert.critical` |
 | `reply` | Contesta al comando o a la acción que se atiende | Como `notify`, sin `loud` | Solo en `command.*`, `action.*` y `monitor.round_end` |
@@ -2821,10 +2861,10 @@ Los seis `plugin.json` completos, con todos sus textos, están en [`examples/plu
 | Plugin | Tipo | Fase | Motores y servicios | Tamaño del `plugin.json` (compacto) |
 |---|---|---|---|---|
 | Pauta | nativo, app de serie | F0 | almacén de la lista, `ListView` | 3,1 KB |
-| nicscom | nativo | F3 | MQTT, programador declarativo, capa crítica | 4,3 KB |
+| nicscom | nativo | F3 | MQTT, programador declarativo, capa crítica | 4,6 KB |
 | Pomodoro | receta de serie | F1 | `timer` | 6,2 KB |
 | Atajos | receta de serie | F4 | `hid.*`, `grid` | 10,8 KB |
-| Semáforo | receta de serie | F4 | `monitor`, alarmas | 10,8 KB |
+| Semáforo | receta de serie | F4 | `monitor`, alarmas | 10,9 KB |
 | Salvapantallas | receta de serie | F5 | `photos`, `slideshow` | 9,6 KB |
 
 ### A.1 Pauta, la app de serie (nativo, F0)
@@ -2845,20 +2885,49 @@ Manifiesto: [`examples/plugins/pauta/plugin.json`](../examples/plugins/pauta/plu
 
 ### A.2 nicscom (nativo, F3)
 
-Manifiesto: [`examples/plugins/nicscom/plugin.json`](../examples/plugins/nicscom/plugin.json) (permisos `lan`, `mqtt`, `alert.critical` y `notify`; `mqtt.sub` `/topics`, `/+/config` y `/+/post`; `mqtt.pub` solo `/+/post`; la lista `autos` con su programación declarativa; la lista de la placa `channels`).
+Manifiesto: [`examples/plugins/nicscom/plugin.json`](../examples/plugins/nicscom/plugin.json) (permisos `lan`, `mqtt`, `alert.critical` y `notify`; `mqtt.sub` `/topics`, `/+/config` y `/+/post`; `mqtt.pub` solo `/+/post`; `"touch": {"longpress": true}` para repetir en el editor; el ajuste `alert`, pantalla completa o banda, con `screen`; la lista `autos` con su programación declarativa; la lista de la placa `channels`).
 
-- **MQTT.** Usa el servicio MQTT con la contraseña nombrada, nunca vista ([§12.4](#124-fragmento-nicscom-con-un-secreto-que-nunca-ve)). El servicio comprueba que el broker es una IP privada, repite las suscripciones en cada reconexión y da el motivo de cada desconexión, que nicscom enseña en su página y manda a la Mini App con `ctx.setStatus()` («USUARIO O CLAVE INCORRECTOS», «SIN BROKER»). Solo puede publicar `1` en `/<canal>/post`. **No es administrador por regla del sistema**: la lista `pub` no le deja tocar `/topics` ni `/<canal>/config`.
+Las pantallas siguen las maquetas 7, 7b y 9 a 11, y lo de nicscom que eligió el dueño sobre ellas: la franja de sus avisos va en acento, el aviso sale a pantalla completa o en banda según un ajuste que también está en el menú, y nicscom no solo recibe: también **manda** y **programa**.
+
+- **MQTT.** Usa el servicio MQTT con la contraseña nombrada, nunca vista ([§12.4](#124-fragmento-nicscom-con-un-secreto-que-nunca-ve)). El servicio comprueba que el broker es una IP privada, repite las suscripciones en cada reconexión y da el motivo de cada desconexión, que nicscom enseña en su página y manda a la Mini App con `ctx.setStatus()` («CONTRASEÑA INCORRECTA», «SIN BROKER»). Solo puede publicar `1` en `/<canal>/post`. **No es administrador por regla del sistema**: la lista `pub` no le deja tocar `/topics` ni `/<canal>/config`.
 - **Validación.** Comprueba los nombres de `/topics` con `^[A-Za-z0-9_-]{1,64}$` y que cada `/config` traiga exactamente 64 `"#rrggbb"`. Se queda con los 60 primeros canales: el servidor de nics-com no limita la lista, así que, si llegan más, la página lo dice («y 3 canales más que no caben») en vez de tirar `/topics` entero. El dibujo se pinta en el orden recibido (índice = fila × 8 + columna), sin darle la vuelta, y `#000000` es un LED apagado.
-- **Página.** El botón del pie alterna entre dos vistas:
-  - **CANALES:** un `ListView` de renglones de 46 px con la miniatura 8x8 (puntos de 5 px, redondos), el nombre, «último aviso 12:03» y un botón «AVISAR» de 88×44 px. Caben 4 renglones; los demás, desplazando.
-  - **PROGRAMADOR:** renglones ordenados por hora, como «08:30 · L-V · AGUA», con un punto lleno o hueco según estén activos, y un renglón «+ NUEVO». Tocar uno abre, dentro de la página y con `ctx.holdPage(true)`, un editor: canal (◀ ▶ sobre la lista de `/topics`), hora y minutos con botones de 44×44, 7 días de 52×44, «GUARDAR» y «BORRAR», y «VOLVER» en el pie. Guarda con `listAdd`, `listSet` y `listDel`, y no deja guardar dos automatizaciones iguales (mismo canal y hora); avisa si hay más de 10 en el mismo minuto. La Mini App edita los mismos elementos por su `id`, y los choques se resuelven elemento a elemento ([§9.5](#95-la-vuelta-senddata)).
+- **Página.** El botón del pie alterna entre dos vistas, CANALES y PROGRAMADOR, y el editor se abre dentro de la segunda. Todas son renglones de 46 px con el `ListView`, como Pauta.
+- **CANALES** (pie «PROGRAMADOR»; subtítulo «6 CANALES»). Un renglón por canal, en el orden de `/topics`: la lista es dinámica y cambia sola cuando llega otra. Cada renglón lleva:
+  - la miniatura del dibujo de `/<canal>/config` en color real, a 5 px por LED (40×40), con los apagados como un punto y el filete de contraste del [§5.5](#55-avisos-y-capas);
+  - el nombre en `BodyMedium19`, recortado con «…» antes de la hora;
+  - la hora del último aviso, en versalitas `InkDim`: «HOY 12:03», «VIE 13:45» o «SIN AVISOS»;
+  - la celda «AVISAR», de 88×45 entre filetes ([§5.9](#59-guía-visual)), que publica `1` en `/<canal>/post`.
+
+  Caben cuatro renglones; los demás, desplazando.
+- **Al tocar AVISAR.** Entre el toque y el eco pasan hasta 2 s. Mientras tanto, la celda se queda en `RowPress` con la etiqueta en `InkDim`, la columna de la hora dice «ENVIANDO…» y otro toque no hace nada.
+  - **Confirmación.** Cuando vuelve el eco sale una banda `info`: filete `Rule`, la marca `check` en acento en el sitio de la miniatura, «Avisado AGUA» y la hora; dura 4 s, sin «TOCA PARA CERRAR». El renglón pasa a «HOY 16:24».
+  - **No salió.** Si `publish()` falla o el eco no vuelve en 2 s, sale una banda `warn` con la franja de arcilla, el disco de caída (`status` = `Fail`), «No salió AGUA» y el motivo corto de `MqttState` («SIN BROKER»), hasta tocarla. Queda apuntado también en el anillo de 10 líneas que enseña la página (abajo, en «Programador»).
+- **Sin broker.** El primer renglón es el estado: el disco de caída, «Sin broker» en `Body19` y `Ink`, y a la derecha, en versalitas, el motivo: «NO CONTESTA · REINTENTO 20 S» (con la cuenta hasta el siguiente intento) o «CONTRASEÑA INCORRECTA» (`BadAuth`, que no reintenta). Debajo, un filete `Rule` y los canales de la última copia guardada, con «AVISAR» apagado (en `InkMute`): tocarlo no hace nada. El subtítulo lo repite («SIN BROKER · 6 CANALES»), como `ctx.setStatus()` en la Mini App.
+- **Sin canales.** Con el broker conectado pero sin `/topics` (aún no ha llegado, o llegó vacío), la página enseña un estado vacío ([§5.9](#59-guía-visual)): la antena en `Rule`, «Aún no hay canales» y «ESPERANDO /TOPICS», con el subtítulo «CONECTADO · 0 CANALES». Si tras 10 s suscrito sigue sin llegar, la línea dice «SIN DATOS O SIN PERMISO».
+- **PROGRAMADOR** (pie «CANALES»; subtítulo «PROGRAMADOR · 3 ACTIVOS»).
+  - El primer renglón es «Nuevo», con el icono `plus`, para que no se pierda en una lista de 24.
+  - Debajo van las automatizaciones, ordenadas por hora, como «08:30 · L-V · AGUA»: la hora en `BodyMedium19`, los días en formato cerrado ([§5.9](#59-guía-visual)) y el canal, separados por «·» en `InkMute`, con un chevron al final.
+  - Cada renglón tiene dos objetivos. La celda de la casilla (62×45, cerrada por un filete) activa o apaga la automatización: casilla llena de acento o anillo en `InkMute`, y con la automatización apagada el texto pasa a `InkDim`. El resto del renglón abre el editor.
+  - El nombre del canal se recorta con «…» antes del chevron. Un canal que ya no está en `/topics` sale en `InkDim`, con «NO ESTÁ AHORA» en versalitas.
+  - Sin automatizaciones, solo sale «Nuevo» y, debajo, un estado vacío: el reloj en `Rule`, «Aún no hay avisos programados» y «TOCA NUEVO PARA CREAR UNO», con el subtítulo «PROGRAMADOR · NINGUNO».
+- **EDITOR.** Va dentro de la página, con `ctx.holdPage(true)` (así que no hay indicador de páginas), y el pie dice «VOLVER». La cabecera dice «Editar aviso», o «Nuevo aviso» si viene de «Nuevo», y el subtítulo dice cuándo saltará («SALTA MAÑANA A LAS 08:30») o por qué no se puede guardar. Es un `ListView` de cuatro renglones de 46 px, con la etiqueta en versalitas a la izquierda y los controles, de x=90 a x=454, como celdas entre filetes, igual que el teclado del PIN:
+  - **CANAL:** ◀ y ▶ (los iconos `left` y `right`, en celdas de 44×44) recorren la lista de `/topics`. Entre ellos van la miniatura a 4 px por LED, el nombre recortado con «…» y la posición en `InkDim` («1 DE 6»).
+  - **HORA:** «−» y «+» para la hora y para los minutos, en celdas de 44×45, con las cifras en `Clock36` y los dos puntos en `InkDim`. Los minutos van de 5 en 5, y la hora y los minutos dan la vuelta (23 pasa a 00, y 55 pasa a 00). Un toque da un paso, y mantener el dedo repite cada 150 ms, también en ◀ ▶: el `LongPress` arranca un `ctx.after(150)` que se vuelve a programar hasta que llega `Up` o `Cancel`.
+  - **DÍAS:** 7 celdas de 52×44. El día marcado es la casilla llena de acento, con la letra en `OnAccent`; el desmarcado, un anillo en `InkMute`.
+  - **Acciones:** «Guardar», con la marca en acento, y «Borrar», como las dos celdas de un renglón. Un aviso nuevo no tiene «Borrar», y «Guardar» va a lo ancho.
+
+  **«Borrar» pide un segundo toque**: el primero arma la celda (en `RowPress`, con una franja de arcilla de 2 px arriba y «¿Borrar? Toca otra vez» en `Ink`), que se desarma sola a los 4 s o al tocar otra cosa. **«Guardar» se apaga** (en `InkMute`) si ya hay otra automatización con el mismo canal y la misma hora («YA EXISTE A LAS 08:30») o si no queda ningún día marcado («ELIGE UN DÍA»). Los dos van en la página porque el pie solo admite una acción, que es «VOLVER». El editor atiende `Event::Insets`: con una banda, el `ListView` añade 46 px abajo y deja subir la fila de acciones por encima de ella, así que la banda nunca tapa «Guardar» ni «Borrar» ([§5.9](#59-guía-visual)). Guarda con `listAdd`, `listSet` y `listDel`, y avisa si hay más de 10 en el mismo minuto. La Mini App edita los mismos elementos por su `id`, y los choques se resuelven elemento a elemento ([§9.5](#95-la-vuelta-senddata)).
 - **Programador.** Lo lleva el sistema con `schedule` ([§6.4](#64-programador-de-eventos)): cada automatización activa salta a su hora y llega como `Event::Timer` con su `id`. Al saltar publica el aviso. Si a esa hora el servicio está reconectando o se ha gastado el depósito de publicaciones, nicscom reintenta cada 5 s durante 60 s; si no sale, lo apunta en un anillo de 10 líneas que enseña la página («08:30 AGUA no salió: sin conexión»). Con la placa apagada, el aviso no sale.
-- **Aviso entrante.** Es un `Alert` de nivel `Critical` (o `Warn`, si `wake` está apagado), con el título del canal, `pixels` con su dibujo, `sec` = `alert_s` y la clave del canal. No implementa `paintCritical()`: el sistema pinta el dibujo a 32 px por LED. Después, la línea de estado dice «AGUA 12:03» durante 10 minutos. Si `tg` está activo, lo reenvía por Telegram, con cupo y con la clave del canal.
-- **Su propio eco.** El aviso que manda Pauta le vuelve por el broker, igual que a las demás placas, y lleva el mismo «1». Un aviso en el mismo canal en los 2 s siguientes a publicar se toma como propio: en vez de la capa grande sale una banda corta, «AVISADO AGUA 12:03», que no despierta el reposo ni se reenvía por Telegram.
+- **Aviso entrante.** Lo decide el ajuste `alert`, que el dueño cambia en la Mini App o en la subpágina «Pantalla» del menú («Avisos de nicscom: pantalla completa / banda», [§5.8](#58-menú-del-sistema)):
+  - **Pantalla completa** (el valor por defecto): un `Alert` de nivel `Critical` con `sec` = `alert_s`, que despierta el reposo. No implementa `paintCritical()`: el sistema pinta el dibujo a 32 px por LED y, a su lado, «NICSCOM» y el nombre del canal;
+  - **Banda**: un `Alert` de nivel `Warn`, que no despierta el reposo y dura hasta tocarlo o 10 minutos. Lleva la miniatura a 4 px por LED y, detrás del nombre del canal, «NICSCOM · 16:24».
+
+  Los dos llevan `stripe` = `Accent`: la franja y la antena van en el verde de acento, no en arcilla (decisión del dueño). Y los dos llevan el título del canal, `pixels` con su dibujo y la clave del canal. Después, la línea de estado dice «AGUA 12:03» durante 10 minutos. Si `tg` está activo, lo reenvía por Telegram, con cupo y con la clave del canal.
+- **Su propio eco.** El aviso que manda Pauta le vuelve por el broker, igual que a las demás placas, y lleva el mismo «1». Un aviso en el mismo canal en los 2 s siguientes a publicar se toma como propio: en vez del aviso grande sale la confirmación de arriba, una banda `info` «Avisado AGUA 12:03» con filete `Rule` y la marca de verificación, que no se confunde con un aviso entrante (con su franja de acento), no despierta el reposo ni se reenvía por Telegram.
 - **Telegram.** `/nics AGUA` avisa y contesta con una respuesta diferida cuando vuelve el eco («Avisado AGUA 12:03») o cuando falla («No salió: sin conexión con el broker»). `/nics` lista los canales con la hora del último aviso.
 - **Mini App.** La lista `runtime.channels` llena el desplegable de canales del programador y de «Avisar ahora». El sistema guarda su última copia, así que sigue ahí aunque el broker no conteste, y un canal que ya no está sale como «AGUA (no está ahora)» sin impedir apagar o borrar su automatización.
 - **Red.** El broker va por IP fija (también acepta `.local`, solo en la misma subred) y la WiFi del trabajo llega a la vez al broker y a Internet. El servidor de hora puede ser el que dé el router o el del campo `sys.ntp`.
-- **Al terminar la ráfaga** (`MqttState` con `n` = 1, [§7.5](#75-mqtt)), pone al día lo que guarda: borra los dibujos que no han llegado y los canales que ya no están en `/topics`, porque un dibujo quitado mientras la placa estaba desconectada no llega como retenido vacío, sino que no llega. Si tras 10 s suscrito no ha llegado `/topics`, la página dice «sin datos o sin permiso».
+- **Al terminar la ráfaga** (`MqttState` con `n` = 1, [§7.5](#75-mqtt)), pone al día lo que guarda: borra los dibujos que no han llegado y los canales que ya no están en `/topics`, porque un dibujo quitado mientras la placa estaba desconectada no llega como retenido vacío, sino que no llega. Si tras 10 s suscrito no ha llegado `/topics`, la página lo dice («SIN DATOS O SIN PERMISO», arriba en «Sin canales»).
 - **Coste.** Unos 16 KB de RAM interna (el cliente, unos 12,5, y la tarea `mqttq`), unos 45 KB de flash por esp-mqtt y ninguna conexión TLS: MQTT va en claro dentro de la red local.
 - **Por qué no es receta.** Lo explica [§2](#2-tipos-de-plugin); un motor `mqtt` genérico llegaría en la 1.x ([§16](#16-fuera-de-alcance-de-la-v1-y-futuro)).
 
@@ -3254,6 +3323,7 @@ Del manifiesto ([`examples/plugins/semaforo/plugin.json`](../examples/plugins/se
            "tone": [
              {"if": [["item.status", "eq", "stale"]], "v": "mute"},
              {"if": [["item.st", "eq", "fail"]], "v": "clay"},
+             {"if": [["item.st", "in", ["slow", "warn"]]], "v": "ochre"},
              {"v": "dim"}
            ]
          },
@@ -3341,7 +3411,7 @@ Del manifiesto ([`examples/plugins/semaforo/plugin.json`](../examples/plugins/se
 
 - **Comprobaciones.** Las hace el motor `monitor` cada `every_min` minutos: un sondeo para las webs (`http`) y la lectura de `/api/v2/status.json` sobre el origen de la dirección para las páginas de estado (`statuspage`; también tras la redirección de `githubstatus.com` a `www.githubstatus.com`), con `none` = bien, `minor` o `maintenance` = atención y `major` o `critical` = caída. Un error local no toca las cuentas: cada web conserva su estado, que pasa a dato viejo a las 3 vueltas. Si en una vuelta fallan todas por la red (una caída del DNS o del router de la oficina), la vuelta no cuenta, y sin Internet no da veredictos: no son 12 caídas falsas. «Internet» quiere decir que algo público contestó en los últimos 3 minutos, no solo Telegram ([§6.5](#65-eventos-del-sistema)). La red nunca deja colgada la placa: el recadero trabaja a trozos de 1 s ([§7.4](#74-red-httptls-con-cola-el-recadero)).
 - **Estados.** Caída tras `fails` fallos seguidos, lenta tras `slow_n` lecturas lentas y de vuelta tras `recover` aciertos. Con «Vigilar el certificado», uno caducado cuenta como fallo y uno al que le quedan menos de `cert_days` días pone la web en «atención». Una web que solo habla TLS 1.3 sale como «no compatible». La tabla completa está en [§13.11](#1311-motor-monitor-vigilante-de-webs-y-servicios).
-- **Página.** Vista `main`: un bloque `list` sobre `monitor.targets`, con el estado con forma delante, el nombre y el resumen del motor («200 · 340 ms · cert 52 d» o el motivo del fallo); un dato viejo, en `InkMute`. Tocar un renglón abre la vista `detail` con esa web: último resultado, cuándo se comprobó, la dirección y una minigráfica con los últimos 24 tiempos; «VOLVER» en el pie.
+- **Página.** Vista `main`: un bloque `list` sobre `monitor.targets`, con el estado con forma delante, el nombre y el resumen del motor («200 · 340 ms · cert 52 d» o el motivo del fallo). Es la 8b de las maquetas, con el **ocre para «lenta»** que eligió el dueño: bien es el disco de acento con la marca; lenta o en atención, el disco ocre con una raya; caída, el disco de arcilla con una cruz ([§5.9](#59-guía-visual)). El resumen va en `InkDim`, en ocre si la web va lenta o en atención y en arcilla si está caída; un dato viejo, en `InkMute`. Tocar un renglón abre la vista `detail` con esa web: último resultado, cuándo se comprobó, la dirección y una minigráfica con los últimos 24 tiempos; «VOLVER» en el pie.
 - **Cabecera y pie.** «11/12 OK», «1 CAÍDA», «3 CAÍDAS» o «COMPROBANDO…» mientras ninguna se ha comprobado aún, y el progreso = webs bien / webs vigiladas. El botón del pie, «COMPROBAR», lanza una vuelta.
 - **Avisos.**
   - Línea de estado fija (`sticky`, estado `fail`) «1 CAÍDA · Tienda» mientras alguna falla; con `glance_ok`, «12/12 OK» cuando todo va bien.
@@ -3355,7 +3425,7 @@ Del manifiesto ([`examples/plugins/semaforo/plugin.json`](../examples/plugins/se
 
 ## Preguntas abiertas
 
-Lo que sigue sin decidir. El texto ya aplica la recomendación de cada pregunta y la marca con su número, así que contestar otra opción solo cambia esos sitios. Las preguntas se numeran de la [P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso) a la [P30](#p30-la-lluvia-de-la-cabecera-las-próximas-12-horas-o-el-día-de-hoy) porque es la numeración con la que se han discutido; las anteriores ya tienen respuesta y forman parte del texto. La P29 y la P30 salen de las pruebas de viabilidad.
+Lo que sigue sin decidir. El texto ya aplica la recomendación de cada pregunta y la marca con su número, así que contestar otra opción solo cambia esos sitios. Las preguntas se numeran de la [P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso) a la [P30](#p30-la-lluvia-de-la-cabecera-las-próximas-12-horas-o-el-día-de-hoy) porque es la numeración con la que se han discutido; las anteriores ya tienen respuesta y forman parte del texto. La P21 (los colores del Semáforo) también está contestada: con las maquetas, el dueño eligió un ocre para «lenta», que ya es un rol del tema ([§5.9](#59-guía-visual)). La P29 y la P30 salen de las pruebas de viabilidad.
 
 | Pregunta | Qué se aplica mientras tanto |
 |---|---|
@@ -3364,7 +3434,6 @@ Lo que sigue sin decidir. El texto ya aplica la recomendación de cada pregunta 
 | [**P18.**](#p18-con-la-pantalla-bloqueada-se-ven-las-fotos-o-solo-el-reloj) Con la pantalla bloqueada, ¿fotos o solo el reloj? | Un ajuste del sistema, `sys.lock_show`, con «reposo» por defecto (o «solo reloj» si la placa vive en la oficina) |
 | [**P19.**](#p19-toque-para-los-destinos-nuevos-de-la-red-local) Toque para cada destino nuevo de la red local | Sí: guardar o cambiar una dirección de la red local pide un toque que enseña la dirección |
 | [**P20.**](#p20-webs-de-tu-red-con-certificado-propio) Webs de tu red con certificado propio | Fijar el certificado: la primera vez la pantalla enseña su huella y, con un toque, se guarda; desde entonces se compara |
-| [**P21.**](#p21-colores-del-semáforo) Colores del Semáforo | Dos colores más la forma: oliva lleno, anillo de arcilla, arcilla llena y anillo gris |
 | [**P22.**](#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1) Recetas del catálogo en la v1 | Sí, en F2, solo del catálogo oficial firmado y con su toque |
 | [**P23.**](#p23-recetas-sin-firmar-en-la-v1) Recetas sin firmar | Solo desde `/pauta/inbox/` de la microSD, marcadas «no verificada», con su toque y en F5 |
 | [**P24.**](#p24-las-claves-del-sistema) Las claves del sistema | Quedan las 23 claves del manifiesto del sistema, más `idle_by` ([P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)), y `theme: auto` |
@@ -3412,14 +3481,6 @@ Un NAS o un router en `https://192.168.1.10:5001` suele llevar un certificado he
 *Opciones:* (a) solo para hosts de la red local y con `lan`, «fijar» el certificado: la primera vez la pantalla enseña su huella SHA-256 y, con un toque, se guarda; desde entonces se compara la huella antes de enviar nada (`getFingerprintSHA256()` ya existe en el core); (b) un modo que solo mira si el puerto contesta; (c) no vigilar `https` en la red local.
 
 *Recomendación:* (a): sigue siendo una comprobación, solo que contra la huella que tú has aceptado. Encaja en el motor `monitor` como opción de `probe`, sin cambiar el formato de receta.
-
-### P21. Colores del Semáforo
-
-El caso pide verde, ámbar y rojo, y la paleta de libreta solo tiene oliva (`Accent`) y arcilla (`Clay`).
-
-*Opciones:* (a) dos colores más la forma: oliva lleno = bien; anillo de arcilla = lenta o atención; arcilla llena = caída; anillo gris = sin datos; (b) añadir un rol `Ochre` (ocre tierra, por ejemplo B08A3C de día y D9B25F de noche) solo para «atención».
-
-*Recomendación:* (a), que encaja con la libreta y ya distingue los estados por la forma. Es lo que usan las recetas de referencia.
 
 ### P22. ¿Se pueden instalar recetas del catálogo ya en la v1?
 

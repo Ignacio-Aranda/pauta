@@ -252,6 +252,7 @@
     "iconName": {
       "enum": ["pauta", "check", "cross", "plus", "minus", "play", "pause", "next", "prev", "stop", "reset", "timer", "bell",
                "alert", "lock", "gear", "clock", "search", "photo", "lights", "antenna",
+               "left", "right", "chevron", "backspace",
                "keyboard", "mic", "mic_off", "volume", "volume_off", "camera", "camera_off", "hangup", "hand", "monitor",
                "window", "globe", "mail", "terminal", "folder", "copy", "paste", "screenshot",
                "sun", "moon", "cloud", "sun_cloud", "rain", "snow", "storm", "fog"]
@@ -434,6 +435,21 @@
     "field": {
       "description": "Un campo de ajustes de primer nivel.",
       "$ref": "#/$defs/fieldCore",
+      "properties": {
+        "screen": {"$ref": "#/$defs/bi24", "description": "El campo se puede cambiar también desde la subpágina «Pantalla» del menú del sistema (apartado 5.8), con este texto como etiqueta del renglón. Solo en un select con exactamente dos opciones fijas, sin visible_if, confirm ni private; uno por plugin (lo comprueba mkmanifests.py)."}
+      },
+      "allOf": [
+        {"if": {"required": ["screen"]}, "then": {
+          "required": ["options"],
+          "properties": {
+            "type": {"const": "select"},
+            "options": {"minItems": 2, "maxItems": 2},
+            "confirm": {"const": false},
+            "private": {"const": false}
+          },
+          "not": {"anyOf": [{"required": ["visible_if"]}, {"required": ["options_from"]}]}
+        }}
+      ],
       "unevaluatedProperties": false
     },
     "subField": {

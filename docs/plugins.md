@@ -17,10 +17,12 @@ abiertas](plugins-referencia.md#preguntas-abiertas).
 ## 1. Las tres piezas
 
 **El sistema** es lo que siempre está y no es un plugin: la **cabecera**, con
-la hora, la fecha y el tiempo de la ciudad que elijas; el **pie**, con el
-botón de acción de la página, el punto de conexión y el sol o la luna; el
-**reposo** (una pantalla tranquila cuando no la usas) y el **bloqueo con
-PIN**; el **menú del sistema**, que se abre tocando el logotipo; la red, el
+la hora en grande a la derecha y, debajo, la fecha y el tiempo de la ciudad
+que elijas; el **pie**, con el botón de acción de la página, el punto de
+conexión y el sol o la luna; el **reposo** (una pantalla tranquila cuando no
+la usas: un reloj grande sobre papel o tus fotos a pantalla completa con una
+faja con la hora, a elegir) y el **bloqueo con PIN**; el **menú del sistema**,
+una lista de renglones que se abre tocando el logotipo; la red, el
 bot y el **modo seguro**, que arranca con todo apagado si la placa se reinicia
 tres veces seguidas por un fallo. También presta los **servicios** que usan
 los plugins: red, MQTT (el protocolo de mensajes de la red nicscom), archivos,
@@ -55,8 +57,8 @@ despierta el reposo) y ser el **proveedor de reposo**
 Unas pocas ideas lo sostienen todo ([§1](plugins-referencia.md#1-principios)):
 
 - **El sistema pinta el marco y el plugin, su página**, con los colores del
-  tema nombrados por su papel (tinta, gris, acento, arcilla) y nunca con
-  colores sueltos, para que todo siga pareciendo papel de día y de noche.
+  tema nombrados por su papel (tinta, gris, acento, arcilla, ocre) y nunca
+  con colores sueltos, para que todo siga pareciendo papel de día y de noche.
 - **Un solo hilo por plugin.** Su código corre en el núcleo de la pantalla; lo
   lento (conexiones cifradas, MQTT, fotos, archivos, teclado) lo hacen tareas
   del sistema, que devuelven el resultado como un evento.
@@ -137,7 +139,9 @@ campo, y la Mini App pinta el formulario sin programar una pantalla por plugin
 | `list` | Elementos repetibles (las webs del Semáforo, los botones de Atajos) |
 
 Cada campo lleva etiqueta y ayuda en los dos idiomas, y puede verse solo según
-otro campo (`visible_if`).
+otro campo (`visible_if`). Un `select` de dos opciones puede llevar además
+`screen`, para cambiarse también desde la subpágina Pantalla del menú de la
+placa, como el «Avisos de nicscom: pantalla completa / banda».
 
 **Ida y vuelta.** La placa le pasa su estado a la Mini App en la URL del
 botón, comprimido y **cifrado**: GitHub Pages solo ve datos cifrados
@@ -176,7 +180,9 @@ cuya recomendación ya aplica el texto.
 
 **En la pantalla, solo lo imprescindible**: el menú del sistema activa y
 desactiva plugins, bloquea, pone el reposo, sale del modo seguro, actualiza y
-empareja u olvida dispositivos
+empareja u olvida dispositivos. Su subpágina **Pantalla** deja a mano lo que
+se cambia con la placa delante: el reposo (reloj o foto), cómo salen los
+avisos de nicscom (pantalla completa o banda), el tema y el brillo
 ([§5.8](plugins-referencia.md#58-menú-del-sistema)).
 **Telegram** sigue para escribir tareas, los comandos de los plugins
 (`/nics AGUA`, `/webs`, `/fondo`), mandar fotos y recibir avisos

@@ -119,7 +119,7 @@
         }
       ]
     },
-    "toneName": {"enum": ["ink", "dim", "mute", "accent", "clay"]},
+    "toneName": {"enum": ["ink", "dim", "mute", "accent", "clay", "ochre"]},
     "statusName": {"enum": ["ok", "warn", "fail", "unknown", "stale", "none"]},
     "iconName": {
       "enum": [
@@ -145,6 +145,10 @@
         "photo",
         "lights",
         "antenna",
+        "left",
+        "right",
+        "chevron",
+        "backspace",
         "keyboard",
         "mic",
         "mic_off",
@@ -402,7 +406,9 @@
               "priv": {"type": "boolean"},
               "band_after": {"type": "boolean"},
               "open": {"type": "boolean"},
-              "flash": {"type": "boolean"}
+              "flash": {"type": "boolean"},
+              "stripe": {"enum": ["clay", "accent"], "description": "Color de la franja de un warn o de la capa crítica (apartado 5.5); clay por defecto."},
+              "status": {"$ref": "#/$defs/statusV", "description": "Estado con forma que la banda pinta delante, en lugar del icono."}
             }
           }
         },

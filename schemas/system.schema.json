@@ -2,14 +2,39 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/Ignacio-Aranda/pauta/main/schemas/system.schema.json",
   "title": "Pauta Plugin API 1.0: manifiesto del sistema",
-  "description": "Los ajustes del sistema descritos con los mismos tipos de campo que un plugin (docs/plugins-referencia.md, apartado 9.8), para que la Mini App los pinte con el mismo motor de formularios. Va en miniapp/fw/<versión>/manifests.json junto con los manifiestos de los plugins. El sistema no es un plugin: no tiene permisos, ni memoria, ni receta. Sus claves son las mismas que viajan en 'sys' del estado (url-state.schema.json) y en la operación 'sys' (miniapp-message.schema.json).",
+  "description": "Los ajustes del sistema descritos con los mismos tipos de campo que un plugin (docs/plugins-referencia.md, apartado 9.8), para que la Mini App los pinte con el mismo motor de formularios. Va en miniapp/fw/<versión>/manifests.json junto con los manifiestos de los plugins. El sistema no es un plugin: no tiene permisos, ni memoria, ni receta. Sus claves son las mismas que viajan en 'sys' del estado (url-state.schema.json) y en la operación 'sys' (miniapp-message.schema.json), y solo valen las de la tabla del apartado 9.8. idle_by, theme y bright se cambian también en la subpágina «Pantalla» del menú (apartado 5.8), pero esos renglones los fija el firmware, así que ningún campo del sistema lleva 'screen'. bright solo aparece en los firmwares que regulan el brillo.",
   "type": "object",
   "required": ["id", "version", "name", "settings"],
   "properties": {
     "id": {"const": "sys"},
     "version": {"$ref": "manifest.schema.json#/$defs/semver"},
     "name": {"$ref": "manifest.schema.json#/$defs/bi16"},
-    "settings": {"$ref": "manifest.schema.json#/$defs/settings"}
+    "settings": {
+      "description": "Como el 'settings' de un plugin, pero sin su tope de 24 campos: el sistema tiene 25 claves.",
+      "type": "object",
+      "required": ["version", "fields"],
+      "properties": {
+        "version": {"type": "integer", "minimum": 1, "maximum": 999},
+        "fields": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "manifest.schema.json#/$defs/field",
+            "properties": {"key": {"$ref": "#/$defs/systemKey"}},
+            "not": {"required": ["screen"]}
+          }
+        }
+      },
+      "additionalProperties": false
+    }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "systemKey": {
+      "description": "Las claves del manifiesto del sistema (apartado 9.8).",
+      "enum": ["lang", "theme", "bright", "loc", "tz", "ntp", "idle", "idle_by", "night", "night_from", "night_to",
+               "live_idle", "home", "home_min", "pin", "lock_min", "lock_sched", "lock_from", "lock_to", "lock_show",
+               "live_lock", "unlock_tg", "photos", "kb", "kb_speed"]
+    }
+  }
 }
