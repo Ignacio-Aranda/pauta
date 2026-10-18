@@ -1,0 +1,3297 @@
+# Estándar de plugins de Pauta — referencia
+
+**Estado: borrador v1** (18 de octubre de 2026).
+
+Esta es la especificación completa y normativa: lo que tienen que cumplir el firmware, la Mini App y cualquier plugin. Si buscas una introducción, empieza por la [guía](plugins.md), que cuenta lo mismo en corto y enlaza aquí para el detalle.
+
+## Índice
+
+- [0. Estado, versión y glosario](#0-estado-versión-y-glosario)
+- [1. Principios](#1-principios)
+- [2. Tipos de plugin](#2-tipos-de-plugin)
+- [3. Manifiesto](#3-manifiesto)
+- [4. Ciclo de vida](#4-ciclo-de-vida)
+- [5. Superficies de pantalla y guía visual](#5-superficies-de-pantalla-y-guía-visual)
+- [6. Entradas](#6-entradas)
+- [7. Servicios del sistema](#7-servicios-del-sistema)
+- [8. Permisos y seguridad](#8-permisos-y-seguridad)
+- [9. Ajustes y Mini App](#9-ajustes-y-mini-app)
+- [10. Almacenamiento](#10-almacenamiento)
+- [11. Distribución y catálogo](#11-distribución-y-catálogo)
+- [12. API C++ de los módulos nativos](#12-api-c-de-los-módulos-nativos)
+- [13. Recetas declarativas (formato v1)](#13-recetas-declarativas-formato-v1)
+- [14. Idiomas](#14-idiomas)
+- [15. Conformidad](#15-conformidad)
+- [16. Fuera de alcance de la v1 y futuro](#16-fuera-de-alcance-de-la-v1-y-futuro)
+- [Anexo A. Los seis encajes de referencia](#anexo-a-los-seis-encajes-de-referencia)
+- [Preguntas abiertas](#preguntas-abiertas)
+
+## 0. Estado, versión y glosario
+
+**Estado.** Borrador v1. Se apoya en la versión 1.1.0 del firmware (rama `estandar-plugins`, commit 0a87398) y todavía no hay código que lo implemente: el plan por fases de este apartado dice en qué orden llega. Lo que falta por decidir está al final, en [Preguntas abiertas](#preguntas-abiertas). Mientras tanto, el texto aplica la opción recomendada de cada pregunta y la marca con su número (por ejemplo, [P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso)), así que contestar otra opción solo cambia esos sitios.
+
+**Esquemas y ejemplos.** Todo lo que define el estándar tiene su esquema JSON (JSON Schema 2020-12, un formato estándar para describir cómo tiene que ser un JSON) en [`schemas/`](../schemas/):
+
+| Esquema | Qué describe |
+|---|---|
+| [`manifest.schema.json`](../schemas/manifest.schema.json) | El manifiesto de un plugin, `plugin.json` ([§3](#3-manifiesto)) |
+| [`recipe.schema.json`](../schemas/recipe.schema.json) | La clave `recipe` de una receta ([§13](#13-recetas-declarativas-formato-v1)) |
+| [`system.schema.json`](../schemas/system.schema.json) | El manifiesto del sistema ([§9.8](#98-el-manifiesto-del-sistema)) |
+| [`url-state.schema.json`](../schemas/url-state.schema.json) | El estado que viaja en la URL de la Mini App, ya descifrado ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)) |
+| [`miniapp-message.schema.json`](../schemas/miniapp-message.schema.json) | Lo que la Mini App manda a la placa con `sendData` ([§9.5](#95-la-vuelta-senddata)) |
+| [`catalog-index.schema.json`](../schemas/catalog-index.schema.json) | El índice del catálogo firmado ([§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)) |
+
+Los ejemplos están en [`examples/`](../examples/): los seis plugins de referencia en `examples/plugins/<id>/plugin.json` ([Anexo A](#anexo-a-los-seis-encajes-de-referencia)), el manifiesto del sistema en [`examples/system/system.json`](../examples/system/system.json) y, en [`examples/wire/`](../examples/wire/), un estado de la URL, un envío de la Mini App, una petición de emparejar, un índice del catálogo y los vectores de prueba de la criptografía (`vectors.json`). Todos los que tienen esquema lo cumplen. Lo que no puede decir un esquema (que una receta no use un ajuste que no existe, que su página quepa, que una orden tenga su permiso) lo comprobará `tools/mkmanifests.py` ([§3](#3-manifiesto), [§13.14](#1314-validación-en-tres-capas)), que llega en F0; los seis plugins de referencia ya se han comprobado con un prototipo de esas reglas.
+
+**Versión.** *Pauta Plugin API v1*, nivel **1.0**. El firmware lo anuncia con `PAUTA_API_MAJOR 1` y `PAUTA_API_MINOR 0`. Un nivel 1.x solo añade cosas opcionales, así que un plugin escrito para 1.0 funciona en cualquier firmware 1.x. Un cambio que rompa plugins hechos obliga a pasar a la v2. El formato de receta tiene su propio número, `"format": 1`, que solo cambiará con la v2 ([§13.18](#1318-evolución)).
+
+**Cifras.** Lo que va marcado **(medir)** o **(comprobar)** es una estimación o un supuesto que hay que verificar en la placa antes de darlo por bueno. El resto sale del código de la 1.1.0, del `sdkconfig` del core esp32 3.3.12 (el archivo con las opciones con las que Espressif compiló el core) o de la tabla de particiones `app3M_fat9M_16MB`.
+
+**Plan por fases.** Cada fase termina en un firmware publicable. Como el Pomodoro es una receta y llega en F1, el núcleo del motor de recetas entra antes, en F0.
+
+| Fase | Firmware | Qué entra |
+|---|---|---|
+| F0 Cimientos | 1.2.0 | Host de plugins, registro, `mkmanifests.py` (manifiestos y recetas), FAT montada, secretos apartados, cola de eventos, marcas de fallo y modo seguro. **Núcleo del motor de recetas** ([§13.17](#1317-cómo-lo-ejecuta-el-firmware)): lector y validador, plantillas y filtros, condiciones y casos, variables y tablas, las órdenes generales, la cabecera, el pie, la línea de estado y los bloques de página que no dependen de ningún motor (`big`, `buttons`, `rows`, `text`, `list`, `progress`, `spark`, `gap`). Se prueba con recetas de prueba en el host falso del PC y en una compilación de pruebas; el firmware publicado no trae ninguna. El almacén de la lista pasa a ser un módulo del sistema y **Pauta se reescribe como plugin**. Por fuera no cambia nada: es la prueba de fuego |
+| F1 Páginas y Pomodoro | 1.3.0 | Deslizar entre páginas, línea de estado, avisos y **alarmas** ([§13.8](#138-alarmas-avisos-con-histéresis)), reposo con reloj, menú del sistema, interfaz sin WiFi, fuente `Digits96`, **motor `timer`** y la receta de serie **Pomodoro** |
+| F2 Mini App y OTA | 1.4.0 | Primero, medir el límite de la URL y comprobar el formato de las fotos de Telegram ([§15](#15-conformidad)). Después: la tarea `net` con el hueco TLS del sistema (tiempo, OTA y catálogo), teclado del bot, Mini App, emparejamiento y estado cifrado y comprimido, ubicación, zona horaria y tiempo en la cabecera, secretos cifrados, bloqueo con PIN, **OTA firmada** y el **catálogo firmado**, con la instalación de recetas desde la Mini App ([P22](#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1)) |
+| F3 nicscom | 1.5.0 | Servicio MQTT, capa crítica, programador declarativo y **nicscom** (nativo) |
+| F4 Oficina | 1.6.0 | Teclado HID (variante `v1-hid`) con las órdenes `hid.*` y el bloque `grid`; recadero HTTP/TLS para los plugins (`http()`, `probe` y `net.user`) con el **motor `monitor`**; recetas de serie **Atajos** y **Semáforo** |
+| F5 Fotos | 1.7.0 | microSD, fotos del bot, servicio de imágenes, **motores `photos` y `slideshow`**, receta de serie **Salvapantallas** y recetas desde `/pauta/inbox/` de la tarjeta ([P23](#p23-recetas-sin-firmar-en-la-v1)) |
+
+- **Por qué el motor va en F0 y no en F1.** F1 ya trae páginas, avisos, reposo y menú. Con el núcleo del motor en F0, F1 solo añade el motor `timer` y la receta, y la CI valida recetas desde el primer día. El riesgo es que F0 crezca: si pasa, el núcleo del motor puede abrir F1, siempre antes del Pomodoro.
+- **Cada motor llega con el servicio que usa.** `timer` en F1, `monitor` con el recadero en F4, `photos` y `slideshow` con la microSD y las imágenes en F5. Una receta que pida un motor que su firmware aún no trae sale «no disponible» ([§13.18](#1318-evolución)).
+- **El Pomodoro de F1 va con los valores de fábrica.** La Mini App y el PIN llegan en F2, y una receta no cambia sus propios ajustes desde la pantalla (configurar es cosa de la Mini App). Hasta F2 el Pomodoro cuenta 25, 5 y 15 minutos con 4 rondas, sin aviso por Telegram (viene apagado y no hay dónde encenderlo), se activa desde el menú del sistema y no hay bloqueo. El caso completo (ciclos configurables, aviso por Telegram y cuenta con la pantalla bloqueada) se cumple desde F2.
+
+**Glosario**
+
+| Término | Qué es |
+|---|---|
+| **Sistema** | Lo que siempre está y no es un plugin: cabecera con hora, fecha y tiempo; pie; reposo; bloqueo; ajustes; red; bot; gestor de plugins; modo seguro; el almacén de la lista, y los servicios del [apartado 7](#7-servicios-del-sistema). |
+| **App de serie** | Plugin que viene activo de fábrica y hace de pantalla de inicio. En la v1 solo lo es Pauta (la checklist). Usa la misma API que los demás y se puede desactivar, pero no desinstalar. |
+| **Almacén de la lista** | El módulo `model.*` de hoy, que guarda las tareas en NVS. Es del sistema, no de Pauta: Pauta lo usa a través de su API ([§10.1](#101-nvs-20-kb-solo-lo-pequeño-y-crítico)). |
+| **Plugin nativo** | Módulo C++ compilado dentro del firmware y revisado en el repositorio de Pauta. En la v1: Pauta y nicscom. |
+| **Receta** | Plugin hecho solo de datos: un `plugin.json` con su manifiesto y una clave `recipe` que el firmware interpreta ([§13](#13-recetas-declarativas-formato-v1)). No tiene código. En la v1: Pomodoro, Atajos, Semáforo y Salvapantallas. |
+| **Receta de serie** | Receta que viaja dentro del firmware. Las cuatro de la v1 lo son. Se pueden actualizar desde el catálogo sin cambiar de firmware. |
+| **Motor** | Pieza de lógica que el firmware implementa una sola vez en C++ y que una receta configura con datos: `timer` (temporizador por fases), `monitor` (vigilante de webs), `photos` (fototeca) y `slideshow` (pase de fotos del reposo). |
+| **Bloque** | Pieza de la página de una receta: cifra grande, botones, rejilla, lista, renglones, texto, imagen, barra o minigráfica ([§13.5](#135-la-página-vistas-y-bloques)). |
+| **Plantilla** | Texto con huecos, como `"{{timer.label}} · {{timer.round}}/{{timer.rounds}}"`, que el sistema rellena con valores ([§13.3](#133-valores-rutas-plantillas-y-filtros)). |
+| **Orden** | Algo que hace una receta cuando pasa algo: `timer.start`, `hid.keys`, `alert`, `notify`… Es una lista cerrada ([§13.7](#137-eventos-y-órdenes)). |
+| **Alarma** | Aviso con estado de una receta: entra con una condición, sale con otra y no parpadea ([§13.8](#138-alarmas-avisos-con-histéresis)). |
+| **Servicio** | Trabajo que el sistema hace por un plugin: red, MQTT, archivos, avisos, teclado, imágenes… El plugin lo pide y el resultado le llega como **evento**. |
+| **Superficie** | Sitio de la pantalla donde un plugin puede pintar: su página, la cabecera, la línea de estado, un aviso o el reposo. |
+| **Permiso** | Capacidad que el plugin declara en su manifiesto. Se enseña al activarlo y el sistema la comprueba en cada llamada. |
+| **Catálogo** | La lista de plugins disponibles: un índice firmado en GitHub Pages (`catalog/v1/index.json`) con las fichas de todos y los archivos de las recetas que se pueden instalar ([§11](#11-distribución-y-catálogo)). |
+| **Mini App** | Página web estática alojada en GitHub Pages, en la carpeta `miniapp/`, que Telegram abre desde un botón del chat del bot. Es la única pantalla de configuración. |
+| **Dispositivo emparejado** | Un móvil u ordenador cuya Mini App ha recibido, con un toque en la pantalla, la clave para leer el estado cifrado de la URL y una clave propia para firmar sus envíos ([§9.4](#94-emparejar-dispositivos)). |
+| **Dueño** | La persona cuyo chat privado de Telegram está vinculado a la placa: el primero que le escribe ([§6.2](#62-telegram)). Es quien configura, activa plugins y da las órdenes. |
+| **Manifiesto** | El archivo `plugin.json` de cada plugin. Describe nombre, permisos, ajustes, comandos, textos y memoria y, en una receta, lleva además la receta. Es la única fuente de verdad. |
+| **Manifiesto del sistema** | La descripción de los ajustes del sistema con los mismos tipos de campo que un plugin, para que la Mini App los pinte igual ([§9.8](#98-el-manifiesto-del-sistema)). |
+| **Host** | La parte del firmware que carga los plugins, les entrega eventos, aplica los permisos y les presta los servicios. El plugin solo lo ve a través del objeto `Context`. El **host de recetas** es el plugin nativo que interpreta una receta ([§12.6](#126-el-host-de-recetas)). |
+| **Revisión** | Número que sube con cada cambio de ajustes, igual que hoy `tasksRevision()` sube con cada cambio de la lista. |
+| **Variante** | Cada binario distinto que se publica de una misma versión: `v1` (placa V1.0), `v1-hid` (V1.0 con teclado USB), `v2` (placa V2.0). |
+
+**Términos técnicos que salen a menudo**
+
+- **Núcleo**: cada una de las dos CPU del ESP32-S3. Hoy el núcleo 0 lleva la red y el 1, la pantalla.
+- **Tarea**: cada «hilo» de trabajo que reparte FreeRTOS, el sistema operativo mínimo que trae el chip. Cada tarea tiene su **pila**, la memoria donde guarda sus variables mientras trabaja.
+- **RAM interna**: unos 512 KB dentro del chip, de los que quedan libres unos 270 al arrancar. Es la memoria más escasa, porque la WiFi y el cifrado TLS solo funcionan con ella.
+- **PSRAM**: 2 MB de memoria externa, más lenta. Aquí vive el lienzo de 307 KB donde se dibuja la pantalla.
+- **NVS**: almacén pequeño de ajustes dentro de la flash (20 KB). Guarda hoy la lista (`taskdesk`) y los ajustes (`tdcfg`).
+- **FAT interna**: un «disco» de 9,6 MB dentro de la flash, que hoy nadie usa.
+- **TLS**: el cifrado de `https`. Cada conexión TLS ocupa unos 40-50 KB de RAM interna. El **saludo TLS** es el intercambio de claves con el que empieza cada conexión.
+- **MQTT**: protocolo de mensajes ligero que usa la red nicscom del laboratorio. El **broker** es el servidor que reparte los mensajes.
+- **HID**: dispositivo de entrada, aquí un teclado. **TinyUSB** es la pila USB que permite al ESP32-S3 hacerse pasar por teclado. **BLE** es Bluetooth de bajo consumo.
+- **OTA**: actualizar el firmware por WiFi, sin cable.
+- **Watchdog** (vigilante): mecanismo que reinicia la placa si algo se queda colgado. **Pánico**: el reinicio que provoca un error grave, como leer una dirección que no existe.
+- **Mutex** (cerrojo): mecanismo que impide que los dos núcleos toquen el mismo dato a la vez.
+- **base64url**: forma de escribir datos binarios con letras, cifras, `-` y `_`, para que viajen dentro de una URL sin tener que escaparlos. **base32**: lo mismo con solo 32 signos (letras y las cifras del 2 al 7), que se leen bien en voz alta.
+- **deflate**: el método de compresión de los `.zip`. «deflate-raw» es deflate sin cabecera.
+- **JSON Schema**: un formato estándar para describir cómo tiene que ser un JSON; con él, un programa comprueba solo si un archivo está bien hecho.
+- **ECDH, HKDF, AES-GCM, HMAC, ECDSA**: piezas de criptografía. ECDH sirve para que dos partes acuerden una clave sin enviarla; HKDF saca de ella una clave para cada uso; AES-GCM cifra y además detecta cualquier cambio en el mensaje; HMAC es una «firma» con clave compartida que prueba quién mandó un mensaje; ECDSA es una firma con clave pública, que cualquiera comprueba pero solo el dueño de la clave privada puede hacer.
+- **semver**: versión con la forma `MAYOR.MENOR.PARCHE`, por ejemplo `1.4.2`.
+- **Histéresis**: que un aviso entre con una condición y salga con otra (o tras varias lecturas seguidas), para que no se encienda y se apague a cada momento.
+
+## 1. Principios
+
+1. **Una sola interfaz.** Pauta, nicscom y las cuatro recetas usan la misma API; las recetas, a través del host de recetas, que es un plugin nativo más ([§12.6](#126-el-host-de-recetas)). La prueba de que basta es que la checklist quepa en ella sin perder nada de la 1.1.0.
+2. **El sistema pinta el marco y el plugin pinta su página**, siempre con los roles de color, las fuentes y los bloques del sistema. Los colores reales solo aparecen dentro de las imágenes y los dibujos de píxeles.
+3. **Un solo hilo por plugin.** Todas las funciones de un plugin se ejecutan en el núcleo 1, dentro de `loop()`. Lo lento (TLS, MQTT, descargas, descodificar imágenes, archivos, teclado) lo hacen tareas del sistema y devuelven el resultado como evento. Así quien escribe un plugin no necesita cerrojos.
+4. **Declarar antes que programar.** Permisos, ajustes, comandos, programaciones y textos van en el manifiesto. De ahí salen la ficha, el formulario de la Mini App y la validación de todo lo que llega a la placa. Y si lo difícil ya lo hace un motor del sistema, el plugin entero puede ser una receta, sin código ([§13](#13-recetas-declarativas-formato-v1)).
+5. **Secretos fuera de alcance.** Ningún plugin lee el WiFi, el token ni sus propios secretos en claro: solo los nombra, y es el servicio quien los usa.
+6. **Nada encendido aparte de la placa.** Telegram, una Mini App estática en GitHub Pages y APIs públicas, sin servidor propio.
+7. **Presupuestos con números.** Memoria, tiempos y escrituras en la flash tienen tope, se miden y el sistema los hace cumplir.
+8. **Fallar en pequeño.** Un plugin que falla se apaga solo. Puede haber un reinicio, pero nunca un bucle de reinicios.
+9. **La flash se escribe poco**, en diferido y, salvo las excepciones documentadas del [§10.2](#102-fat-interna-96-mb-el-almacén-por-defecto), con la pantalla quieta.
+10. **Compatible y bilingüe.** `taskdesk` y `tdcfg` no cambian de formato. Todo texto existe en español y en inglés: si falta uno, no compila.
+11. **Aislamiento honesto.** En C++ todo comparte memoria. El aislamiento sale del diseño de la API, de un lint (un comprobador automático del código) en la CI y de la revisión humana. Por eso los plugins nativos solo entran revisados. Las recetas no tienen código, y por eso pueden venir de un catálogo.
+12. **Por fases**, recolocando `ui.cpp` y `telegram.cpp` en vez de reescribirlos.
+
+## 2. Tipos de plugin
+
+| Tipo (`kind`) | Qué es | Llega por | v1 |
+|---|---|---|---|
+| `native` | Clase C++ en `firmware/pauta/src/plugins/<id>/` | Una actualización de firmware | **Sí**: Pauta y nicscom |
+| `recipe` | Un `plugin.json` con su receta ([apartado 13](#13-recetas-declarativas-formato-v1)), que interpreta el host de recetas con los motores del sistema | Dentro del firmware (recetas de serie); el catálogo firmado (F2, [P22](#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1)); la microSD (F5, [P23](#p23-recetas-sin-firmar-en-la-v1)) | **Sí**: Pomodoro, Atajos, Semáforo y Salvapantallas |
+| Script (Berry u otro motor) | Código interpretado y aislado | — | Reservado, sin fecha |
+| ELF cargable o firmware a medida | Código nativo desde un archivo, o un binario compilado por usuario | — | **Descartados**: sin aislamiento, o exigen servidor |
+
+**Por qué estos cuatro son recetas.** Lo difícil de cada uno es una pieza que sirve para muchos plugins y que el firmware escribe una sola vez, bien probada: un temporizador por fases, un teclado con sus reglas de seguridad, un pase de fotos que hace de reposo y un vigilante de webs con histéresis y certificados. Lo que cambia de un plugin a otro (duraciones, botones, webs, qué se pinta y qué se avisa) son datos. Una receta no tiene código, así que no puede colgar la placa, leer lo que no le toca ni gastar más de lo que dicen sus límites, y cualquiera puede escribir una sin compilar nada.
+
+**Por qué nicscom y Pauta siguen siendo nativos.**
+
+- **nicscom** valida a mano lo que llega por MQTT (dibujos de 64 colores, la lista de canales), pinta cada aviso como la matriz de LEDs real y tiene un editor de automatizaciones dentro de su página, con `holdPage()` y botones ◀ ▶. Un motor `mqtt` genérico queda para la 1.x ([§16](#16-fuera-de-alcance-de-la-v1-y-futuro)).
+- **Pauta** es la app de serie: hereda los datos de `taskdesk`, recibe el texto libre del bot y su lista con tachado animado e inercia es el `ListView` de [§12.2](#122-clases-de-servicio-y-listview). Es la prueba de que la API basta.
+
+**Qué es «instalar» en la v1.**
+
+- **Un nativo** viaja dentro del firmware. Los nativos nuevos llegan con firmware nuevo, por USB o por la OTA firmada ([§7.13](#713-ota-firmada)).
+- **Una receta de serie** también viaja dentro del firmware, incrustada como datos. Se puede actualizar desde el catálogo sin cambiar de firmware; si se desinstala esa versión, vuelve la de serie.
+- **Una receta del catálogo** se instala desde la Mini App (operación `install`, [§9.5](#95-la-vuelta-senddata)): la placa la descarga de GitHub Pages, comprueba la firma del índice y la huella del archivo, la valida y enseña sus permisos en la pantalla, que piden un toque ([§4](#4-ciclo-de-vida), [§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)).
+
+**El papel no es un tipo.** Que un plugin tenga página, sea proveedor de reposo o lance avisos críticos lo declara en `surfaces` y en `permissions`, no en `kind`.
+
+**Terceros.**
+
+- **Recetas:** cualquiera puede proponer una al catálogo con un *pull request* (petición de cambio en GitHub). La CI la valida ([§13.14](#1314-validación-en-tres-capas)) y una persona la revisa con reglas publicadas antes de firmar el índice.
+- **Nativos:** como un nativo comparte memoria con el token, los de otras personas solo entran por *pull request* al repositorio de Pauta, con CI y revisión humana. Un *fork* que compile sus propios plugins sale en la Mini App como «no verificado».
+
+**Flash.** El firmware ocupa hoy 1,33 MB de los 3 MB de cada ranura. El host, el host de recetas, los motores, los dos nativos y las cuatro recetas incrustadas (unos 40 KB de JSON) sumarán unos 400-500 KB **(medir)**. El tope es 2,6 MB, para dejar margen en cada ranura de la OTA ([§7.13](#713-ota-firmada)).
+
+## 3. Manifiesto
+
+Cada plugin lleva un `plugin.json`, su manifiesto: los nativos en `firmware/pauta/src/plugins/<id>/`, las recetas de serie en `firmware/pauta/src/recipes/<id>/` y las instaladas, en `/plugins/<id>/plugin.json` de la FAT. Va en UTF-8 y mide, en JSON compacto, **12 KB** como mucho en un nativo (con los textos de ayuda de los dos idiomas, 8 KB se quedaban cortos) y **16 KB** en una receta, que lleva además la clave `recipe` ([§13](#13-recetas-declarativas-formato-v1)). Lo describe [`schemas/manifest.schema.json`](../schemas/manifest.schema.json) (JSON Schema 2020-12). Las claves van en inglés, como los identificadores del código (`tasksAdd`, `drawHeader`). Todo texto visible es un objeto `{"es": …, "en": …}`; solo `unit` admite una cadena suelta, si es igual en los dos idiomas.
+
+El guion `tools/mkmanifests.py`, hermano de [`tools/mkfont.py`](../tools/mkfont.py):
+
+1. valida cada `plugin.json` contra [`schemas/manifest.schema.json`](../schemas/manifest.schema.json) (la receta, contra [`schemas/recipe.schema.json`](../schemas/recipe.schema.json)) y contra las reglas de [§13.14](#1314-validación-en-tres-capas) y del [apartado 15](#15-conformidad);
+2. genera `src/plugins/gen/manifests.h`, que contiene cada manifiesto como cadena y unas tablas C++ constantes (bits de permisos, tabla de campos, comandos, programaciones, tablas de teclado), con las que el firmware valida todo lo que llega de la Mini App y las recetas que se instalan; las recetas de serie van incrustadas ahí mismo;
+3. genera el paquete de la Mini App, `miniapp/fw/<versión>/manifests.json`, con el manifiesto del sistema ([§9.8](#98-el-manifiesto-del-sistema)), los de los plugins y las mismas tablas.
+
+Como `arduino-cli` no ejecuta nada antes de compilar, lo generado se sube al repositorio, igual que las fuentes de `mkfont.py`. La CI comprueba que está al día.
+
+| Campo | Oblig. | Tipo y límites |
+|---|---|---|
+| `api` | sí | `"1.0"`: nivel mínimo de la API. Con un número mayor distinto de 1, el plugin sale como «no disponible» |
+| `id` | sí | `^[a-z][a-z0-9-]{1,23}$` (de 2 a 24 caracteres). Fijo para siempre. Reservados: `system`, `sistema`, `sys`, `settings`, `ajustes`, `plugins`, `core`, `pauta` (la app de serie) y `auto`, `clock` y `none` (valores especiales de `sys.idle_by` y `sys.photos`) |
+| `version` | sí | semver. El número mayor sube si se quita o se renombra una clave de ajustes |
+| `kind` | sí | `"native"` o `"recipe"` ([§2](#2-tipos-de-plugin)) |
+| `min_firmware` | sí | semver: primer firmware que lo trae |
+| `name` | sí | {es,en}, 16 caracteres como mucho: es el título de la cabecera |
+| `summary` | sí | {es,en}, 120 como mucho |
+| `author` | sí | 40 como mucho |
+| `license` | sí | Identificador SPDX, el código estándar de cada licencia (`"MIT"`) |
+| `icon` | sí | Un nombre del juego de iconos del sistema ([§5.9](#59-guía-visual)) |
+| `category` | no | `trabajo`, `casa`, `reposo`, `herramientas` o `comunicacion` |
+| `builtin` | no | `true` solo en la app de serie |
+| `requires` | no | `{"build": [...], "sd": "optional" \| "required"}`. En `build`: `"hid.usb"` (teclado USB), `"hid.ble"` (teclado Bluetooth) o `"hid"` (cualquiera de los dos). Si falta un requisito, el plugin queda «no disponible» y la ficha dice cuál |
+| `permissions` | sí | Lista del [apartado 8](#8-permisos-y-seguridad) (puede ir vacía, `[]`). Un permiso desconocido se rechaza |
+| `optional_permissions` | no | Permisos que el plugin solo pide la primera vez que hacen falta, con su toque en la pantalla ([§8.1](#81-permisos)). La ficha dice «puede pedir: …» |
+| `net` | si pide `net` o `net.user` | `hosts`: hasta 8 nombres literales. `user_hosts_from`: campos de tipo `url` o `host` de los que salen los hosts del usuario, como `"sites.url"`. `min_interval_s`: 60 como mínimo, **por URL**. `max_per_hour`: 600 como máximo, **por plugin**. `mkmanifests.py` exige `max_items × 3600 / min_interval_s ≤ max_per_hour` para cada lista de `user_hosts_from` |
+| `mqtt` | si pide `mqtt` | `sub` y `pub`: hasta 8 filtros de tema cada uno (`sub` admite `+` y `#`; `pub`, solo `+`). `pub_retain`: `false` por defecto |
+| `surfaces` | sí | `page`, `glance`, `idle` y `critical`, booleanos. `critical` significa «implementa `paintCritical()`»; poder lanzar avisos críticos es el permiso `alert.critical`. Una receta no declara `critical`: sus avisos críticos los pinta el sistema ([§5.5](#55-avisos-y-capas)). Lo que no aparece cuenta como `false` |
+| `touch` | no | `{"longpress": bool}`, `false` por defecto. Solo con `true` recibe `LongPress` ([§6.1](#61-táctil)) |
+| `commands` | no | Hasta **8** comandos: `{"cmd": "^[a-z0-9_]{1,32}$", "args": {es,en}, "desc": {es,en} de 64 caracteres como mucho}` |
+| `help` | no | {es,en}, 600 caracteres como mucho: el bloque del plugin en `/help` ([§6.2](#62-telegram)). Es texto para Telegram, así que admite cualquier UTF-8 |
+| `settings` | no | `{"version": n, "fields": [...]}`, con 24 campos como máximo ([§9](#9-ajustes-y-mini-app)) |
+| `schedule` | no | Hasta 2 programaciones declarativas sobre una lista: `{"list", "time", "days", "enabled"}` ([§6.4](#64-programador-de-eventos)) |
+| `actions` | no | Hasta 8 acciones que se lanzan desde la Mini App: `{"id", "label": {es,en}, "args": [campos], "confirm": false \| "app" \| "screen"}`. `"app"` pide un «¿seguro?» en la Mini App; `"screen"`, un toque en la placa ([§8.2](#82-reglas)) |
+| `runtime` | no | Hasta 4 listas que la placa publica para la Mini App: `{"name", "kind": "options" \| "status", "max" (≤ 64), "item_max" (≤ 64 caracteres)}` y, si quiere, `"pairs": true` o columnas tipadas (`cols` y `label`). Si su peor caso pasa de 2 KB, viaja por ventanas ([§9.1](#91-tipos-de-campo)) |
+| `memory` | sí | `psram_kb`, de 4 a 256. `static_kb` (RAM interna fija): 4 como mucho, u 8 con `builtin`; 0 en una receta |
+| `storage` | no | `state_kb` (de 0 a 8; 2 por defecto), `data_kb` (4096 como mucho), `sd_mb` (1024 como mucho), `sd_shared` (carpeta visible de la microSD que puede leer, como `"fotos"`) |
+| `attribution` | no | {es,en}, 60 como mucho: texto que hay que enseñar en su página |
+| `legacy` | no | Solo la app de serie: `{"nvs": "taskdesk"}`. Documenta qué datos heredados usa; **no da ningún permiso** ([§10.1](#101-nvs-20-kb-solo-lo-pequeño-y-crítico)) |
+| `recipe` | si `kind` es `recipe` | La receta ([§13](#13-recetas-declarativas-formato-v1), [`recipe.schema.json`](../schemas/recipe.schema.json)). Prohibida en un nativo |
+
+Las claves que empiezan por `x_` son experimentos y el firmware las ignora. Cualquier otra clave desconocida la rechaza `mkmanifests.py`. Un firmware que lee el manifiesto de un nivel 1.x más nuevo ignora lo que no conoce, salvo los permisos.
+
+**Comprobaciones de tamaño de `mkmanifests.py`.**
+
+- **Rechaza** el manifiesto si el peor caso de sus ajustes (todos los campos y listas al máximo) no cabe en los 6 KB de `/cfg/<id>.json`. Por eso todos los tipos tienen tope, también `keys` ([§9.1](#91-tipos-de-campo)). Cómo se cuenta: cada carácter de texto vale 2 bytes (la Mini App no admite en los campos de texto caracteres de más de 2 bytes en UTF-8, que la pantalla tampoco sabría pintar); un `select` vale su opción más larga; un número, las cifras de su mínimo o su máximo; un secreto no cuenta, porque va al cofre; y de los campos que `visible_if` excluye entre sí solo cuenta la combinación visible más larga, porque los ocultos se borran al guardar. Cada elemento de lista suma su `id` y su revisión `_r`.
+- **Avisa** si el peor caso no cabe en el presupuesto de la URL ni solo. Eso no impide nada, porque las listas se abren por trozos ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)), salvo una lista con `ui: grid`, que nunca se trocea: si su peor caso no cabe sola en la URL de dos pasos, lo **rechaza** ([§9.1](#91-tipos-de-campo)).
+- **Calcula** el peor caso de cada lista de la placa y avisa si pasa de 2 KB: entonces viaja por ventanas ([§9.1](#91-tipos-de-campo)).
+- **Rechaza** los botones por defecto de una rejilla que no caben en la rejilla por defecto ([§13.13](#1313-teclado-órdenes-hid-y-bloque-grid)).
+- **Rechaza** que el menú del bot pase de 100 comandos entre el sistema y todos los plugins del firmware, que es el límite de `setMyCommands`.
+- **Avisa** si un campo `url` más el sufijo que el plugin le añade (por ejemplo, `/api/v2/status.json`) puede pasar de los 256 caracteres del recadero.
+
+**Ejemplo completo**: el manifiesto del Pomodoro, sin su clave `recipe`, que se explica en [§13](#13-recetas-declarativas-formato-v1) y va entera en el [Anexo A.4](#a4-pomodoro-receta-f1). Los seis `plugin.json` completos y validados están en [`examples/plugins/<id>/plugin.json`](../examples/plugins/).
+
+```json
+{
+  "api": "1.0",
+  "id": "pomodoro",
+  "version": "1.0.0",
+  "kind": "recipe",
+  "min_firmware": "1.3.0",
+  "name": {"es": "Pomodoro", "en": "Pomodoro"},
+  "summary": {
+    "es": "Temporizador grande de trabajo y descanso. Sigue contando en otras páginas, en reposo y con la pantalla bloqueada.",
+    "en": "Big work and break timer. It keeps counting on other pages, while idle and with the screen locked."
+  },
+  "author": "Ignacio Aranda",
+  "license": "MIT",
+  "icon": "timer",
+  "category": "trabajo",
+  "permissions": ["notify", "alert.critical"],
+  "surfaces": {"page": true, "glance": true},
+  "settings": {"version": 1, "fields": [
+    {"key": "work", "type": "number", "min": 1, "max": 90, "step": 1, "default": 25, "unit": "min",
+     "group": {"es": "Duraciones", "en": "Durations"},
+     "label": {"es": "Trabajo", "en": "Work"}},
+    {"key": "short", "type": "number", "min": 1, "max": 30, "step": 1, "default": 5, "unit": "min",
+     "group": {"es": "Duraciones", "en": "Durations"},
+     "label": {"es": "Descanso corto", "en": "Short break"}},
+    {"key": "long", "type": "number", "min": 5, "max": 60, "step": 1, "default": 15, "unit": "min",
+     "group": {"es": "Duraciones", "en": "Durations"},
+     "label": {"es": "Descanso largo", "en": "Long break"}},
+    {"key": "rounds", "type": "number", "min": 2, "max": 8, "step": 1, "default": 4,
+     "group": {"es": "Duraciones", "en": "Durations"},
+     "label": {"es": "Rondas antes del descanso largo", "en": "Rounds before the long break"}},
+    {"key": "auto_next", "type": "bool", "default": true,
+     "group": {"es": "Al acabar una fase", "en": "When a phase ends"},
+     "label": {"es": "Empezar la siguiente sola", "en": "Start the next one by itself"},
+     "help": {"es": "Si lo apagas, espera a que toques SEGUIR.",
+              "en": "If off, it waits until you tap RESUME."}},
+    {"key": "alert", "type": "select", "default": "full",
+     "group": {"es": "Al acabar una fase", "en": "When a phase ends"},
+     "label": {"es": "Aviso en la pantalla", "en": "On-screen alert"},
+     "help": {"es": "Pauta no tiene sonido: el aviso a pantalla completa es el que más se nota.",
+              "en": "Pauta has no sound: the full-screen alert is the easiest to notice."},
+     "options": [
+       {"v": "full", "es": "A pantalla completa", "en": "Full screen"},
+       {"v": "band", "es": "Banda abajo", "en": "Band at the bottom"}]},
+    {"key": "tg", "type": "bool", "default": false,
+     "group": {"es": "Al acabar una fase", "en": "When a phase ends"},
+     "label": {"es": "Avisarme también por Telegram", "en": "Also tell me on Telegram"}},
+    {"key": "tg_sound", "type": "bool", "default": true, "visible_if": {"tg": true},
+     "group": {"es": "Al acabar una fase", "en": "When a phase ends"},
+     "label": {"es": "Mensaje con sonido", "en": "Message with sound"},
+     "help": {"es": "Si lo apagas, el mensaje llega en silencio.",
+              "en": "If off, the message arrives silently."}},
+    {"key": "awake", "type": "bool", "default": true,
+     "group": {"es": "Pantalla", "en": "Screen"},
+     "label": {"es": "Mantener su página a la vista mientras cuenta", "en": "Keep its page on screen while counting"},
+     "help": {"es": "No deja entrar el reposo mientras ves el Pomodoro. El bloqueo con PIN sí entra.",
+              "en": "Idle mode stays away while you are looking at the Pomodoro. The PIN lock still kicks in."}}
+  ]},
+  "memory": {"psram_kb": 16, "static_kb": 0},
+  "storage": {"state_kb": 1}
+}
+```
+
+## 4. Ciclo de vida
+
+**Estados.** `no_disponible` (falta un requisito, o pide un nivel de API o un motor que el firmware no tiene), `inactivo`, `activo`, `sin_configurar` (activo, pero le falta un ajuste obligatorio), `fallido` (apagado por el sistema, con el motivo) y `cuarentena` (apagado por el modo seguro). Se guardan en `/sys/plugins.json`, dentro de la FAT interna:
+
+```json
+{"v": 1, "order": ["pauta", "pomodoro", "nicscom"],
+ "p": {"nicscom": {"on": 1, "ver": "1.0.0", "perm": "9f2c11a0", "grave": [1792330000], "leve": []}}}
+```
+
+- **Instalar.** Un nativo o una receta de serie vienen con el firmware; una receta puede llegar además del catálogo firmado (desde la Mini App, F2, [P22](#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1)) o de la carpeta `/pauta/inbox/` de la microSD (F5, [P23](#p23-recetas-sin-firmar-en-la-v1)). Todo plugin nuevo empieza `inactivo`, salvo la app de serie. Instalar una receta que no viene de serie es: descargarla o leerla, comprobar la firma del índice y su huella (o marcarla «no verificada»), validarla ([§13.14](#1314-validación-en-tres-capas)), enseñar en la pantalla su nombre, su origen y sus permisos, esperar el toque y guardarla en `/plugins/<id>/plugin.json`. El origen (`fw`, `catalog` o `sd`) se apunta en `/sys/plugins.json`.
+- **Desinstalar.** Solo las recetas que no vienen de serie, con la operación `remove` o con una pulsación larga en el gestor: se borran sus datos, como con `reset`, y su archivo. Si había una receta de serie con el mismo `id`, vuelve esa.
+- **Activar.** Desde la Mini App (`enable`) o desde el gestor del menú del sistema. El sistema comprueba los requisitos y que su `psram_kb` cabe en el fondo de plugins ([§7.12](#712-memoria)).
+  - Si el plugin tiene un permiso sensible (`hid` o `lan`) y la orden llega de la Mini App, pide además un toque en la pantalla antes de 2 minutos. En el gestor de la pantalla, ese toque ya es la confirmación.
+  - Si faltan ajustes o secretos marcados `required`, el plugin queda `sin_configurar` sin llamar a `begin()`. Su página la pinta entonces el sistema: el icono, el nombre y «Falta: Usuario, Contraseña · Abre ⚙ Ajustes», con las etiquetas de los campos.
+  - Si no falta nada, crea el objeto en el fondo de PSRAM, carga `/cfg/<id>.json` validado y completado con los valores por defecto, y llama a `begin()`, que tiene que volver en menos de 50 ms (en una receta, el del host de recetas, que la compila, [§13.17](#1317-cómo-lo-ejecuta-el-firmware)). Si `begin()` devuelve `Err::NotReady`, el plugin queda `sin_configurar` (y su página la pinta él, para decir qué le falta). Cualquier otro error cuenta como fallo leve.
+  - Mientras un plugin esté `sin_configurar`, el sistema vuelve a intentar activarlo tras cada `Event::Settings` o secreto guardado que le afecte.
+  - Nada de esto reinicia la placa.
+- **Desactivar.** Se llama a `end()`. El sistema cancela por su cuenta los temporizadores, las programaciones, las suscripciones, las peticiones, los avisos, la línea de estado, las respuestas diferidas, `keepAwake` y `holdPage`, suelta las teclas que el plugin tuviera pulsadas y deja de publicar sus listas. Antes de liberar su memoria escribe el estado pendiente (lo que `saveState()` tenía programado), y los motores de una receta dejan su estado listo para volver: el `timer` queda en pausa con lo que faltaba, porque un plugin apagado no puede avisar al acabar la fase ([§13.10](#1310-motor-timer-temporizador-por-fases)). Después libera su memoria. Si la cuenta de PSRAM del plugin no vuelve a cero, se apunta una fuga como fallo leve. Ajustes y estado se conservan.
+- **Actualizar.** Llega con el firmware o, en una receta instalada, del catálogo, nunca sola ([§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)). Si cambió `version`, se llama a `migrate(desde)` antes de `begin()`. Si subió `settings.version`, se descartan las claves que ya no existen y las nuevas toman su valor por defecto. Si cambiaron los permisos, `net` o `mqtt` (el sistema lo nota porque cambia su huella `perm`, un CRC32), el plugin queda apagado hasta que el dueño acepte los permisos nuevos en la Mini App **y con un toque en la pantalla**. La huella solo sirve para notar el cambio, no protege de nada: lo que protege es la revisión del código y el toque.
+- **Borrar datos.** Con la operación `reset` de la Mini App o con una pulsación larga en el gestor. Borra `/cfg/<id>.json`, `/state/<id>.json`, `/state/<id>.sys.json`, `/data/<id>/`, `/cache/<id>/`, los `ETag` guardados del recadero y sus secretos del cofre. La carpeta de la microSD solo se borra si el dueño lo confirma en la pantalla. Y el `reset` de un plugin con campos `confirm` pide siempre un toque, porque los cambia: devolver los botones de fábrica de Atajos es «cambiar los botones» ([§8.2](#82-reglas)).
+  - **Un plugin con `legacy`** (la app de serie) solo pierde sus ajustes: **la lista nunca se borra con `reset`**, igual que con el reset del logotipo. Vaciar la lista es una acción aparte, «Vaciar lista», con `confirm: "screen"` ([A.1](#a1-pauta-la-app-de-serie-nativo-f0)).
+
+**Fallos.**
+
+- **Leves:** `begin()` falla con algo distinto de `NotReady`; cualquier llamada al plugin tarda más de 2 s; `paintPage()` tarda más de 200 ms; el plugin recibe más de 60 rechazos por cuota o por cola llena en un minuto (señal de un bucle); llama a `ctx.fail()`; pierde memoria al desactivarse; o, en una receta, encadena más de 4 eventos seguidos ([§13.7](#137-eventos-y-órdenes)).
+- **Una cuota alcanzada no es un fallo.** Un `Err::Quota` o un `Err::Busy` sueltos, sobre todo si vienen de un toque del dueño o del programador, nunca cuentan. Un plugin no se apaga por algo que hace el dueño.
+- **Graves:** un pánico o un watchdog que el sistema le atribuye.
+- **Umbral:** con 2 graves en 24 horas o 3 leves en 10 minutos, el plugin pasa a `fallido`. Sale un aviso en la pantalla y un mensaje por Telegram, por ejemplo: «Atajos se ha apagado: tardó 2,4 s en pintar». Solo vuelve si el dueño lo reactiva.
+
+**Atribución de fallos.** Hace falta saber de quién era el código que colgó la placa sin escribir en la flash en cada llamada. Para eso:
+
+1. El sistema guarda una estructura `RTC_NOINIT_ATTR`, memoria que sobrevive a pánicos y watchdogs pero se borra con un apagón. Lleva un número mágico y un CRC: si no cuadran (tras un encendido, la memoria trae basura), se pone a cero.
+2. La estructura tiene **una marca por tarea**: la del núcleo 1 (`loopTask`) y las de las tareas de servicio `net`, `io` y `hid` ([§7.1](#71-tareas-y-núcleos)). Antes de cada llamada a un plugin, o de cada trabajo que un servicio hace por él, se apunta `{plugin, función, hora}` (en `net` e `io`, también el plazo de ese trabajo), y al volver se borra.
+3. Al arrancar se mira `esp_reset_reason()`:
+   - Con `PANIC`, `esp_core_dump_get_summary()` dice qué tarea falló, porque la partición `coredump` de 64 KB ya existe y el core la tiene activada. Si fue una tarea con marca, se culpa a la marca de esa tarea. Si fue otra (`telegram`, la WiFi…), no se culpa a ningún plugin. Después se borra el volcado con `esp_core_dump_image_erase()`. Si el volcado no cabe en los 64 KB **(medir)**, se usa solo la marca del núcleo 1.
+   - Con `TASK_WDT`, `INT_WDT`, `WDT` o `CPU_LOCKUP`, se culpa a la marca de `loopTask` o de `hid` que lleve más de 4 s puesta. Tras un reinicio del vigilante por software (punto 4), a la marca que él apuntó.
+4. Vigilantes. El de tareas del chip ya viene a 5 s con pánico y vigila la tarea de reposo del núcleo 0; el núcleo 1 llama a `enableLoopWDT()` y la tarea `hid` se suscribe a él. **Las tareas `net` e `io` no se suscriben**: una web que no contesta puede tener ocupado el recadero 8-15 s, y una foto grande de la tarjeta, más de 5 s, sin que nada esté colgado. Las vigila el sistema por software: si una marca de esas tareas sigue puesta 5 s después del plazo de su trabajo, apunta el culpable en la estructura RTC y reinicia la placa como lo haría el vigilante. Ese reinicio cuenta como arranque anómalo. Además, el recadero nunca se queda parado más de 1 s seguido ([§7.4](#74-red-httptls-con-cola-el-recadero)).
+
+**Modo seguro.**
+
+- **Cuándo entra.** Tras **3 arranques anómalos** (por pánico, watchdog o el vigilante por software de `net` e `io`) sin 10 minutos de funcionamiento estable entre ellos, o si el dedo está apoyado en la pantalla al terminar el logotipo de arranque. Los encendidos, las bajadas de tensión y los reinicios pedidos por el firmware no cuentan, así que desenchufar la placa tres veces seguidas no la mete en modo seguro. El contador vive en la estructura RTC. Además, se copia en NVS (`psys/boots`) solo en los arranques anómalos, y se pone a cero una sola vez tras 10 minutos estables, al salir del modo seguro o tras una vuelta atrás de la OTA ([§7.13](#713-ota-firmada)).
+- **Qué apaga.** **Todo**, también la app de serie Pauta: todos los plugins pasan a `cuarentena`. No arrancan el servicio MQTT, el recadero ni el tiempo de la cabecera, y el teclado queda mudo (en `v1-hid` el USB arranca igual, para que el PC no vea un puerto serie, [§7.10](#710-teclado-hid)).
+- **Qué queda.** Un modo seguro mínimo del sistema:
+  - la **cabecera** con la hora (sin el tiempo), el icono `alert` y el título «Modo seguro»;
+  - una **página del sistema** con el motivo («Se ha reiniciado 3 veces por un fallo») y el culpable si lo hay («nicscom: puntero nulo»), o «sin culpable claro»;
+  - el botón **«SALIR DEL MODO SEGURO»**, que reactiva todo menos el culpable. El culpable queda `fallido` y el dueño lo puede reactivar después desde el menú o la Mini App;
+  - el **pie** con «MODO SEGURO» en arcilla, y el menú del sistema (zona del logotipo) con lo mínimo: reactivar plugins uno a uno, bloquear y «Acerca de».
+- **El bot.** Sigue funcionando para lo del sistema: avisa del motivo y del culpable, contesta a `/status` y `/help`, y la Mini App puede salir del modo seguro o reactivar plugins uno a uno. Al texto libre y a los comandos de los plugins contesta «Pauta está en modo seguro: no apunto nada hasta salir. Sal desde la pantalla o con ⚙ Ajustes». La lista guardada no se toca.
+- **El bloqueo sigue.** El modo seguro no quita el bloqueo con PIN ([§5.7](#57-bloqueo-con-pin)): con la pantalla bloqueada, primero hay que desbloquear.
+- **Mensaje envenenado.** El modo seguro también se protege del mensaje de Telegram que tumbó la placa ([§6.2](#62-telegram)), porque el bot sigue activo.
+
+**Arranque.** Así queda el orden de `setup()`:
+
+```
+WiFi.persistent(false); Serial.begin();
+settingsBegin(); safeModeCheck(); storageBegin(); i18nSetLang(); tasksBegin(); uiBegin();
+hidUsbBegin();         // solo en v1-hid, también en modo seguro: teclado mudo hasta que lo use Atajos (§7.10)
+pluginsBegin();        // salvo en modo seguro; antes que la WiFi: Pomodoro y Atajos funcionan sin red
+splash; wifiStart();   // no bloquea: la interfaz y los plugins siguen vivos mientras conecta
+// Al conectar, sin reiniciar: configTzTime(reglaGuardada…), deviceKeyEnsure(), telegramBegin(),
+// tiempo de la cabecera y confirmación de la OTA pendiente (§7.13).
+```
+
+- `pluginsLoop()` se llama desde `loop()` y desde las esperas de `setup()`, igual que hoy `uiLoop()`. El host llama además a `tasksFlushIfDirty()` en cada vuelta, esté Pauta como esté ([§10.1](#101-nvs-20-kb-solo-lo-pequeño-y-crítico)).
+- **Sin WiFi.** Si la red guardada no responde en 20 s, la interfaz sigue normal con los plugins, el punto de acceso del portal se abre de fondo (WiFi en modo punto de acceso y cliente a la vez) y el pie dice «SIN WIFI · TOCA PARA CONFIGURAR». Tocar el pie enseña el nombre de la red del portal, su clave y el código QR, como hoy la pantalla del portal. Con la pantalla bloqueada el portal no se abre ([§5.7](#57-bloqueo-con-pin)). Mientras nadie use el portal, se sigue probando la red guardada como hace hoy `portalRetry()`.
+- **Cuando vuelve la WiFi ya no se reinicia.** Tras 10 s de conexión estable, se cierra el punto de acceso y arrancan en caliente la hora, Telegram y el tiempo. Así un Pomodoro en marcha no se corta cuando vuelve el router.
+
+**Reinicios.** Todo reinicio que pide el firmware pasa por `restartNow()`, que manda `Event::Restarting` a los plugins al menos 3 s antes (con `n` = milisegundos que quedan), guarda la lista, el estado y los ajustes pendientes, y reinicia. Los que quedan son pocos y siempre los pide el dueño: guardar en el portal, instalar una OTA y el reset de fábrica. Salir del modo seguro no reinicia: los servicios arrancan cuando el primer plugin que los usa se activa.
+
+**Reset de fábrica** (mantener el logotipo 8 s, como hoy).
+
+- Borra `tdcfg`, `psys` (claves del dispositivo y PIN) y la FAT entera (ajustes, estado, cofre, dispositivos emparejados y datos de los plugins). Como hoy, deja la lista en `taskdesk`.
+- Al terminar la cuenta atrás, si hay una carpeta `/pauta/` en la microSD, la pantalla pregunta durante 10 s «¿Borrar también los datos de la tarjeta? Las fotos de la tarjeta no se borran solas» [Borrar] [Dejar]. Sin respuesta, se dejan.
+- Al arrancar después, la placa genera claves nuevas: la huella cambia y todos los dispositivos tienen que volver a emparejarse ([§9.4](#94-emparejar-dispositivos)).
+- **Con la pantalla bloqueada no funciona.** Mantener el logotipo no hace nada mientras está bloqueada. Si se olvida el PIN, la recuperación está en [§5.7](#57-bloqueo-con-pin).
+
+## 5. Superficies de pantalla y guía visual
+
+### 5.1 Mapa
+
+```
+y=0   ┌──────────────────────────────────────────────────┐
+      │ [icono] Título (Title23)            12:34 (Clock36)│  CABECERA 480×78 (sistema)
+      │         SUBTÍTULO (Meta13)     SÁB 18 OCT · 17° ☀ │
+y=77  ├══════ filete = progreso de la página visible ═════┤
+y=78  │                                                  │
+      │            PÁGINA DEL PLUGIN 480×208              │
+      │     (contenido de 428 px entre márgenes de 26)    │
+y=240 │   [ banda de aviso 480×46: página y=162 a 207 ]   │
+y=286 ├──────────── ▬ ▬ ━━ ▬ (indicador de páginas) ──────┤
+      │ ACCIÓN DE PÁGINA     ● TRABAJO 12:34          ☾   │  PIE 480×34 (sistema)
+y=320 └──────────────────────────────────────────────────┘
+```
+
+### 5.2 Inicio y páginas
+
+- **Inicio.** Por este orden: el plugin que el dueño haya elegido como inicio en la Mini App (`sys.home`), si está activo; si no, la app de serie; si está apagada, el primer plugin activo con página según `order`; si no queda ninguno, la página **Reloj** del sistema, que tiene la misma forma que el reposo.
+- **Páginas.** Una por cada plugin activo con `surfaces.page`, ocho como mucho, en el orden que el dueño elige en la Mini App.
+- **Cambiar de página.** Se desliza en horizontal. El sistema decide el gesto cuando el dedo se ha movido 8 px en cualquier eje (el mismo umbral de arrastre que hoy tiene la lista): es horizontal si el desplazamiento en x es más del doble que en y. Cambia de página si el dedo recorre al menos 60 px. Un gesto vertical se entrega a la página, para que la lista de Pauta siga desplazándose como hoy. **Con una sola página activa, el sistema no se queda ningún gesto horizontal**, así que en F0 todo llega a Pauta como en la 1.1.0.
+- **Vuelta al inicio.** Tras `sys.home_min` minutos sin tocar la pantalla: 3 por defecto, o 0 para no volver nunca. No vuelve mientras el plugin de la página visible pida `keepAwake` o `holdPage`.
+- **`ctx.keepAwake(true)`** vale solo mientras la página de ese plugin está a la vista: deja en suspenso el reposo por inactividad y la vuelta al inicio. Con la página oculta no hace nada. Nunca frena el bloqueo con PIN (ni a mano, ni programado, ni por inactividad), el reposo pedido a mano ni la franja nocturna ([P17](#p17-puede-un-pomodoro-en-marcha-retrasar-la-franja-nocturna)). El sistema la apaga en `end()`. La usan el Pomodoro mientras cuenta y Atajos con el ordenador conectado.
+- **`ctx.holdPage(true)`** es para editar dentro de la página, como el editor de automatizaciones de nicscom: además de lo anterior, el sistema deja de cambiar de página con gestos horizontales, que llegan a la página. Se suelta sola tras 5 minutos sin tocar. El reposo y el bloqueo siguen entrando a su hora, y el plugin recibe `IdleOn` o `Locked` para guardar su borrador.
+
+### 5.3 Cabecera (la pinta el sistema)
+
+- **Izquierda.** El icono de la página visible (17 px, en x=26, y=20, el tamaño del logotipo de hoy), su título en `Title23` (16 caracteres como mucho, en x=53, y=18) y su subtítulo en versalitas `Meta13` (28 caracteres como mucho, en x=54, y=48). Los da `header()`. Antes de llamarla, el sistema rellena `title` con el `name` del manifiesto en el idioma actual, `icon` con su `icon`, `subtitle` vacío y `progress` = −1, así que un plugin solo cambia lo que quiere. Con Pauta salen su logotipo en dos colores, «Pauta» y «3 PENDIENTES», como hoy.
+- **Derecha.** La hora en `Clock36`, alineada a x=454, y=14. Debajo, en y=56, la fecha y el tiempo: «SÁB 18 OCT · 17° ☀», con un icono de 12 px. Si el dato del tiempo tiene más de 2 horas, la temperatura sale en `InkMute`. Con más de 6 horas, solo se ve la fecha. Sin hora de NTP no se pinta el reloj, como hoy.
+- **Filete inferior** (y=77): la barra de progreso de la página, un valor de 0 a 1 o −1 si no hay. Se tiñe de acento en esa proporción, como hoy con las tareas hechas.
+- **Textos de fuera.** El sistema pasa el título y el subtítulo por `printable()` con la fuente de la cabecera ([§5.9](#59-guía-visual)).
+- **Gestos.** La mitad izquierda (x<240) es la zona del logotipo. Un toque abre el **menú del sistema** ([§5.8](#58-menú-del-sistema), desde F1) y mantener el dedo 8 s sigue siendo el reset de fábrica, salvo con la pantalla bloqueada. Mantener el reloj 2 s bloquea la pantalla, si hay PIN.
+
+### 5.4 Pie y línea de estado (los pinta el sistema)
+
+- **Izquierda: botón de acción** de la página visible, con 18 caracteres en versalitas como mucho, como hoy «LIMPIAR HECHAS». Lo da `footer()`. El sistema vuelve a llamar a `footer()` en el momento del toque y solo entrega `Event::FooterAction` si el botón estaba a la vista.
+- **Centro:** el punto de conexión y, delante, un texto. Por orden de prioridad:
+  1. «MODO SEGURO», en arcilla;
+  2. «SIN WIFI · TOCA PARA CONFIGURAR». Si hay a la vez una línea `Live` o `Sticky` (punto 4), **se turnan cada 6 s**: así la cuenta del Pomodoro no desaparece de las demás páginas mientras no hay WiFi. Tocar el pie mientras se ve el aviso sigue enseñando el portal ([P25](#p25-el-aviso-sin-wifi-y-la-cuenta-del-pomodoro));
+  3. el fallo de conexión que dure más de 1 minuto, como hoy. Si hay una línea `Live` o `Sticky`, el fallo se queda solo en el punto de arcilla y su texto pasa al menú del sistema;
+  4. la **línea de estado** de los plugins (`glance()`: un texto y, si quiere, un valor, 22 caracteres entre los dos como mucho; un icono; y, si quiere, un estado con forma, por ejemplo «● 1 CAÍDA · Tienda»). Hay tres clases:
+     - `Live`: una cuenta en marcha, como «TRABAJO 12:34». El sistema vuelve a pedir `glance()` cada segundo mientras se ve;
+     - `Sticky`: algo que va mal y no debe perderse, como una web caída;
+     - `Normal`: el resto.
+
+     **Una `Live` gana a una `Sticky`.** Si hay alguna `Live`, las `Live` se turnan entre ellas cada 6 s y cada `Sticky` se queda como su estado con forma (por ejemplo, un círculo de arcilla) junto al punto, sin texto. Sin `Live`, se turnan las `Sticky`. Las `Normal` solo salen si no hay ninguna de las otras, y también se turnan. La línea del plugin de la página visible no sale;
+  5. si no hay nada, el punto solo, en el centro.
+- **Tocar la línea de estado** abre la página de su plugin, como un aviso con `open` (con la pantalla desbloqueada). Así se pausa el Pomodoro desde cualquier página sin deslizar hasta la suya.
+- **Cuándo se pide `glance()`.** En cada rotación, cada segundo si la línea que se ve es `Live`, y cuando llama a `ctx.redraw()` un plugin cuya página no está a la vista (entonces solo se repinta su línea).
+- **Si no cabe todo.** El texto de un fallo de conexión gana: el botón de acción se esconde mientras dure, como en la 1.1.0. Una línea de estado, en cambio, se recorta, siempre por el texto y nunca por el valor («DESCANSO LA… 1:00:00»), y el botón se queda entero.
+- **Derecha:** el sol o la luna para cambiar el tema, como hoy.
+- **Indicador de páginas:** filetes de 10×2 px apoyados en la raya superior del pie, separados 6 px. El de la página actual mide 18×2 px y va en acento. Solo sale si hay dos páginas o más.
+- **Medida:** los botones del pie ocupan todo su alto (34 px) y al menos 60 px de ancho. Es la única excepción, heredada de la 1.1.0, a la regla de 44 px. Tocar el pie nunca abre la ventana del teclado HID ([§7.10](#710-teclado-hid)).
+
+### 5.5 Avisos y capas
+
+| Nivel | Cómo se ve | Duración (`sec` = 0) | En reposo | Con la pantalla bloqueada |
+|---|---|---|---|---|
+| `info` | Banda de 480×46 justo encima del pie | 4 s | Banda encima del reposo, sin despertarlo | Se ve |
+| `warn` | La misma banda, con filete de arcilla | Hasta tocarla o 10 min | Igual, sin despertar | Se ve |
+| `critical` | Capa a pantalla completa | 30 s (de 3 a 60) o hasta tocarla | **Despierta** la pantalla | Se ve; tocarla la cierra, pero no desbloquea |
+
+- **Campos de un aviso** (`struct Alert`, [§12.1](#121-la-interfaz)): `level`; `title` (40 caracteres como mucho); `body` (120 como mucho); `big` (una cifra corta para la capa crítica, en `Digits96`); `icon`; `pixels` (8×8 colores reales, opcional) y `pixelsRound`; `key` (un aviso nuevo con la misma clave sustituye al anterior); `sec` (0 = la duración de su nivel); `priv` (con la pantalla bloqueada solo se ve el título); `bandAfter` (al acabar, la capa crítica deja una banda `warn`, que conserva la clave del aviso); `open` (tocarlo abre la página del plugin); `flash` (solo `critical`: la retroiluminación parpadea 3 veces).
+- **Se copia todo.** `ctx.alert()` copia en la cola el título, el cuerpo y los 64 colores (unos 420 bytes por entrada), así que el plugin puede usar un búfer local y desactivarse sin dejar punteros colgando. `paintCritical()` recibe esa copia.
+- **Las claves son de cada plugin.** El sistema las combina con el índice del plugin, así que la `key` 1 del Pomodoro no choca con la 1 de nicscom. `ctx.clearAlert(key)` solo borra las suyas. `ctx.keyOf("k3f7a2")` da siempre el mismo número de 16 bits para el `id` de un elemento de lista.
+- **Textos.** El sistema pasa el título y el cuerpo por `printable()` con la fuente de la banda o de la capa.
+- **La banda tapa el final de la página.** Mide 480×46 y ocupa las filas y=162 a 207 de la página. Mientras se ve:
+  - el sistema manda `Event::Insets` con `n` = 46, y `ctx.bottomInset()` devuelve 46 (0 cuando desaparece). El `ListView` añade ese margen abajo, para que la última fila se pueda subir por encima de la banda, y una página con controles por debajo de y=162 los recoloca ([§5.9](#59-guía-visual));
+  - los toques que caen dentro de la banda **nunca llegan a la página**: un `Tap` la cierra (o abre la página del plugin si lleva `open`). En reposo o con la pantalla bloqueada, tocar una banda solo la cierra: no despierta el reposo ni saca el teclado del PIN.
+- **Capa crítica.** La banda inferior de 44 px la pinta el sistema: icono, título, hora, el contador si hay varias («1/3») y «TOCA PARA CERRAR», con un filete de arcilla de 2 px arriba. El resto (480×276) lo pinta el plugin en `paintCritical()`. Si no la implementa:
+  - con `pixels`, el sistema pinta el dibujo a 32 px por LED (256×256), con el título al lado en `Title23`;
+  - sin `pixels` y con `big`, el título en `Title23` arriba y la cifra en `Digits96` en el centro (el Pomodoro: «A DESCANSAR» y «05:00»);
+  - sin ninguno de los dos, el icono a 48 px, el título en `Title23` y el cuerpo en `Body19`.
+
+  Si el plugin que lanza la capa tiene una línea `Live`, el sistema la pinta en `Meta13` debajo de la cifra y la refresca cada segundo: durante los 30 s del aviso del Pomodoro se ve «DESCANSO 04:58», y no solo el «05:00» que se copió al lanzarlo.
+- **Dibujos de LEDs** (`pixels`, en la capa y en `Canvas::pixels`). `0x000000` significa LED apagado: se pinta como un anillo hueco en `RuleSoft`, no como un cuadro negro. Con `pixelsRound` (cierto por defecto) los LEDs encendidos son círculos llenos, como en la matriz real, y con el tema de día llevan un filete de 1 px en `Rule` para que los colores claros se vean sobre el papel.
+- **Varias capas críticas.** Van en cola por orden de llegada, cada una con su `sec`. Una con la misma clave sustituye a la anterior en su sitio y no vuelve a gastar cupo. Mientras se ve una capa, el brillo sube al 100 %. Un toque que empieza sobre la capa se queda en ella hasta levantar el dedo, así que nunca llega a la página de debajo; y uno que empieza justo después de que la capa se cierre sola tampoco (la guarda de 400 ms del [§6.1](#61-táctil)). Si la capa despertó el reposo, al acabar la última se vuelve al reposo, y un aviso no reinicia la cuenta de inactividad.
+- **Tocar un aviso con `open`.** Con la pantalla desbloqueada, lo cierra y abre la página del plugin, que recibe `Event::AlertTap` con la clave en `tag`. Si el aviso había despertado el reposo, la pantalla se queda despierta en esa página y la cuenta de inactividad empieza de cero. Con la pantalla bloqueada solo lo cierra.
+- **La pantalla de confirmación va por encima de todo** ([§8.2](#82-reglas)), también de la capa crítica: mientras se ve, los avisos esperan en la cola y salen después.
+- **`flash`** enciende y apaga la retroiluminación (IO45, que ya es una salida) tres veces; no necesita PWM. Hay que **medir** que no moleste ni deje marcas en la pantalla.
+- **Cola y topes.** Caben 8 avisos en cola. Cada plugin tiene un tope de 6 avisos `warn` o `critical` por minuto y 20 por hora; los `info` no cuentan, y sustituir uno con la misma clave tampoco. Al pasarse, un `critical` baja a banda `warn` y un `warn` se funde con el anterior del mismo plugin («y 3 más»). **Nunca se tira un aviso sin decirlo.** `critical` exige el permiso `alert.critical`.
+
+### 5.6 Reposo
+
+- **Cuándo entra.** Tras `sys.idle` minutos sin tocar (0 = nunca; el valor por defecto lo decide [P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso)), dentro de una franja nocturna (por ejemplo, de 23:30 a 07:00), a mano desde el menú del sistema, al bloquear la pantalla o con `ctx.previewIdle()`. El plugin recibe `Event::IdleOn` con el motivo en `n` (`Timeout`, `Night`, `Manual`, `Lock` o `Preview`), y `ctx.idleReason()` lo devuelve mientras dure. Si el reposo ya estaba puesto cuando empieza la franja nocturna, llega otro `IdleOn` con `Night`, y al acabar la franja, otro con el motivo de antes; la pantalla sigue en reposo, y con las fotos si las hay.
+- **Qué pinta.** Un único **proveedor de reposo**, el que diga `sys.idle_by` ([P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)): con `auto`, el valor por defecto, es el único plugin activo con `surfaces.idle` si hay exactamente uno, y si no, el reloj; con `clock`, siempre el reloj; o el `id` de un plugin con `surfaces.idle`. Así, activar el Salvapantallas lo convierte solo en el proveedor.
+  - **Por defecto, el reloj del sistema:** la hora en `Digits96`, debajo la fecha y el tiempo en `Meta13` y, debajo, las líneas de estado `Live` y `Sticky` y la de la app de serie («3 PENDIENTES»). Así la lista no desaparece del todo ([P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso)). Si hay exactamente una línea `Live`, el reloj la pinta grande, en `Clock36`, en vez de en `Meta13`. Sin hora válida (sin NTP), la cifra grande pasa a ser esa cuenta, o «--:--» si no hay ninguna.
+  - **Un plugin** con `surfaces.idle` y el permiso `idle`, como el Salvapantallas (en una receta, con el motor `slideshow`, [§13.12](#1312-motores-photos-y-slideshow-fotos-y-reposo)). Pinta los 480×320 en `paintIdle()`, que tiene que volver en 40 ms. El sistema solo la llama tras `ctx.redraw()`, durante una transición pedida con `ctx.animate()` (a 10 fotogramas por segundo como mucho) o cuando cambia una capa; nunca cada segundo por sistema.
+  - **`ctx.idleReady(bool)`.** Si el proveedor no dice que está listo en 1 s desde `IdleOn`, o dice que no tiene nada que enseñar (por ejemplo, ninguna foto), el sistema pinta su reloj. Un `idleReady(true)` que llega tarde cambia del reloj a las fotos sin despertar la pantalla.
+- **Faja del reloj** (`ctx.idleOverlay()`). El proveedor puede pedir que el sistema pinte encima una faja de lado a lado de 480×44, abajo o arriba, en `PaperSoft` al 85 % de opacidad y con su filete, igual que el pie: se lee sobre cualquier foto y sigue pareciendo papel. Lleva la hora en `Clock36` y, si se pide, la fecha y el tiempo en `Meta13` con su icono, con las mismas reglas de dato viejo que la cabecera, y la línea de estado `Live` si la hay. El sistema la refresca cada minuto (o cada segundo con una línea `Live`) sin llamar al plugin, con una copia aparte del fondo de la franja que tapa (480×44, 42 KB de PSRAM), así que no necesita leer el hueco de imagen.
+- **Mandan `sys.live_idle` y `sys.live_lock`.** Si hay una línea `Live` y la opción que toca está activa, el sistema pinta siempre una faja mínima de 480×44 con esa línea, aunque el proveedor no pida faja. Lo que pide el proveedor (en el Salvapantallas, `overlay`) solo decide si además salen la hora, la fecha y el tiempo.
+- **El hueco de imagen completa** (`Slot::Full`, [§7.11](#711-imágenes)) es del plugin que resulta de `sys.idle_by` mientras esté activo, también fuera del reposo, para que tenga la foto preparada al entrar. Fuera del reposo prepara una sola foto tras cada `IdleOff`, no una cada `every`. La capa crítica nunca usa ese hueco.
+- **Dos memorias.** El lienzo conserva la foto que se ve y el hueco recibe la siguiente: mientras la tarea `io` escribe en el hueco, la pantalla sigue enseñando la foto actual (el sistema solo deja de copiar del hueco), y la faja y las bandas se refrescan con normalidad. Así una foto de la tarjeta que tarda en descodificarse no deja la pantalla en blanco.
+- **Transiciones.** El corte seco o el fundido. El fundido es **cruzado**: con la foto nueva ya en el hueco, cada fotograma mezcla el lienzo un paso más hacia ella. Son unos 1,2 MB de tráfico de PSRAM por fotograma: hay que **medir** que llega a 10 fotogramas por segundo; si no, el fundido pasa por el color del papel (la foto vieja se apaga hacia el papel y la nueva aparece desde él). Las dos caben en `animate()`.
+- **Probar.** `ctx.previewIdle()` entra en reposo con ese plugin como proveedor hasta el siguiente toque, aunque no sea el elegido. Exige el permiso `idle`.
+- **Salir.** El primer toque solo despierta y vuelve a la página que se veía.
+- **Línea viva en reposo y bloqueo.** En la parte de sistema de la Mini App, el dueño elige si las líneas `Live` salen en el reposo (`sys.live_idle`, sí por defecto) y con la pantalla bloqueada (`sys.live_lock`, sí por defecto). Una línea con `priv` no sale con la pantalla bloqueada.
+- **Todo sigue en marcha.** Temporizadores, programaciones, MQTT y peticiones siguen llegando en reposo; lo único que se corta son los toques a las páginas.
+- **Brillo.** Si se comprueba que la retroiluminación (IO45, que es un pin de arranque) admite PWM (encenderla a pulsos para atenuarla) **(medir)**, el reposo baja el brillo al 30 %. Una capa crítica lo sube al 100 % mientras dura.
+
+### 5.7 Bloqueo con PIN
+
+- **Se configura en la Mini App.** PIN de 4 a 8 cifras, que viaja en un sobre sellado y se confirma con un toque en la pantalla ([§9.7](#97-cómo-se-meten-los-secretos-el-sobre-sellado), [§8.2](#82-reglas)). Se bloquea a mano (manteniendo el reloj 2 s o desde el menú), a una hora (franja «de 19:00 a 08:00») o tras N minutos sin uso (0 = nunca).
+- **Aviso al configurarlo.** La Mini App enseña, y obliga a marcar «Lo entiendo» (el atributo `ack` del campo, [§9.1](#91-tipos-de-campo)), este texto: «Si olvidas el PIN y no has activado “Desbloquear desde Telegram”, la única forma de recuperar la placa es borrarla entera por USB, y se pierde todo, también la lista». La pantalla de confirmación de la placa lo repite.
+- **Bloquear implica reposo.** El proveedor de reposo recibe `IdleOn` (motivo `Lock`) antes de `Locked`, y al desbloquear, `Unlocked` y después `IdleOff`.
+- **Qué se ve.** El proveedor de reposo, o solo el reloj del sistema si así lo pide `sys.lock_show` ([P18](#p18-con-la-pantalla-bloqueada-se-ven-las-fotos-o-solo-el-reloj)), con un candado en la esquina superior derecha (con la faja del reloj arriba, el candado va dentro de ella, a la izquierda de la hora). Al tocar aparece, durante 30 s, un teclado numérico de 3×4 teclas de 88×52 px sobre un panel de papel de alto completo a la derecha, con los puntos del PIN a la izquierda. Mientras se ve el teclado, el sistema no llama a `paintIdle()` y la foto se queda quieta.
+- **Orden de las capas,** de abajo arriba: el proveedor de reposo, la faja del reloj, la banda de aviso (justo encima de la faja), el candado, el panel del teclado y, encima de todo, la capa crítica.
+- **Qué sigue funcionando.** Los plugins siguen en marcha (el Pomodoro cuenta, nicscom recibe), pero sus páginas no se ven y ningún toque les llega. El teclado HID no teclea y suelta cualquier tecla pulsada. El bot de Telegram funciona, y `/unlock` solo desbloquea si el dueño ha activado esa opción, que viene apagada; encenderla pide un toque en la pantalla ([P27](#p27-encender-desbloquear-desde-telegram-con-un-toque)).
+- **Avisos.** Se ven todos los niveles. Los marcados `priv` solo enseñan el título. Tocar una capa crítica la cierra, pero no desbloquea ni abre la página del plugin.
+- **Errores.** Tras 5 fallos hay que esperar 30 s, y la espera se dobla con cada fallo más, hasta 15 minutos.
+- **Guardado del PIN.** En `psys`, como PBKDF2-HMAC-SHA256 con 16 bytes de sal y 20.000 iteraciones **(medir: menos de 300 ms)**. PBKDF2 hace a propósito que comprobar cada PIN cueste tiempo. La comprobación se hace en el núcleo 0, nunca en `loopTask`, y mientras tanto el teclado dice «Comprobando…» ([§7.1](#71-tareas-y-núcleos)).
+- **Lo que no funciona con la pantalla bloqueada:**
+  - el reset del logotipo;
+  - el portal de fondo: no se abre, y si estaba abierto se cierra al bloquear;
+  - el menú del sistema.
+
+  El modo seguro tampoco quita el bloqueo.
+- **Si olvidas el PIN:**
+  1. Si activaste «Desbloquear desde Telegram», escribe `/unlock` al bot. Una vez desbloqueada, puedes cambiar o quitar el PIN desde la Mini App (con su toque en la pantalla).
+  2. Si no lo activaste, la única salida es **borrar la flash entera por USB y volver a instalar el firmware**: `esptool erase-flash` (o la opción de borrar de ESP Web Tools) por el puerto del CP2102, y después flashear. **Se pierde todo:** la lista, los ajustes, los plugins y sus datos, los dispositivos emparejados y la vinculación con el bot. Lo que haya en la microSD no se toca.
+
+  La guía de instalación lo explicará en un apartado propio.
+- **Lo que no protege.** El core tiene apagados el arranque seguro y el cifrado de la flash, así que el bloqueo no frena a quien reflashea la placa por USB, que además podría leer la NVS. La documentación lo dice claro.
+
+### 5.8 Menú del sistema
+
+Es una página del sistema de 480×208 que se abre tocando la zona del logotipo (desde F1). Sus renglones se desplazan con el mismo `ListView` que la lista:
+
+- **Plugins:** una checklist. Tocar un renglón activa o desactiva el plugin, y una pulsación larga lleva a «Borrar datos» (y, en una receta instalada, a «Desinstalar»).
+- **Bloquear ahora** y **Reposo ahora**.
+- **Modo seguro:** solo aparece si está activo. Desde aquí se sale o se reactivan los plugins uno a uno.
+- **Actualizar:** «Hay una versión nueva: 1.5.0 · [Instalar]», solo si la hay, o «Buscar actualización» ([§7.13](#713-ota-firmada)).
+- **Dispositivos emparejados:** cuántos hay y «OLVIDAR TODOS» ([§9.4](#94-emparejar-dispositivos)).
+- **Fallo de conexión:** el texto del fallo cuando el pie no lo enseña ([§5.4](#54-pie-y-línea-de-estado-los-pinta-el-sistema)).
+- **Ajustes:** «Abre ⚙ Ajustes en el chat del bot».
+- **Acerca de:** versión y variante, IP, chat vinculado (sí o no), huella de la clave del dispositivo y atribuciones, como «Tiempo: Open-Meteo.com (CC BY 4.0)». Si la 1.1.0 vinculó un grupo, avisa de que la Mini App no se puede abrir ahí ([§6.2](#62-telegram)).
+
+Configurar sigue siendo cosa de la Mini App. La pantalla solo hace lo imprescindible, más el programador de nicscom, que se edita en la propia página de nicscom.
+
+### 5.9 Guía visual
+
+**Roles de color.** El plugin nombra el rol y nunca el color. Los valores salen de `theme.cpp`:
+
+| Rol (`pauta::Role`) | Día | Noche | Uso |
+|---|---|---|---|
+| `Paper` / `PaperSoft` | F3EEE4 / FBF8F2 | 17150F / 201D16 | Fondo / cabecera, pie y bandas |
+| `RowPress` | E7E0D2 | 2E2A20 | Lo que está pulsado |
+| `Rule` / `RuleSoft` | D8CFBE / E6DFD2 | 3A352A / 2A261D | Filetes |
+| `Ink` / `InkDim` / `InkMute` | 241F19 / 6B6255 / A19685 | F0EADC / A79C88 / 6E6555 | Texto en tres pesos |
+| `Accent` / `OnAccent` | 6B7A55 / F8F5EF | A3B47F / 1A180F | Hecho, progreso, «bien» / lo que va encima del acento |
+| `Clay` | B0603C | D98A5F | Solo avisos y fallos |
+
+- **Un solo acento por página.** Se refiere a `Accent`. `Clay` no cuenta como acento: es el color de los avisos y los fallos, y puede convivir con él.
+- **Los estados se distinguen también por la forma** (`pauta::Status`, que pinta `canvas.status()`): `Ok` = círculo lleno en `Accent`; `Warn` = anillo en `Clay`; `Fail` = círculo lleno en `Clay`; `Unknown` (sin datos) = anillo en `InkMute`; `Stale` (dato viejo) = la forma de su estado en `InkMute`. Si hace falta un tercer color para «atención», lo decide [P21](#p21-colores-del-semáforo).
+- **Dato caducado:** en `InkMute` y con «hace 20 min», no tachado, porque en `Meta13` una raya encima se lee mal.
+- **Colores reales** solo dentro de `pixels` e `image`.
+
+**Fuentes VLW.** Son las de hoy: `Meta13` (versalitas con 2 px de separación entre letras), `Body19`, `BodyMedium19`, `Title23` (serif, la del logotipo) y `Clock36` (serif, la del reloj). Se añade **`Digits96`**: serif de 96 px solo con `0123456789:.,-+%°` y el espacio, para el Pomodoro y el reposo. La genera `mkfont.py` con un juego de glifos propio y **cifras tabulares** (todas del ancho de la más ancha), para que una cuenta atrás centrada no baile cada segundo. Ocupará unos 40-60 KB de flash **(medir)**. `Clock36` no cambia.
+
+**Glifos.**
+
+- Todo texto que llega de fuera (Telegram, MQTT, webs, nombres de archivo) pasa por `ctx.printable()`, que es el `printable()` actual de `ui.cpp`. Sustituye lo que no tiene glifo (por ejemplo, «–» por «-»), quita los emojis y nunca parte una letra.
+- **El sistema limpia lo que pinta él.** Los textos de `Header`, `Glance` y `Alert` los pasa el sistema por `printable()` con la fuente de esa superficie. El plugin solo llama a `printable()` para lo que pinta en su propia página.
+- **Caracteres y bytes.** Los topes de texto se dan en caracteres y los búferes de la API, en bytes: 2 bytes por carácter más uno, porque la Mini App y `CHARS` solo admiten letras de hasta 2 bytes en UTF-8. El sistema recorta siempre por letras enteras, con la misma lógica que `fit()` de `ui.cpp`.
+- El texto fijo de pantalla de un plugin (manifiesto y la tabla de pantalla de `strings.h`) tiene que estar entero dentro de `CHARS` ([`tools/mkfont.py`](../tools/mkfont.py), 134 glifos). `mkmanifests.py` lo comprueba. Los textos que solo van al bot (la tabla `BOT_*` de `strings.h` y el campo `help`) admiten cualquier UTF-8, emojis incluidos ([§14](#14-idiomas)).
+- `✓ ✗ ● ○` están en `CHARS`, pero la TTF no los trae: se usan los iconos.
+
+**Iconos.** Un juego cerrado, dibujado con primitivas como hoy el sol y la luna, de 12 a 48 px. Son 47 en la v1, más `none` (sin icono; un botón sin icono pinta su etiqueta un punto más grande):
+
+- generales: `pauta` (el logotipo, en dos colores), `check`, `cross`, `plus`, `minus`, `play`, `pause`, `next`, `prev`, `stop`, `reset`, `timer`, `bell`, `alert`, `lock`, `gear`, `clock`, `search`, `photo`, `lights`, `antenna`;
+- oficina (para Atajos): `keyboard`, `mic`, `mic_off`, `volume`, `volume_off`, `camera`, `camera_off`, `hangup`, `hand`, `monitor`, `window`, `globe`, `mail`, `terminal`, `folder`, `copy`, `paste`, `screenshot`;
+- tiempo: `sun`, `moon`, `cloud`, `sun_cloud`, `rain`, `snow`, `storm` y `fog`, que salen del código WMO (la tabla internacional de códigos meteorológicos) que da Open-Meteo.
+
+Nunca se usan emojis en la pantalla. La Mini App lleva una copia en SVG de los mismos iconos, dibujada a juego, para el selector del campo `icon`; `pauta-sim` saca una hoja con todos para compararlos.
+
+**Bloques de libreta** (ayudas de `Canvas`, [§12.1](#121-la-interfaz)):
+
+- `row`: etiqueta, y valor alineado a la derecha sobre un filete suave, en 46 px; opcionalmente con un estado con forma delante.
+- `bigNumber`: cifra en `Digits96` o `Clock36`, con un pie en versalitas.
+- `progress`: barra hecha de filete. `spark`: minigráfica hecha de filetes.
+- `status` y `dot`: los estados con forma.
+- `button`: filete de 1 px, radio de 9 px como mucho, sin sombra, con icono opcional; pulsado, en `RowPress`.
+- `checkbox`: la casilla de la lista de hoy (círculo de 9 px que se llena con la marca de verificación), con su animación.
+- `mark`: el logotipo de Pauta en dos colores, con su trazado animado.
+- `ListView`: renglones con la inercia, el difuminado y el revelado de `ui.cpp`, reutilizable ([§12.2](#122-clases-de-servicio-y-listview)).
+- `pixels`: rejilla de colores reales, de 16×16 como mucho.
+- `image`: una imagen ya descodificada ([§7.11](#711-imágenes)).
+
+Las recetas usan estos mismos bloques por su nombre ([§13.5](#135-la-página-vistas-y-bloques)): `big`, `buttons`, `grid` (una rejilla de `button`), `list` (un `ListView` con `row`), `rows`, `text`, `image`, `progress` y `spark`.
+
+**Medidas.**
+
+- Página de 480×208. El contenido mide 428 px de ancho entre márgenes de 26, o 202 px en media columna.
+- Los bloques con controles o renglones van en múltiplos de 46 px, la altura del renglón (`ROW_H`): 46, 92, 138 o 184. `big`, `progress` y `gap` tienen alto libre, siempre que nada que se toque quede por debajo de y=162.
+- Todo lo que se toca mide al menos 44×44 px (salvo el pie). El texto mide 13 px como mínimo.
+- **Zona de la banda.** Ningún control imprescindible queda por debajo de y=162 de la página mientras se ve una banda: o la página lo pone más arriba, o lo recoloca al recibir `Event::Insets`. `pauta-sim` lo comprueba con una banda pintada.
+- Sin tarjetas ni sombras.
+- Los decimales van con coma en español («17,5°») y con punto en inglés.
+
+## 6. Entradas
+
+### 6.1 Táctil
+
+La página recibe `Touch` en sus propias coordenadas: (0,0) es la esquina superior izquierda de la página.
+
+- **Campos.** `kind` (`Down`, `Move`, `Up`, `Tap`, `LongPress` o `Cancel`), `x` e `y`, `dx` y `dy` (lo que se ha movido el dedo **desde el evento anterior**) y `t` (la hora del evento, en milisegundos de `ctx.uptimeMs()`), que necesita la inercia para calcular la velocidad.
+- **`Down` llega al momento**, para que la página pueda iluminar el renglón.
+- **Los `Move`.** Con una sola página activa llegan según se producen, como hoy. Con varias, el sistema los retiene hasta decidir si el gesto es un deslizamiento horizontal ([§5.2](#52-inicio-y-páginas), a los 8 px). Si es vertical, entrega un primer `Move` con todo el desplazamiento acumulado desde `Down` y después los demás según llegan.
+- **`Cancel`.** Si el sistema se queda con un gesto que ya había empezado en la página (deslizar entre páginas, aparecer una capa crítica, bloquearse la pantalla o entrar el reposo), la página recibe `Cancel` y nada más de ese gesto. Sirve para apagar el resaltado.
+- **`Up`** llega al levantar el dedo. Justo después llega **`Tap`** si se cumple todo esto:
+  - el dedo se levantó antes de 900 ms;
+  - el gesto no se convirtió en arrastre (más de 8 px en vertical o, con varias páginas, un deslizamiento horizontal);
+  - han pasado al menos 180 ms desde el `Tap` anterior (la protección contra rebotes de la 1.1.0).
+
+  Las coordenadas del `Tap` son las del `Down`, como hoy.
+- **`LongPress`** solo llega a los plugins que lo piden en el manifiesto (`"touch": {"longpress": true}`). Salta a los 600 ms con el dedo quieto, y después de un `LongPress` ya no llega `Tap` de ese gesto. Un plugin que no lo pide nunca lo recibe, y para él un toque de hasta 900 ms sigue siendo `Tap`, como hoy en la lista (Pauta no lo pide).
+- **Toque tardío** (normativo). Un `Down` que empieza en los 400 ms siguientes a que una capa crítica, una banda, un panel o la pantalla de confirmación desaparezcan **solos** (por tiempo, no por un toque) no llega a la página: el sistema se queda ese gesto entero. Así, ir a quitar el aviso del Pomodoro justo cuando se cierra solo no pausa el descanso, y un toque que iba a otra cosa no cae sobre lo que queda debajo. Es lo mismo que ya hace `ui.cpp` con la lista (`REVEAL_GRACE_MS`, 250 ms).
+- **Lo que se queda el sistema:** la cabecera, el pie (salvo el botón de acción, que llega como `Event::FooterAction`), las bandas de aviso, la capa crítica y, con dos páginas o más, el deslizamiento horizontal. Con la pantalla bloqueada, en reposo o tapada por una capa crítica, la página no recibe nada.
+- **`ctx.msSinceTouch()`** dice cuántos milisegundos hace del último toque en cualquier sitio de la pantalla, cabecera y pie incluidos. Pauta lo usa para no revelar una tarea nueva si alguien ha tocado en los últimos 5 s.
+- `onTouch()` tiene que volver en menos de 10 ms.
+
+### 6.2 Telegram
+
+- **Dueño.** Como hoy, el primer chat que escribe se queda con la placa, pero ahora solo si es un chat privado (`message.chat.type == "private"`). Telegram solo deja abrir una Mini App desde un botón de teclado en chats privados. Una placa que la 1.1.0 vinculó a un grupo sigue apuntando tareas, pero «Acerca de» avisa de que la Mini App no se puede abrir ahí.
+- **Texto libre.** Siempre son tareas, y solo las recibe la app de serie (permiso `freetext`), como `Event::Text`:
+  - `a` lleva el texto, de 4096 bytes como mucho (lo que admite Telegram), en UTF-8 ya validado. Un mensaje de varias líneas llega entero; Pauta lo parte en tareas, como hoy;
+  - **el mensaje que vincula la placa también se apunta como tarea**, como hace la 1.1.0;
+  - el sistema descarta el texto que coincide exactamente con el del botón de la Mini App («⚙ Ajustes» o «⚙ Settings») y contesta volviendo a mandar el teclado. Así un cliente de Telegram que no sepa abrir Mini Apps no apunta el botón como tarea (**comprobar** en F2 con clientes de terceros);
+  - si Pauta está apagada, el bot contesta «La lista está desactivada. Actívala en ⚙ Ajustes». En modo seguro, el mensaje del [§4](#4-ciclo-de-vida).
+- **Comandos.**
+  - Reservados del sistema: `start` y `help` (como hoy), `settings` (vuelve a mandar el teclado de la Mini App), `plugins` (lista los plugins y su estado), `status` (versión, variante, IP, modo seguro y últimos fallos), `lock` (bloquea la pantalla) y `unlock` (solo si está permitido). Reservados de la app de serie: `list`, `done`, `undo`, `del` y `clear`. `mkmanifests.py` rechaza cualquier choque.
+  - El plugin recibe `Event::Command` con el nombre del comando en `a`, en minúsculas, sin la barra y sin `@bot` (`/Nics@MiBot AGUA` llega como `a` = `"nics"`), y los argumentos en `b` (UTF-8 válido, 200 bytes como mucho). En una receta llega a su manejador `command.<cmd>`, con `ev.args`, `ev.w1`, `ev.w2` y `ev.n` ([§13.7](#137-eventos-y-órdenes)).
+  - **Menú del bot** (`setMyCommands`, uno por idioma). Va en este orden: los de la app de serie, los de los plugins activos según `order` y al final los del sistema (`help`, `settings`, `plugins`, `status`, `lock`, y `unlock` solo si está permitido). Son 100 como mucho, que es el límite de Telegram. Se vuelve a mandar al activar o desactivar un plugin, al cambiar el idioma y al cambiar la opción de `/unlock`. La tabla `MENU` de `telegram.cpp` pasa a generarse. **En F0 el menú queda igual que en la 1.1.0** (`list`, `done`, `undo`, `del`, `clear`, `help`); `plugins` y `status` llegan en F1, y `settings` y `lock`, en F2.
+  - **`/help`** (y `/start` después de la bienvenida) se compone así: una cabecera del sistema, el bloque `help` de cada plugin activo por orden y la versión al final. La cabecera solo sale si hay algo más que Pauta o Pauta está apagada («⚙ Ajustes abre la configuración»). **Con solo Pauta activa, `/help` sale igual que en la 1.1.0.** Si el total pasa de 4096 bytes, se manda en dos mensajes.
+  - Las frases del sistema que dan por hecho que la lista existe cambian si Pauta está apagada: por ejemplo, la respuesta a una nota de voz deja de decir «escríbeme la tarea».
+- **`ctx.reply()`** manda un `sendMessage` al chat del dueño sin citar el mensaje (sin `reply_parameters`) y en silencio (`disable_notification`), como la 1.1.0.
+- **Respuesta sin esperar al sondeo.** Hoy la cola de salida solo se vacía antes de cada sondeo largo de 12 s. Tras repartir un lote que lleve trabajo para plugins (texto, comandos, `web_app_data`, ofertas de archivos), la tarea de Telegram espera a que el núcleo 1 lo atienda, 500 ms como mucho. Después vacía la cola y vuelve a sondear. Un plugin cumple su presupuesto de 10 ms, así que en la práctica la espera ronda los 30 ms. Si alguno se pasa, retrasa el bot 500 ms como mucho, y su respuesta sale tras el siguiente sondeo.
+- **Fotos y documentos.**
+  - **Los descarga el sistema** con `getFile`, porque la URL de descarga lleva el token y el plugin nunca la ve.
+  - **Qué talla de foto.** Telegram guarda cada foto en varias tallas. Se baja **la más pequeña que cubra la pantalla**: lado largo de 480 px o más y lado corto de 320 o más, contando el giro si la foto es vertical. En la práctica es la de 800 px, de unos 60-150 KB. Tope: 300 KB; la descarga se corta al pasarlo aunque Telegram no diga el tamaño (en la Bot API, `file_size` es opcional). El protocolo de Telegram tiene tallas guardadas como JPEG progresivo (`photoSizeProgressive`), que TJpgDec no lee (marcador `FFC2`, [§7.11](#711-imágenes)). Si los primeros bytes dicen que lo es, se prueban por orden la de 800 px, la de 1280 px y, como último recurso, la de 320 px (que sale más pequeña que la pantalla, con bandas), y se queda la primera *baseline*. **Plan B**, si ninguna lo es: el bot contesta «No puedo leer esa foto: mándamela como archivo (sin comprimir)». El original de la cámara suele ser *baseline*; ese archivo se acepta hasta 8 MB, se guarda en la tarjeta o en la FAT y se reduce una sola vez con la caché de [§7.11](#711-imágenes). Descodificar entero un progresivo no es viable en esta placa (una foto de 800×600 necesita alrededor de 1,4 MB solo para sus datos). Qué tallas llegan progresivas se **comprueba al empezar F2** ([§15](#15-conformidad)).
+  - **Documentos.** Un JPEG o PNG mandado como archivo cuenta como foto (permiso `photos`); el resto, como archivo (permiso `files`), solo en JSON. Pesan 1 MB como mucho, salvo un JPEG para el receptor de fotos, que puede pesar 8 MB (el plan B de arriba). Los rechazos tienen cada uno su mensaje: «Mándala como foto, no como archivo», «HEIC no: en la cámara del iPhone elige “Más compatible”», «Demasiado grande» y «No puedo leer esa foto».
+  - **Reparto.** Si el pie de foto empieza por el comando de un plugin (`/fondo`), va a ese plugin. Si no, con pie o sin él, va al receptor de fotos (`sys.photos`): con `auto`, el valor por defecto, es el único plugin activo con el permiso `photos`, si hay exactamente uno ([P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)), así que activar el Salvapantallas basta. Un pie que no es un comando («playa», que es como la gente titula sus fotos) le llega como pie. Si no hay receptor, se contesta «solo texto», como hoy, una sola vez por álbum.
+  - **Oferta antes de bajar.** El plugin recibe primero `Event::FileOffer`, con el pie en `b` (sin el comando ni la `@`, pasado por `printable()` y recortado a 64 bytes) y un `FileInfo` en `data` (ancho, alto, bytes si se saben e identificador único). Tiene que contestar dentro de esa misma llamada con `ctx.acceptFile(nombre)` o `ctx.rejectFile(motivo)`; si no contesta, se rechaza. Así puede aplicar su tope («40 fotos») antes de gastar nada.
+  - **Duplicados.** El sistema descarta las fotos repetidas por su `file_unique_id` (el identificador que Telegram mantiene para un mismo archivo) y contesta «Esa foto ya la tengo». Una foto cuenta como repetida **solo si sigue en el índice del plugin**: el sistema guarda el `file_unique_id` y el `file_id` de cada foto en un solo archivo por plugin (`/state/<id>.sys.json`, no uno al lado de cada foto) y borra la entrada al borrar la foto, así que volver a mandar una foto borrada funciona. Esto cubre también la foto que Telegram vuelve a entregar tras un apagón.
+  - **Dónde se escribe.** La propia tarea de Telegram escribe la descarga a trozos de 4 KB en `<nombre>.part`, dentro de la carpeta del plugin (microSD o FAT), y la renombra al terminar. Al arrancar se borran los `.part` que hayan quedado. En la FAT, las fotos recibidas tienen su propio tope de 8 MB al día ([§10.2](#102-fat-interna-96-mb-el-almacén-por-defecto)).
+  - **Resultado.** `Event::File`, con el nombre en `a`, el pie en `b`, los bytes en `n` (o un `Err` negativo si la descarga falló, junto con un mensaje del sistema al dueño) y el `FileInfo` en `data`, que dice además su posición dentro del álbum. El sistema guarda en ese mismo índice el `file_id` de Telegram, para poder reenviar la foto sin subirla (`ctx.replyPhotos()`, [§7.8](#78-avisos-y-notificaciones)).
+  - **Álbumes.** Cada foto de un álbum se ofrece y se entrega por separado, y todas van al mismo plugin que la primera: el sistema recuerda durante 60 s a quién fue cada `media_group_id`, porque el pie solo lo lleva la primera foto, y ese pie vale para todas (también uno normal, como «playa»). Las respuestas de un mismo álbum se juntan en un solo mensaje, que sale 3 s después de la última foto: «10 fotos guardadas (22 de 40)».
+- **`web_app_data`.** Lo atiende solo el sistema, solo si viene del chat del dueño, y nunca sirve para vincular un chat. Se atiende **antes** del `if (!text && !media) return;` de `processUpdate()`: hoy se perdería ahí, porque no lleva texto y no está en `isMedia()`. La tarea de Telegram lee `getUpdates` en un documento con `pauta::PsramAllocator` y, desde que hay Mini App, con `limit=2` ([§7.12](#712-memoria)).
+- **Mensaje envenenado.** `s_offset` solo vive en RAM. Si atender un mensaje tumba la placa, Telegram lo vuelve a entregar tras cada reinicio, y el bucle seguiría incluso en modo seguro, porque el bot sigue activo. Por eso, antes de atender cada actualización, la tarea de Telegram apunta su `update_id` en la estructura RTC. Si la placa arranca tras un pánico o un watchdog con esa marca puesta, el primer `getUpdates` pide `offset = id + 1`, lo que da ese mensaje por leído y lo salta. El bot avisa: «He descartado un mensaje que colgaba la placa».
+- **Repeticiones tras un apagón.** Telegram vuelve a entregar lo que no se llegó a confirmar. `lastmsg` (en `taskdesk`) es el último mensaje ya atendido, y lo que tenga un número igual o menor se salta. Hoy `lastmsg` solo llega a la NVS junto con la lista, porque repetir lo demás «no hace daño». Con plugins sí lo hace (un `/nics AGUA` repetido vuelve a avisar), así que:
+  - **antes de entregar a un plugin una orden que no se puede repetir sin efecto** (los comandos de los plugins y los envíos de la Mini App), el servicio de Telegram guarda `lastmsg` en la NVS, en la misma clave de siempre (8 bytes, `tasksCommitLastMsg()`). Para el texto libre de Pauta basta el guardado diferido de hoy, que lo lleva junto con la lista. Así una orden puede perderse en un apagón, pero nunca se aplica dos veces. Esto no depende de que Pauta esté activa, porque el almacén de la lista es del sistema;
+  - cada envío de la Mini App lleva su propio `id`, y el sistema recuerda los 16 últimos aplicados para descartar un envío repetido (por ejemplo, un doble toque en «Enviar»);
+  - las operaciones `action` llevan su hora `t` y se descartan si tienen más de 10 minutos;
+  - `item.add` lleva el `id` que genera la Mini App, así que repetirlo no duplica nada, y los ajustes valen lo mismo aplicados dos veces.
+- **Botones en línea** (`callback_query`): reservados para la 1.1. El formato ya queda fijado: `p:<id>:<carga>`, de 64 bytes como mucho.
+
+### 6.3 Mini App
+
+El sistema valida lo que llega y lo entrega así ([§9](#9-ajustes-y-mini-app)):
+
+- **`Event::Settings`**, con las claves cambiadas en `b`, separadas por comas. Un campo normal sale por su nombre (`work`). En una lista, cada elemento sale con su marca: `sites+k3f7a2` (añadido), `sites~q7c2d3:url:name` (cambiado, con los subcampos que cambian), `sites-x2b4e7` (borrado) y `sites^` (reordenada con `item.order`). Si la lista de cambios pasa de 512 bytes, `b` vale `*` (puede haber cambiado todo). Un plugin no recibe este evento por los cambios que hace él mismo con `setConfig()` o `listSet()`.
+- **`Event::Action`**, con el índice de la acción en `tag` y los argumentos JSON en `data`.
+- En una receta, los dos llegan a sus manejadores `settings` y `action.<id>` ([§13.7](#137-eventos-y-órdenes)).
+
+En los dos se puede llamar a `ctx.reply()`: su texto se añade a la respuesta del envío («Guardado: nicscom · Avisado AGUA 12:03»). Si el resultado tarda, el plugin reserva una respuesta con `ctx.deferReply()` ([§7.8](#78-avisos-y-notificaciones)).
+
+### 6.4 Programador de eventos
+
+- **Llamadas.** `ctx.every(ms)` se repite, cada 250 ms como mínimo. `ctx.after(ms)` salta una sola vez. `ctx.at(hh, mm, days)` salta a una hora local, con los días en una máscara de 7 bits (bit 0 = lunes). `ctx.cancel(id)` lo anula.
+- **Precisión.** El programador mira en cada vuelta de `loop()`, que da cientos por segundo, así que `every` y `after` saltan con 20 ms de retraso como mucho. Para un reloj o una cuenta atrás se recomienda un `after()` que se vuelve a programar para el siguiente cambio de segundo.
+- **Cada disparo** llega como `Event::Timer`, con el id en `tag`. Los id de `every`, `after` y `at` van de 1 a `0x7FFF`; los de las programaciones declarativas (abajo) llevan el bit `0x8000`.
+- **Un `at`** salta una vez al día, a las `hh:mm:00` con 1 s de retraso como mucho, en hora local y con el cambio de hora incluido. Si `loop()` estuvo parado, todavía salta hasta 90 s tarde; pasado eso, se pierde. Solo salta con la hora ya sincronizada por NTP. En el cambio de hora, una hora que no existe salta en el primer minuto válido, y una repetida, una sola vez. Un `at` creado cuando su hora de hoy ya pasó salta mañana.
+- **No se duplica nada.** El sistema recuerda el último día en que saltó cada `at` y cada elemento programado, así que rehacer los temporizadores (por ejemplo, tras un cambio en la Mini App a las 08:30:20) ni repite ni pierde el aviso de las 08:30. Al cambiar la zona horaria, el sistema recalcula los `at` él solo.
+- **Programación declarativa** (`schedule` en el manifiesto). Para listas de cosas que pasan a una hora, como las automatizaciones de nicscom: `{"list": "autos", "time": "at", "days": "days", "enabled": "on"}`. El sistema programa él solo cada elemento de la lista cuyo campo `enabled` sea cierto, rehace lo que cambie con cada edición (de la Mini App o de la pantalla) y entrega `Event::Timer` con `tag` = `0x8000` + el número de la programación y el `id` del elemento en `a`. Los elementos programados no cuentan en el tope de temporizadores: caben tantos como `max_items` tenga la lista.
+- **Topes.** 16 temporizadores (`every`, `after` y `at`) por plugin y 96 entre todos, más los elementos programados.
+- **Viven en RAM** y el sistema solo los cancela en `end()`. `Event::Settings` no cancela nada: el plugin rehace los que dependan de los ajustes, si quiere.
+- **Siguen llegando** con la página oculta, en reposo y con la pantalla bloqueada.
+- **Lo que tocaba con la placa apagada no se recupera**, tampoco en nicscom: si la placa está apagada a la hora de una automatización, el aviso no sale.
+- **Recetas.** No programan temporizadores sueltos: los llevan sus motores ([§13.10-13.12](#1310-motor-timer-temporizador-por-fases)). La programación declarativa `schedule` sí les vale, y les llega como evento `schedule`, con el elemento en `ev.item` ([§13.7](#137-eventos-y-órdenes)).
+
+### 6.5 Eventos del sistema
+
+| Evento | Cuándo llega | Datos |
+|---|---|---|
+| `PageShown` / `PageHidden` | La página del plugin pasa a verse o deja de verse. Cuenta como oculta si hay reposo, bloqueo, capa crítica o el menú del sistema encima | — |
+| `Insets` | Aparece o desaparece una banda sobre la página | `n` = margen inferior en px (46 o 0) |
+| `AlertTap` | El dueño toca un aviso con `open` | `tag` = clave |
+| `TimeSynced` | Ya hay hora de NTP | — |
+| `Uplink` | Cambia la conexión | `n`: bit 0 = WiFi, bit 1 = Internet: alguna conexión a un host público (Telegram, el tiempo, la OTA, el catálogo o una petición del recadero) salió bien en los últimos 3 minutos. Así un cortafuegos que bloquea Telegram no deja al Semáforo sin veredictos |
+| `Lang` / `Theme` | Cambia el idioma o el tema | — |
+| `IdleOn` / `IdleOff` | Entra o sale el reposo (y otro `IdleOn` si empieza o acaba la franja nocturna con el reposo puesto, [§5.6](#56-reposo)) | `n` = motivo: `Timeout`, `Night`, `Manual`, `Lock` o `Preview` |
+| `Locked` / `Unlocked` | Se bloquea o se desbloquea la pantalla | — |
+| `SdMounted` / `SdRemoved` | Cambia la tarjeta después del arranque (en `begin()` se consulta `files().onSd()`) | — |
+| `Restarting` | El firmware va a reiniciar | `n` = ms que quedan (3000 como mínimo) |
+| `Confirmed` / `Declined` | El dueño acepta o rechaza en la pantalla lo que el plugin pidió con `ctx.confirmScreen()`; `Declined` también si pasan los 2 minutos ([§8.2](#82-reglas)) | `tag` = la ficha |
+
+`ctx.visible()` dice en cualquier momento si la página se ve, con el mismo criterio que `PageShown`. `ctx.uplink()` da el estado de la conexión, y `ctx.locked()`, si la pantalla está bloqueada.
+
+## 7. Servicios del sistema
+
+Ninguna llamada a un servicio bloquea: o vuelve al momento, o devuelve un número de petición cuyo resultado llega más tarde como evento. Sin el permiso necesario devuelve `Err::Denied`. Las recetas usan estos mismos servicios a través de sus motores y sus órdenes ([§13](#13-recetas-declarativas-formato-v1)), con las mismas comprobaciones.
+
+### 7.1 Tareas y núcleos
+
+| Tarea | Núcleo | Prioridad | Pila | Qué hace |
+|---|---|---|---|---|
+| `loopTask` (ya existe) | 1 | 1 | 12 KB (hoy 8; `SET_LOOP_TASK_STACK_SIZE`) | Táctil, pintado, **todo el código de los plugins**, programador y guardado diferido |
+| `telegram` (ya existe) | 0 | 3 | 12 KB | Sondeo, envíos, mensajes de la Mini App, descargas con `getFile` y su escritura en la FAT o la microSD |
+| `net` (nueva) | 0 | 2 | 12 KB | Recadero HTTP/TLS, tiempo de Open-Meteo y descarga de la OTA |
+| `io` (nueva) | 0 | 2 | 8 KB | Archivos de los plugins, microSD, descodificar imágenes y escrituras grandes |
+| `hid` (nueva, solo con teclado) | 1 | 4 | 4 KB (**medir** con `uxTaskGetStackHighWaterMark()`: 3 KB se quedan justos con los registros activados, porque `SendReport` llama a `log_e`) | La única que habla con el teclado USB; vacía la cola de 32 acciones |
+| `mqtt` (la crea esp-mqtt) | sin núcleo fijo | 3 | 6 KB | Cliente MQTT |
+| `usbd` (la crea el core al llamar a `USB.begin()`, solo en `v1-hid`) | sin núcleo fijo | 24 (`configMAX_PRIORITIES − 1`, por encima de la WiFi; comprobado en `esp32-hal-tinyusb.c`) | 4 KB | La pila USB de TinyUSB. Casi siempre duerme |
+
+- **Por qué `net` e `io` van separadas.** Una web que no contesta puede tener ocupado el recadero 15 s, y reducir una foto grande de la tarjeta a la caché puede tardar varios segundos ([§7.11](#711-imágenes)). Juntas, una retrasaría a la otra: el cambio de foto esperaría a la web, y el Semáforo, a la foto.
+- **Por qué `hid` va aparte y en el núcleo 1.** Cada informe USB espera hasta 100 ms a que el ordenador lo recoja (`USBHID::SendReport`), y cada tecla son dos informes: una macro de 64 caracteres puede tardar más de 1 s. No cabe en `loopTask` (10 ms por llamada) ni detrás de una petición TLS de `net`. Casi siempre está dormida esperando, así que no le quita tiempo a la pantalla.
+- **`mqtt` no tiene núcleo fijo.** En el core 3.3.12 precompilado, `CONFIG_MQTT_TASK_CORE_SELECTION_ENABLED` está apagado, así que la tarea puede correr en el núcleo 1 por encima de `loopTask`. Por eso su prioridad baja a 3 (`task.priority`) y su manejador hace lo mínimo: copiar el mensaje a la tabla y encolarlo.
+- **Las pilas de las tareas nuevas van en RAM interna.** Mientras se escribe en la flash, la PSRAM no se puede leer, y una tarea con la pila en PSRAM se colgaría. La de `net` se mide con `uxTaskGetStackHighWaterMark()`, porque la de Telegram ya necesitó 12 KB para el saludo TLS completo **(medir)**.
+- **La criptografía y la compresión, en el núcleo 0** (normativo). Comprimir y cifrar el estado de la URL, el ECDH de cada sobre y de cada emparejamiento (decenas o cientos de milisegundos, porque el S3 no tiene acelerador de curvas: **medir**) y el PBKDF2 del PIN (unos 300 ms) se hacen en la tarea `telegram` o en un trabajo que ella encarga en el núcleo 0, nunca en `loopTask`, que tiene 10 ms por llamada y congelaría la pantalla y el Pomodoro. Los sobres se guardan cifrados hasta el toque y se descifran después, en el núcleo 0. Al desbloquear, la comprobación del PIN también va al núcleo 0, y la pantalla dice «Comprobando…».
+- **El núcleo 0 nunca llama al código de un plugin.** Los servicios dejan eventos en una cola de 32 entradas, con los datos en un anillo de 64 KB de PSRAM, y `loop()` la vacía. Si el anillo se llena, el servicio espera o funde los mensajes ([§7.5](#75-mqtt)).
+- **Ajustes, estado y listas de los plugins solo cambian en el núcleo 1.** La tarea de Telegram valida lo que llega de la Mini App con las tablas generadas, pero lo aplica el núcleo 1. Después, el núcleo 1 publica una copia del estado para la URL de la Mini App, protegida por un cerrojo y con número de revisión, igual que hoy `tasksRevision()`.
+
+### 7.2 Hora y zona horaria
+
+- **NTP.** La hora llega por NTP, como hoy (`pool.ntp.org` y `time.google.com`). Además se acepta el servidor de hora que anuncia el router por DHCP (el core trae `CONFIG_LWIP_DHCP_GET_NTP_SRV=y`) y, si el dueño lo pone en la Mini App, uno propio (`sys.ntp`), por ejemplo el ordenador del broker en una red sin salida a Internet.
+- **Zona horaria.** Deja de ser fija. Se guarda como regla POSIX (la forma que entiende la placa, por ejemplo `CET-1CEST,M3.5.0,M10.5.0/3`) en `/sys/system.json`, y un cambio se aplica al momento con `setenv("TZ")` y `tzset()`. Si no hay ninguna guardada, se usa la peninsular de hoy (`TZ_SPAIN`).
+- **API.**
+  - `ctx.now()` y `ctx.timeValid()` (cierta desde que la hora pasa de 1700000000, como hoy `localTime()`). Tras un reinicio por software la hora puede seguir siendo válida antes de NTP, porque el reloj RTC del chip sigue contando **(comprobar)**.
+  - `ctx.uptimeMs()`: milisegundos desde el arranque, de 32 bits. Da la vuelta a los 49,7 días, así que se compara siempre restando sin signo, como hace hoy `ui.cpp`.
+  - `ctx.monoMs()`: milisegundos de 64 bits desde el último encendido, que **sobreviven a los reinicios por software** (se leen del temporizador RTC; el core trae `CONFIG_NEWLIB_TIME_SYSCALL_USE_RTC_HRT=y`, **comprobar** en la placa). `ctx.coldBoot()` dice si el último arranque fue un encendido, en cuyo caso `monoMs()` empezó de cero.
+
+### 7.3 Ubicación y tiempo
+
+- **Ubicación.** La Mini App, desde el móvil, busca la ciudad en el geocodificador de Open-Meteo, que no pide clave. Traduce la zona horaria (`Europe/Madrid`) a la regla POSIX con `tz.json`, una tabla de unas 470 zonas que vive en la Mini App y no en el firmware. `tz.json` se genera con el pie POSIX de cada archivo de `/usr/share/zoneinfo` (la última línea de cada archivo TZif; tzdata es de dominio público). Muchas zonas acaban en reglas con el nombre entre ángulos, como `<-03>3` (São Paulo) o `<+04>-4`. newlib, la biblioteca de C del core, aprendió a leerlas en 2022: en F2 se **comprueba** que `setenv("TZ")` y `tzset()` del core 3.3.12 las aceptan; si no, `tz.json` las convierte a nombres de letras (`XXX3`), que la placa no enseña nunca. La placa recibe `sys.loc` = `{n, lat, lon, tz}` (nombre, coordenadas con 2 decimales y zona IANA) y `sys.tz` = `{iana, posix}` (la zona que se aplica, [§9.8](#98-el-manifiesto-del-sistema)), y los guarda en `/sys/system.json`.
+- **Tiempo.** Cada 30 minutos, la tarea `net` pide a Open-Meteo, por delante de las peticiones de los plugins:
+  `https://api.open-meteo.com/v1/forecast?latitude=36.72&longitude=-4.42&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto`
+  Son unos 1-1,5 KB, que se guardan en `/cache/weather.json`. En modo seguro no se pide.
+- **Para los plugins.** `ctx.weather()` devuelve `{valid, temp, max, min, wmo, isDay, at, place}`. Las coordenadas solo se dan con el permiso `location` (`ctx.location()`).
+- **Atribución.** «Tiempo: Open-Meteo.com (CC BY 4.0)», en «Acerca de». Open-Meteo es gratis para uso no comercial; si Pauta llegara a venderse, haría falta su plan comercial.
+
+### 7.4 Red HTTP/TLS con cola (el «recadero»)
+
+- **Una sola conexión TLS de plugins a la vez**, además de la de Telegram. Antes de abrirla, el recadero exige **90 KB libres** de RAM interna y sitio para **dos bloques seguidos de 17 KB** (los dos búferes de 16 KB del TLS, con su cabecera). Así, con la conexión ya abierta (unos 45 KB), siguen libres los 40 KB del suelo ([§7.12](#712-memoria)). Si no los hay, lo reintenta cada 5 s, y a los tres intentos devuelve el resultado con `err` = `NoMem`. El Semáforo hace 12 saludos TLS cada 5 minutos, mezclados con el de Telegram: en F0 se **mide** cuánto fragmentan la RAM interna y se valora reservar una sola vez los búferes TLS de los plugins.
+- **Nunca se queda parado más de 1 s seguido** (normativo). `NetworkClientSecure::connect()` se queda en `select()` todo el plazo de conexión y su saludo TLS no avisa a nadie, y `getaddrinfo` no tiene tope. Por eso el recadero hace la red a trozos: conecta sin bloquear y espera con `select()` de 1 s en bucle; lleva el saludo TLS con su propio bucle (la subclase de `NetworkClientSecure`, que además rehace `connect()` para leer `mbedtls_ssl_get_verify_result()` antes de cerrar un saludo fallido); y resuelve los nombres con el DNS asíncrono de lwIP (`dns_gethostbyname()`) con su propio plazo (**comprobar** cómo se llama con el cerrojo de lwIP del core). Entre trozo y trozo mira si la petición se canceló o pasó su plazo. Así una web caída nunca cuelga la tarea, y el vigilante por software del [§4](#4-ciclo-de-vida) solo salta si algo se queda colgado de verdad.
+- **Las `http://` de la red local van aparte.** No necesitan TLS, así que van por una segunda cola de una conexión sin cifrar y no ocupan el hueco TLS.
+- **Petición.** `Err ctx.http().request(const HttpReq&, uint16_t *id)` vuelve al momento:
+  - `Ok`, con el número de petición en `id`; el resultado llega después;
+  - `Denied` (host no permitido o falta el permiso), `Busy` (el plugin ya tiene 3 en cola), `Quota` (ha gastado su `max_per_hour`) o `Invalid` (URL de más de 256 caracteres o mal formada).
+
+  Además, `http().pending()` dice cuántas tiene en cola, `http().cancel(id)` anula una (por ejemplo, la de una web que el dueño acaba de borrar) y `http().budget()` dice cuántas le quedan en esta hora, para que el plugin se regule solo.
+- **Campos de `HttpReq`:**
+  - `url`: 256 caracteres como mucho;
+  - `method`: `Get` (`Post` queda reservado para la 1.1);
+  - `headers`: hasta 4, que admiten `{secret:clave}`;
+  - `timeoutMs`: 15000 como mucho (8 s para conectar);
+  - `maxBytes`: lo que se guarda tras filtrar, 16384 como mucho;
+  - `jsonFilter`: filtro de ArduinoJson, para quedarse solo con los campos útiles;
+  - `probe`: modo sondeo (abajo);
+  - `follow`: seguir redirecciones (sí por defecto; no en `probe`);
+  - `owner`: la pide el dueño. **El host lo decide, no el plugin**: vale solo si la petición se pide atendiendo un toque, el botón del pie, un comando o una acción de la Mini App, o si forma parte de una vuelta que empezó así (por ejemplo, las 12 webs de «Comprobar ahora», aunque entren en la cola más tarde);
+  - `conditional`: mandar `If-None-Match` con el `ETag` guardado (sí por defecto; no en `probe`).
+- **Sondeo** (`probe`). Es un `GET` que solo lee la línea de estado y las cabeceras y cierra (`maxBytes` = 0). No usa `HEAD`, porque muchos servidores contestan mal a `HEAD`, y siempre es una sola petición. Tiene topes más cortos: 4 s para conectar y 8 s en total.
+- **Resultado.** Llega como `Event::Http`, con el número en `tag` y un `HttpResult` en `data`:
+  - `code`: el código HTTP, o 0 si no hubo respuesta;
+  - `err` y `stage`: qué falló y dónde se paró (abajo);
+  - los tiempos por partes, **sin contar la espera en la cola**: `msDns` (resolver el nombre), `msConnect` (la conexión TCP), `msTls` (el saludo TLS), `msFirstByte` (desde que se envía la petición hasta que llega la línea de estado) y `msTotal`. En esta placa el saludo TLS solo ya cuesta 0,3-1,5 s **(medir)**, así que para saber si una web va lenta se usa `msConnect + msFirstByte`;
+  - `certDays` y `certNotAfter` (abajo);
+  - `retryAt`: cuándo se podrá reintentar si el host está en espera;
+  - `location`: el host de destino de una redirección no seguida;
+  - `body`, `bodyLen` y `truncated`.
+- **Errores** (`err`). Hay dos clases, y la diferencia importa:
+  - **locales**, cuando la placa ni siquiera pudo intentarlo: `NoNet` (sin WiFi, sin Internet o **el servidor DNS no contesta**), `NoMem`, `Quota`, `Busy` y `Denied`. **Un error local nunca cuenta como fallo del sitio**: el Semáforo lo pinta como «sin comprobar»;
+  - **remotos**, cuando falló el sitio: `Dns` (el servidor DNS contesta que el nombre no existe), `Refused` (conexión rechazada), `Timeout` (sin respuesta), `TlsProto` (versión de TLS incompatible), `CertName` (certificado de otro nombre), `CertUntrusted` (certificado no fiable), `CertExpired`, `Redirects` (demasiadas) y `TooBig`.
+
+  El recadero los saca del `lastError()` de mbedTLS y, con una subclase de `NetworkClientSecure`, de las marcas de `mbedtls_ssl_get_verify_result()` (`BADCERT_CN_MISMATCH`, `BADCERT_NOT_TRUSTED`…). `stage` dice dónde se paró: `Local`, `Dns`, `Connect`, `Tls`, `Http` o `Done`. lwIP no distingue en su aviso «el nombre no existe» de «el DNS no contesta»: se distinguen por el código de respuesta del DNS o, si no se puede leer, porque lo primero llega enseguida y lo segundo agota el plazo (**comprobar**).
+- **Certificados.** Siempre se comprueban contra el paquete de certificados raíz que trae el core (`CONFIG_MBEDTLS_CERTIFICATE_BUNDLE`). Nunca se desactiva la comprobación.
+  - **Caducidad.** El core está compilado sin `CONFIG_MBEDTLS_HAVE_TIME_DATE`, y sin esa opción mbedTLS **no mira las fechas**: acepta un certificado caducado. Por eso el recadero, con la hora ya válida, compara él mismo las fechas del certificado al terminar el saludo y corta antes de enviar nada (`err` = `CertExpired`). La excepción es `probe`, que no envía ningún dato: termina y devuelve `certDays` negativo, para que el Semáforo pueda decir «certificado caducado hace 3 días». La conexión de Telegram tiene hoy el mismo hueco; se cierra igual en F2.
+  - **`certDays`** son los días enteros, redondeando hacia abajo, que faltan para la caducidad del certificado **del propio host de la URL** (el primer salto, no el de después de una redirección). Se leen con `getPeerCertificate()`, que funciona porque el core tiene `CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=y`. Sale negativo si ya caducó, e `INT16_MIN` si no aplica (`http://`, error antes del saludo o sin hora). `certNotAfter` es esa fecha, para poder pintar «caduca el 12 nov».
+  - **Certificado propio en la red local.** Un NAS o un router con un certificado hecho por el propio aparato nunca pasa la comprobación; qué hacer con ellos lo decide [P20](#p20-webs-de-tu-red-con-certificado-propio).
+  - **TLS 1.3.** El core lo trae apagado (`CONFIG_MBEDTLS_SSL_PROTO_TLS1_3`). Una web que solo acepte TLS 1.3 da `err` = `TlsProto`, y el Semáforo la pinta como «no compatible», no como caída.
+- **Destinos.**
+  - Solo los hosts de `net.hosts` o los que salen de los campos de `net.user_hosts_from`.
+  - Las IP privadas y los nombres `.local` exigen `lan`, y `http://` también, salvo a un host público en `probe` y sin secretos: un sondeo solo lee la línea de estado. **IP privadas**, lista cerrada: en IPv4, 10/8, 172.16/12, 192.168/16, 127/8, 169.254/16, 100.64/10 (la que usan los operadores y Tailscale) y 0/8; en IPv6 (el core lo tiene activado), ::1, fc00::/7, fe80::/10 y las IPv4 escritas como IPv6 (`::ffff:a.b.c.d`).
+  - `api.telegram.org` está siempre prohibido, y la Mini App y la placa rechazan al guardar una dirección con ese host. Los hosts que usa el sistema (como `github.com` para la OTA) sí se pueden vigilar.
+  - **Un host del dueño que resuelve a una IP privada** (un DNS de la oficina con otra respuesta dentro, un NAS con nombre público, un nombre de Tailscale) en un plugin con `lan` como permiso opcional sin conceder: el sistema pide ese permiso en la pantalla, enseñando el host y la IP ([§8.1](#81-permisos)). Mientras tanto la petición da `Denied` y el motivo es «red local: falta permiso», en vez de quedarse «sin comprobar» sin explicación.
+  - Contra el *DNS rebinding* (un nombre que cambia de dirección entre la comprobación y la conexión): se resuelve el nombre, se comprueba si la IP es privada o pública y se conecta a esa misma IP, indicando el nombre para el certificado. Eso se hace con `NetworkClientSecure::connect(ip, puerto, host, …)`, que ya existe en el core (**comprobar** que funciona con el paquete de certificados raíz), y un cliente HTTP/1.0 propio, que además evita las respuestas troceadas.
+- **Redirecciones.** Solo con `follow`, y hasta 3. En cada salto se vuelven a comprobar el host y la IP. Con `net.user` solo se sigue al mismo host, a su variante con o sin `www.` o a otro host que el dueño también haya puesto; así `http://ejemplo.com` → `https://www.ejemplo.com` funciona. Una petición con secretos nunca sigue una redirección a otro host. En `probe`, un 3xx es la respuesta en sí, y `location` trae el host de destino.
+- **Lectura.** Se lee en *streaming*, sin cargar la respuesta entera: 256 KB leídos como mucho. Con `jsonFilter`, `body` es el JSON ya filtrado y compactado, hasta `maxBytes`, y `truncated` dice si se cortó.
+- **Ritmo.**
+  - Caben 12 peticiones en cola, 3 por plugin.
+  - Entre dos peticiones pasa al menos 1 s, y entre dos al mismo host, al menos 10 s.
+  - `min_interval_s` cuenta **por URL** y `max_per_hour`, **por plugin**. Las peticiones con `owner` no esperan `min_interval_s`, pero sí cuentan en `max_per_hour`. Una petición automática que llega antes de su `min_interval_s` espera su turno; no se rechaza.
+  - **Espera creciente, siempre por host**, nunca global ni por plugin: una web caída no deja sin vigilar a las demás. Ante un 429 o un `Retry-After` se espera 1, 2, 4… minutos, hasta 60, o hasta el intervalo del propio plugin si es menor. En una petición normal, un 503 o un *timeout* también hacen esperar; en `probe` no, porque son justo lo que se mide. Nada de esto cuenta como fallo del plugin.
+  - La petición del tiempo de la cabecera va siempre la primera.
+- **Peticiones condicionales.** Con `conditional`, `ETag` e `If-None-Match` van solos, y un 304 significa «igual que la última vez». Los `ETag` viven **solo en RAM**: nunca se escriben en la flash (las páginas de estado los cambian a menudo), así que se pierden al reiniciar y en un `reset`, y un plugin que ha perdido su estado recibe el dato entero.
+- **User-Agent:** `Pauta/<fw> (+https://github.com/Ignacio-Aranda/pauta) <id>/<versión>`.
+- **Válvula de escape (medir).** mbedTLS se compila con `MBEDTLS_PLATFORM_MEMORY`, así que `mbedtls_platform_set_calloc_free()` podría mandar a PSRAM los búferes del TLS de plugins si la RAM interna se queda corta, a cambio de velocidad.
+
+### 7.5 MQTT
+
+- **Cliente.** esp-mqtt (`mqtt_client.h`), que ya viene en el core 3.3.12, con MQTT 3.1.1 sobre TCP sin cifrar dentro de la red local. Exige `lan`. MQTT con TLS queda fuera de la v1, porque costaría unos 40 KB fijos de RAM interna.
+- **Coste.** Dos clientes como mucho entre todos los plugins, uno por plugin, a unos 10 KB internos cada uno (pila de 6 KB y dos búferes de 2 KB) **(medir)**.
+- **Conexión.** `ctx.mqtt().open(MqttOpts)` recibe los **nombres** de los campos de ajustes (`hostKey`, `portKey`, `userKey`) y el del secreto (`passSecret`). El servicio pone los valores, así que el plugin nunca ve la contraseña. Además:
+  - **resuelve el host él mismo.** Lo recomendado es una IP fija; también acepta un nombre `.local`, que el core resuelve por mDNS (`CONFIG_LWIP_DNS_SUPPORT_MDNS_QUERIES=y`) y que solo funciona dentro de la misma subred;
+  - **comprueba que la IP es privada** (la lista cerrada del [§7.4](#74-red-httptls-con-cola-el-recadero)). Una IP pública sin TLS se rechaza (`MqttState` con motivo `PublicIp`), porque la contraseña viajaría en claro por Internet;
+  - **conecta a esa misma IP** con `esp_mqtt_client_set_uri()` antes de cada conexión, así que un nombre que cambia de dirección no sirve para desviarla;
+  - `clientId`: `pauta-<últimos 6 de la MAC>-<id>`; *keepalive* (el latido que el broker espera) de 30 s; sesión limpia; QoS 0 (sin confirmación de entrega); búfer de 2048 bytes;
+  - **reconecta él**, con la reconexión automática de esp-mqtt apagada (esa reintenta cada 10 s fijos aunque la contraseña esté mal): espera 5 s, 10, 20… hasta 5 minutos. Con `BadAuth` o `NotAllowed` deja de intentarlo hasta que cambien los ajustes;
+  - si cambian el servidor, el puerto, el usuario o la contraseña, **vuelve a abrir la conexión solo** y avisa con `MqttState`.
+- **Suscripciones.** Con sesión limpia, el broker las olvida en cada reconexión. Por eso el servicio las guarda, las acepta aunque aún no haya conexión y **las repite en cada reconexión**. `MqttState` con `n` = 1 llega cuando el broker ha confirmado las suscripciones, así que el plugin sabe que ya llegan los mensajes retenidos.
+- **Lista de temas.** El servicio solo deja suscribirse a un filtro que esté dentro de uno de `mqtt.sub` (`/AGUA/config` vale si se declaró `/+/config`) y publicar en un tema que encaje con `mqtt.pub` y no lleve `+` ni `#`. Solo retiene si hay `pub_retain`. Lo demás da `Err::Denied`. Así, «nicscom no es administrador» es una regla del sistema: no puede publicar en `/topics` ni en `/<canal>/config`.
+- **Publicar.** Con `esp_mqtt_client_enqueue()` (QoS 0, sin retener salvo con `pub_retain`, `store` = cierto), solo si hay conexión; si no, `Err::NoNet`. Vuelve al momento, y `Ok` significa «encolado», no «entregado».
+- **Topes.** Un depósito de 10 publicaciones que se recupera a 1 cada 6 s (10 seguidas, y después 10 por minuto), de 2048 bytes como mucho cada una. Pasado el tope, `Err::Quota`, que nunca cuenta como fallo.
+- **Mensajes grandes.** esp-mqtt entrega a trozos los mensajes más grandes que el búfer (`current_data_offset`, `total_data_len`): el servicio los junta hasta 4 KB y descarta los mayores.
+- **Ráfaga al conectar.** Al conectar llegan de golpe los mensajes retenidos, por ejemplo 60 canales de unos 700 bytes, unos 42 KB. El servicio guarda solo el último de cada tema en una tabla de 48 KB de PSRAM y los entrega al ritmo de `loop()`, sin perder nunca `/topics`. Un retenido vacío (un canal al que le han quitado el dibujo) llega con `len` = 0.
+- **Eventos.**
+  - `MqttMsg`: tema en `a`, carga en `data`/`len`, `n` = 1 si era retenido.
+  - `MqttState`: `n` = 1 conectado y suscrito, 0 desconectado; el motivo en `tag` (`Ok`, `NoNet`, `Dns`, `Timeout`, `Refused`, `BadAuth`, `NotAllowed` o `PublicIp`), sacado del código de respuesta del broker. Con `ctx.setStatus()` el plugin lo enseña en su página y lo manda a la Mini App, que puede decir «nicscom: contraseña incorrecta» ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)).
+- **Validación.** El sistema comprueba tamaños y UTF-8, y el plugin valida el contenido ([§15](#15-conformidad)). La credencial del laboratorio es compartida, así que cualquiera puede publicar cualquier cosa.
+
+### 7.6 Almacenamiento para los plugins
+
+- **Estado.** `ctx.state()` es un objeto JSON en PSRAM de `state_kb` como mucho (con `state_kb` = 0 no hay estado). `ctx.saveState()` no escribe al momento: programa la escritura para 10 s después del último cambio, como mucho una vez por minuto y plugin, **solo con la pantalla quieta** y siempre antes de un reinicio. «Quieta» significa 2 s sin dedo, sin ninguna animación pedida con `ctx.animate()` y sin acciones de teclado en cola ni teclas pulsadas (un borrado de sector congela los dos núcleos 20-50 ms, y entre «pulsar» y «soltar» el PC alargaría la tecla); los repintados de una vez por segundo (un reloj, una cuenta atrás) no cuentan.
+- **Archivos.** `ctx.files(vol)` da la carpeta propia del plugin: `/data/<id>/` en la FAT interna (`Vol::Fat`) o `/pauta/<id>/` en la microSD (`Vol::Sd`). Con `Vol::Auto`, lo nuevo va a la tarjeta si el plugin tiene `sd` y hay tarjeta, y si no, a la FAT; al listar se juntan los dos volúmenes, con una marca de dónde está cada archivo. Así meter o sacar la tarjeta no hace desaparecer lo guardado en el otro sitio.
+- **Todo lo que toca la flash o la tarjeta es una petición** que hace la tarea `io` y contesta con un evento, porque listar 500 fotos de una tarjeta tarda mucho más de 10 ms y borrar en la FAT congela la placa:
+  - `read(nombre, maxBytes)` → `Event::FileRead`, con los bytes en `data`;
+  - `write(nombre, datos, n)` copia los datos y los escribe en diferido;
+  - `list(desde)` → `Event::FileList`, de 32 en 32 entradas (nombre, bytes, fecha y volumen);
+  - `remove(nombre)`;
+  - al momento solo responden `onSd()` y `freeKb()`.
+- **Carpeta compartida** (`sd_shared`, por ejemplo `/pauta/fotos/`). Es de solo lectura, con `listShared(desde)` → `Event::FileList`. Cada entrada lleva un identificador opaco, el nombre para enseñar (ya pasado por `printable()`), el álbum (la subcarpeta de primer nivel, si la hay) y la fecha del archivo. Solo se aceptan `.jpg`, `.jpeg` y `.png`, en mayúsculas o minúsculas. Se saltan los nombres que empiezan por punto (como los `._IMG.jpg` que deja un Mac) y las carpetas del sistema (`System Volume Information`, `.Trashes`…).
+- **Nombres de los archivos propios:** `^[a-z0-9][a-z0-9_-]{0,31}(\.[a-z0-9]{1,5})?$`, sin barras, sin `..` y sin empezar por punto. Los de la carpeta compartida conservan su nombre, porque el plugin solo los ve por su identificador. Las cuotas y las rutas están en el [apartado 10](#10-almacenamiento).
+
+### 7.7 Secretos
+
+- **WiFi y token.** Pasan a un módulo nuevo, `secrets.*`, que lee las mismas claves de `tdcfg`. Solo lo incluyen `telegram.cpp`, `portal.cpp`, `settings.cpp` y `pauta.ino`, para conectar la WiFi. `Settings` deja de llevarlos. El lint prohíbe incluir `secrets.h` desde `src/plugins/**` y desde el host.
+- **Secretos de los plugins.** Van en el **cofre**, `/sys/vault.bin`: un archivo cifrado con AES-256-GCM cuya clave de 32 bytes vive en NVS (`psys/vk`). Se escribe de forma segura ante apagones ([§10](#10-almacenamiento)). Límites: 128 bytes por secreto, 4 por plugin y 4 KB en total, más la clave del estado de la URL y las de los dispositivos emparejados ([§9.4](#94-emparejar-dispositivos)), unos 160 bytes. Así no gastan la NVS, que ya va justa con la lista. Nunca van en `/cfg`, en la URL, en la microSD, en copias ni en registros.
+- **El plugin nunca los ve.** `ctx.secretSet("pass")` solo dice si están puestos. Los servicios los usan por su nombre: `MqttOpts.passSecret` o una cabecera HTTP con `{secret:clave}`. Un secreto puede ser `required`, y entonces el plugin no pasa de `sin_configurar` hasta tenerlo ([§4](#4-ciclo-de-vida)).
+- **Atados a su destino.** Un campo `secret` declara `bound_to`, que es el campo con el host o la URL adonde va. Si ese campo cambia, el secreto se borra y hay que volver a meterlo, con su toque en la pantalla. En HTTP, `{secret:clave}` solo se sustituye para los hosts de `net.hosts` o para el host de su campo `bound_to`. Así, una cuenta de Telegram robada no puede mandar la contraseña MQTT a otro broker cambiando la dirección.
+  - **En un mismo envío** (lo normal la primera vez: broker y contraseña juntos), se aplican primero los ajustes, después el borrado por `bound_to` y al final los secretos, así que la contraseña recién llegada no se borra.
+  - **El sobre va atado también al destino:** su cadena `info` lleva el SHA-256 del valor de `bound_to` en el momento de sellarlo, y la placa lo rechaza si no coincide con el valor que queda al final del envío ([§9.7](#97-cómo-se-meten-los-secretos-el-sobre-sellado)).
+- **Contra la pesca.** La placa rechaza un secreto de plugin que sea igual al token del bot o a la clave WiFi.
+- **Cómo entran.** Solo por la Mini App, en un sobre sellado y con confirmación en la pantalla ([§9.7](#97-cómo-se-meten-los-secretos-el-sobre-sellado)).
+
+### 7.8 Avisos y notificaciones
+
+- **En la pantalla.** `ctx.alert(Alert)` y `ctx.clearAlert(key)`, con las reglas de [§5.5](#55-avisos-y-capas). La línea de estado sale de `glance()`.
+- **Por Telegram.** `ctx.notify(texto, opciones)` escribe al dueño un mensaje de 1024 bytes como mucho, con el nombre del plugin delante («Semáforo: …»). A la app de serie no se le antepone, para que sus mensajes salgan iguales que en la 1.1.0. Las opciones (`struct Notify`):
+  - `loud`: con sonido; si no, va en silencio. Exige `alert.critical`, cuya ficha dice «Puede despertar la pantalla y escribirte con sonido»;
+  - `ttlS`: si no ha podido salir en ese tiempo (por ejemplo, sin conexión), se descarta y queda una línea en el resumen. Pauta usa 900 s para las confirmaciones de tachado, así que tras un rato sin WiFi no llegan 20 confirmaciones viejas de golpe, sino una línea: «Mientras no había conexión tachaste 5 tareas»;
+  - `key`: un mensaje con la misma clave sustituye al anterior que aún no haya salido;
+  - `dropOverQuota`: lo que pase del cupo se descarta en vez de ir al resumen, y el sistema lo dice una sola vez.
+- **Cupo.** 10 mensajes por hora y plugin, y 30 en total. Lo que sobra va en un resumen por hora que lleva la última línea de cada clave («Semáforo: Tienda de vuelta 10:42 · Blog caída 10:40»). `ctx.notifyBudget()` dice cuántos le quedan en esta hora, para que el plugin pueda agrupar antes («3 webs caídas: Tienda, Blog, API»).
+- **Lo que hace el dueño no gasta cupo.** No cuentan los mensajes que responden a algo que el dueño hizo con el dedo o por el chat: los que salen en los 2 s siguientes a un `Tap` o `LongPress` sobre la página del plugin o a su botón del pie, las respuestas a comandos y acciones y las respuestas diferidas, **aunque salgan más tarde** porque no había conexión. Así Pauta sigue confirmando cada tachado y cada «LIMPIAR HECHAS» como en la 1.1.0, aunque se tachen 30 tareas en una hora.
+- **Cuánto tarda.** Un mensaje sale cuando termina el sondeo largo en curso: unos 13 s como mucho, o casi al momento si se genera en la ventana de 500 ms que sigue a un lote ([§6.2](#62-telegram)).
+- **Respuestas.**
+  - `ctx.reply(texto)`, de hasta 4096 bytes, contesta al mensaje o al envío que se está atendiendo: vale dentro de `Event::Command`, `Text`, `File`, `FileOffer`, `Action` y `Settings`, y no cuenta en el cupo. En `Action` y `Settings` se une a la respuesta del envío.
+  - `ctx.deferReply(seg)` reserva una respuesta para más tarde (300 s como mucho) y devuelve una ficha (`ReplyToken`). Vale en los mismos eventos y en `FooterAction`. Después, `ctx.replyTo(ficha, texto)` contesta una sola vez dentro del plazo, sin gastar cupo. Lo usan nicscom («Avisado AGUA 12:03», cuando le vuelve el eco) y el Semáforo («Comprobar ahora»: una vuelta de 12 webs puede tardar unos 2 minutos).
+  - `ctx.replyPhotos(nombres, n, pie)` reenvía hasta 10 fotos recibidas por el bot usando su `file_id` (`sendPhoto` o `sendMediaGroup`), sin subirlas de nuevo. Exige `photos` y un contexto de respuesta (directa o diferida). Las fotos de la tarjeta no tienen `file_id`, así que en la v1 no se pueden mandar.
+- **Cola de salida.** Hoy son 8 mensajes de 320 bytes en RAM interna. Pasa a ser un anillo de 32 KB en PSRAM, con mensajes de hasta 4096 bytes.
+
+### 7.9 Programador
+
+Funciona como se describe en [§6.4](#64-programador-de-eventos): `every`, `after`, `at`, `cancel` y las programaciones declarativas. Corre en el núcleo 1, dentro de `loop()`, así que no necesita cerrojos.
+
+### 7.10 Teclado HID
+
+- **Estado del enlace.** `ctx.keyboard().link()` devuelve `None` (el firmware no trae teclado), `Unplugged` (el teclado **no ha llegado a conectarse desde el arranque**: sin cable, el cable en el puerto del CP2102 o el PC apagado), `Suspended` (el ordenador lo reconoció, pero ahora está dormido **o se ha desenchufado el cable**) o `Ready`. La placa no puede distinguir «dormido» de «desenchufado»: tendría que vigilar los 5 V del USB (VBUS) con un divisor de tensión, y el core 3.3.12 arranca el USB sin vigilarlos (`otg_io_conf = NULL` en `esp32-hal-tinyusb.c`). Como el estándar no exige añadir hardware, los dos casos son `Suspended` (**comprobar** en la placa que desenchufar el cable lo da). Cada cambio llega como `Event::HidState`, con el estado en `n`, así que el plugin no tiene que preguntar cada segundo. `available()` dice si el firmware trae teclado y `transport()`, cuál (`None`, `Usb` o `Ble`).
+- **Acciones.** `combo()`, `media()`, `type()`, `macro()` y `hold()`/`release()` (firmas en [§12.2](#122-clases-de-servicio-y-listview)). Todas vuelven al momento:
+  - `Ok`, con un número de acción; al terminar llega `Event::HidDone` con ese número en `tag` y el resultado en `n`;
+  - `Denied` (fuera de la ventana del toque, pantalla bloqueada o sin permiso), `NotReady` (sin `Ready`: la acción **se descarta, nunca se guarda para después**, porque teclearía fuera de contexto), `Busy` (cola llena) o `Invalid` (no cumple la gramática).
+- **Regla de oro.** El servicio solo acepta una acción en los **500 ms que siguen a un `Tap` o a un `LongPress` reales sobre la página de ese plugin**, o, para `hold()`, mientras el dedo siga apoyado en ella. Una macro entera cuenta como una sola acción, que se comprueba al encolarla. Nunca acepta nada que venga de Telegram, de la Mini App, del programador, de MQTT, del reposo, de una capa crítica o del botón del pie, ni con la pantalla bloqueada: en esos casos devuelve `Err::Denied`. Así, quien robe la cuenta de Telegram no puede teclear en el PC. En una receta, además, `hid.keys`, `hid.media` y `hid.text` solo pueden ir en los manejadores `tap` y `long` de su página, y `hid.hold` solo en `down` ([§13.13](#1313-teclado-órdenes-hid-y-bloque-grid)).
+- **Mantener pulsado.** `hold(combo)` deja las teclas pulsadas mientras el dedo siga en el botón, como el «pulsar para hablar» de Teams, Discord o Zoom. El servicio las suelta solo al levantar el dedo (`Up` o `Cancel`), al cambiar de página, al bloquear o entrar el reposo, o a los 120 s, para que una intervención larga con «pulsar para hablar» no se corte.
+- **Gramática de las teclas** (normativa; va en el esquema y `mkmanifests.py` genera sus tablas para la Mini App y la placa):
+  - el valor de `keys` es **siempre una lista de pasos**; una combinación sola es una lista de un paso. La Mini App acepta una cadena suelta como atajo y la convierte;
+  - **paso:** una combinación, `media:<nombre>`, `text:<hasta 48 caracteres, sin caracteres de control>` o `wait:<de 10 a 1000 ms>`. Un texto más largo (64 caracteres) va en un botón de tipo texto, con `hid.text`;
+  - **combinación:** modificadores (`ctrl`, `shift`, `alt`, `gui` —la tecla Windows o Cmd— y `ralt` —AltGr—) unidos con `+` a una tecla, **o solo modificadores** (`gui` abre el menú Inicio; `alt+shift` cambia de idioma en Windows);
+  - **teclas por su posición física, con el nombre de la distribución americana**, de una tabla cerrada de unos 100 nombres con su código HID: `a`-`z`, `0`-`9`, `f1`-`f24`, `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `pgup`, `pgdn`, `up`, `down`, `left`, `right`, `printscreen`, `capslock`, `menu`, `minus`, `equal`, `lbracket`, `rbracket`, `backslash`, `semicolon`, `quote`, `grave`, `comma`, `period`, `slash`, `nonus_backslash` (la tecla `<>` de los teclados españoles) y el teclado numérico (`kp_0`-`kp_9`, `kp_plus`, `kp_minus`, `kp_star`, `kp_slash`, `kp_enter`, `kp_period`). Por USB viajan posiciones, no letras: `ctrl+equal` pulsa la tecla que en un teclado americano lleva el `=`, tenga el PC la distribución que tenga. La Mini App graba con `KeyboardEvent.code`, que también es la posición física;
+  - **teclas multimedia:** `mute`, `vol_up`, `vol_down`, `play_pause`, `next`, `prev` y `stop`, más `sleep` (control del sistema, con el `USBHIDSystemControl` que ya trae el core);
+  - **topes** (normativos; los comprueban la Mini App al guardar, `mkmanifests.py` y la placa al encolar, y **ninguno depende de la velocidad del teclado**, que puede cambiar después de guardar):
+    - 16 pasos;
+    - 128 bytes en **JSON compacto en UTF-8**: sin espacios y con las letras tal cual, no escritas como `\u00e1` (en Python, `json.dumps(v, separators=(",", ":"), ensure_ascii=False).encode()`);
+    - las esperas (`wait`) suman 3 s como mucho;
+    - 160 **pulsaciones**. Una pulsación es pulsar y soltar una tecla que no es un modificador: un paso de combinación o una tecla multimedia cuenta 1; en un texto, cada letra cuenta lo que diga la tabla de su distribución (`sys.kb`), y una letra con tilde son 2 (la tecla muerta del acento y la vocal). Un texto de 64 letras con tilde y su Intro son 129;
+    - y una **red de seguridad de 20 s** desde que empieza: 160 pulsaciones a la velocidad más lenta (10 por segundo) son 16 s, más 3 s de esperas.
+- **Una macro se corta** (y suelta todo) si se bloquea la pantalla, entra el reposo, se cambia de página, cambia el enlace o salta la red de 20 s. El plugin recibe el motivo en `Event::HidDone`.
+- **Texto** (`type()` y los pasos `text:`). Se traduce carácter a carácter con la tabla de la distribución del ordenador: `us`, `es` (Windows y Linux) o `es-mac`, porque la española de macOS pone `\`, `[ ]` y `{ }` en otras teclas. `mkmanifests.py` genera una tabla por distribución, de carácter a secuencia de teclas, con teclas muertas para `á é í ó ú ü` (primero `´` y luego la vocal) y AltGr u Option para `@`, `#` o `€`. La usan la Mini App, que no deja guardar un texto con caracteres imposibles, y el servicio. La distribución es un ajuste del sistema (`sys.kb`). Si el PC tiene el Bloq Mayús puesto, el servicio lo sabe por el LED que manda el propio PC (el core da `ARDUINO_USB_HID_KEYBOARD_LED_EVENT`) y lo compensa invirtiendo Shift en las letras. **Con el Bloq Num igual**: si está apagado, las teclas `kp_*` harían otra cosa (Inicio, flechas…), así que el servicio lo enciende antes de esa tecla y lo deja como estaba (su LED llega por el mismo evento).
+  - **Si cambia `sys.kb`**, el sistema vuelve a validar los textos guardados con la tabla nueva y la Mini App marca los botones que ya no se pueden escribir («Firma: “ç” no existe en us»). Al tocarlos, la placa los rechaza con `Invalid` y lo dice en una banda.
+- **Ritmo.** Cola de 32 acciones. La velocidad es un ajuste del sistema (`sys.kb_speed`): 50, 20 o 10 teclas por segundo, porque algunos escritorios remotos y máquinas virtuales se comen teclas.
+- **Teclas atascadas** (normativo). Si se pierde un «soltar ctrl», el PC cree que ctrl sigue pulsado y cada tecla del teclado de verdad se convierte en un atajo. Por eso el servicio manda «soltar todo» tras cada paso, ante cualquier error o tiempo agotado, al desconectar, suspender o reanudar, con `Locked` o `IdleOn`, en el `end()` del plugin y al arrancar. Ningún modificador queda pulsado más de 2 s, salvo con `hold()`. Una macro interrumpida se aborta entera, nunca se reanuda, y el plugin recibe el motivo en `Event::HidDone`.
+- **Sin ordenador.** Sin `Ready`, las acciones dan `NotReady`. Al pasar a `Unplugged` o a `Suspended` se vacía la cola. Los avisos del sistema son dos: con `Unplugged`, «Conecta el USB nativo (no el del CP2102)», porque el cable en el puerto equivocado es el error más probable y la placa no lo puede saber; con `Suspended`, «Ordenador dormido o desconectado: despiértalo o revisa el cable». Despertar el PC con un botón (*remote wakeup*) queda para la 1.x, así que tocar un botón no despierta un PC dormido.
+- **Alimentación** (montaje recomendado de `v1-hid`). Con un solo cable al USB nativo del PC, al apagar el PC (y en muchos PCs, al suspenderlo, porque cortan la corriente del USB) se apaga Pauta entera: la lista, el Pomodoro, el programador de nicscom y el bot. Por eso el montaje recomendado son **dos cables**: un cargador en el puerto del CP2102, que da la corriente, y el USB nativo al PC, que da el teclado. Hay que **comprobar** en el esquema de Makerfabs que cada USB-C lleva su diodo, para que los 5 V del cargador no vuelvan al PC por el cable de datos. El README de Atajos y la guía de instalación lo explicarán con un dibujo.
+- **Transportes.** El estándar admite los dos con la misma API. La v1 trae el USB:
+
+| | USB HID (TinyUSB), variante `v1-hid` | BLE HID (reservado para la 1.x) |
+|---|---|---|
+| Compilación | Perfil `v1-hid` en `sketch.yaml`: `USBMode=default` (es decir, `ARDUINO_USB_MODE=0`, TinyUSB) y **`CDCOnBoot=default`**. El USB nativo es solo teclado (teclas, multimedia y control del sistema). `USBHIDKeyboard`, `USBHIDConsumerControl` y `USBHIDSystemControl` son objetos globales. El host lo detecta con `#if ARDUINO_USB_MODE == 0` | NimBLE ya viene activado en el core (`CONFIG_BT_NIMBLE_ENABLED=y`). Solo en una variante propia (`v1-ble`): si la librería BLE va enlazada, el core ya no libera al arrancar la memoria del controlador Bluetooth (unos 36 KB), esté Atajos activo o no |
+| Consola y flasheo | **Siempre por el CP2102** (`/dev/ttyUSB0`), como ya documenta [docs/hardware.md](hardware.md) para `CDCOnBoot=default`. Los pánicos y los mensajes del ESP-IDF salen por ahí. Así el PC del trabajo no ve un puerto serie nuevo que un programa pueda abrir y bloquear, ni se reinicia la placa al abrirlo a 1200 baudios | Sin cambios |
+| Arranque del USB | Al arrancar, el USB del ESP32-S3 sale conectado a su puerto serie interno (USB-Serial-JTAG), y solo pasa a TinyUSB con `USB.begin()`; con `CDCOnBoot=default` y `USBMode=default` el core no la llama antes de `setup()` (comprobado). Por eso, en `v1-hid`, el sistema llama a `USB.begin()` **siempre al arrancar**, antes de `pluginsBegin()` y también en modo seguro, después de poner el nombre «Pauta», el fabricante y los atributos del descriptor. Mientras Atajos no esté activo, el teclado está **mudo**: el PC lo ve, pero no recibe nada. Así el PC nunca ve un puerto serie que un programa podría abrir y que reinicia la placa si juega con sus líneas DTR y RTS. **Medir** en F4 lo que ve el PC durante el arranque con Windows, macOS y Linux | — |
+| RAM interna | Unos 3-5 KB, más las pilas de las tareas `hid` (4 KB) y `usbd` (4 KB) | Unos 50-70 KB (`BT_NIMBLE_MEM_ALLOC_MODE_INTERNAL=y`) **(medir)**, más la tarea de NimBLE (5 KB) |
+| Flash / NVS | Unos 15 KB / nada | Unos 250 KB / hasta 3 emparejamientos (`CONFIG_BT_NIMBLE_NVS_PERSIST=y`), que habrá que reservar en [§10.1](#101-nvs-20-kb-solo-lo-pequeño-y-crítico) y medir |
+| Uso | El USB nativo al PC y, recomendado, un cargador en el del CP2102 (arriba, «Alimentación»); no hay que emparejar | Comparte la radio con la WiFi; hay que emparejar |
+
+- **Identidad USB.** Sin tocar nada, el PC ve «Espressif Systems» con el VID 0x303A y el PID del core. Se pone «Pauta» como nombre y fabricante (solo se puede antes de `USB.begin()`) y se pide un PID gratuito para proyectos de código abierto en el repositorio `espressif/usb-pids`. El README de Atajos avisa de lo que verá el usuario: macOS pregunta si permite el accesorio y abre el asistente de teclado, y en los PCs de empresa un control de dispositivos USB puede bloquear un teclado nuevo.
+- **Lo que ya queda fijado para BLE** (1.x), para no cerrar puertas: se empareja desde la página de Atajos con un botón del pie, «EMPAREJAR», que abre una ventana de 2 minutos en la que Pauta enseña una clave de 6 cifras para escribir en el PC; fuera de esa ventana solo se acepta el PC ya emparejado; una pulsación larga sirve para «Olvidar PC»; y con BLE activo el host no activa plugins con `net` o `mqtt` si la RAM interna libre baja de 40 KB, y lo explica («Bluetooth y Semáforo no caben a la vez»).
+- **Placa V2.0.** En la V2.0 el conector Mabee pasó a IO19/IO20, que son las patas del USB nativo ([docs/hardware.md](hardware.md)), así que el teclado USB probablemente no funciona en ella. No se publica `v2-hid` hasta probarla; en la V2.0 el camino será BLE.
+
+### 7.11 Imágenes
+
+- **Formatos.** JPEG *baseline* y PNG. TJpgDec, el descodificador de LovyanGFX 1.2.33, no lee los JPEG progresivos (devuelve `JDR_FMT3` al ver el marcador `SOF2`, comprobado en `lgfx_tjpgd.c`).
+  - **Fotos del bot:** 300 KB como mucho, con la talla que elige el [§6.2](#62-telegram).
+  - **Fotos de la tarjeta:** JPEG *baseline* de hasta 8192 px de lado y 8 MB, que TJpgDec reduce al descodificar a 1/2, 1/4 o 1/8, y PNG de hasta 1024 px de lado y 1 MB. Las fotos de móvil típicas (4032×3024 en un iPhone, 4080×3072 en un Pixel) entran.
+  - **La tarjeta va a 20 MHz.** `SD.begin()` pone 4 MHz por defecto en el core 3.3.12 (unos 0,4 MB/s): el sistema la abre a 20 MHz (**medir** también 40). Aun así, una foto de 4 MB tarda segundos en leerse.
+  - **Caché reducida** (normativa). Por eso cada foto de la tarjeta se descodifica **una sola vez, de fondo**, con un tope largo (15 s), y se guarda reducida en la caché del plugin (`/pauta/<id>/cache/`, 480×320 sin comprimir, 307 KB, con su orientación ya aplicada). Volver a leerla cuesta unos 150 ms **(medir)**. La caché se vacía empezando por lo más viejo cuando llega al `sd_mb` del plugin. Lo mismo vale para un JPEG grande que llega como archivo por el bot ([§6.2](#62-telegram)).
+- **Descodificar.** `ctx.images().decode(origen, nombre, encaje, hueco, caja, &id)` descodifica en la tarea `io`, nunca en el núcleo 1. `origen` es la carpeta propia o la compartida; `encaje`, `Fit::Fill` (llenar recortando) o `Fit::Fit` (foto entera con bandas); `caja`, el rectángulo de destino. Avisa con `Event::Image`: el número en `tag`, el resultado en `n` (`Ok` o un `Err`), el nombre en `a` y un `ImageInfo` en `data` (tamaño original, rectángulo que ocupa la foto y orientación), que hace falta para pintar las bandas con el color del tema. Tarda unos 150-400 ms por foto **(medir)**, y más si hay que escalar a un tamaño no exacto (una foto de 800 px a escala 0,6 usa `pushImageAffine`, más lento: **medir**).
+- **Memoria de trabajo.** TJpgDec necesita unos 3,9 KB y el descodificador PNG, 40-50 KB. En LovyanGFX 1.2.33, `draw_jpg` los pide con `malloc(3900)`, que por debajo de 4 KB va a la RAM interna, y el PNG pide su búfer de línea con `heap_alloc_dma` (también interna). Por eso el servicio llama directamente a `lgfx_jd_prepare()` y `lgfx_jd_decomp()` con memoria de una zona de 48 KB de PSRAM que reserva el sistema y con una función de salida propia, que además escala y gira. Si no se consigue, hay que contar unos 8 KB de RAM interna mientras dura cada descodificación **(medir)**.
+- **Huecos.**
+  - `Slot::Full`: 480×320 y 307 KB. Hay uno solo en todo el sistema, y es del plugin que resulta de `sys.idle_by` ([§5.6](#56-reposo)). Solo él puede descodificar ahí; los demás reciben `Err::Denied`. Mientras se escribe, la pantalla sigue enseñando la foto anterior, que está en el lienzo ([§5.6](#56-reposo)). Si algún día el sistema tuviera que quitárselo, el proveedor recibiría `Event::Image` con `n` = `Err::Busy` y volvería a pedir la foto.
+  - `Slot::Thumb`: miniatura de 240×160 como mucho (75 KB), una por plugin, que cuenta en su `psram_kb`.
+- **Pintar.** `canvas.image(hueco, origen, x, y)` copia la parte pedida de lo ya descodificado (la faja del reloj solo copia su franja). Copiar los 307 KB enteros de PSRAM a PSRAM cuesta 10-30 ms con la PSRAM de esta placa (cuádruple, a 80 MHz) **(medir)**; por eso `paintIdle()` no se llama cada segundo.
+- **Orientación** (normativa en F5). Las fotos del bot llegan ya enderezadas por Telegram. Las de la tarjeta traen la orientación en la etiqueta `Orientation` del bloque EXIF (APP1, unos cientos de bytes al principio del archivo): **se aplican las orientaciones 1, 3, 6 y 8**. Cuesta poco, porque basta descodificar en un `LGFX_Sprite` girado con `setRotation()`, que LovyanGFX ya escribe rotado. Sin esto, las fotos verticales saldrían tumbadas, el fallo más visible del caso.
+- **Si no se puede leer.** Un JPEG progresivo o un formato desconocido: el bot contesta «No puedo leer esa foto» (con el plan B del [§6.2](#62-telegram)). Si viene de la tarjeta, la foto se salta y se cuenta en `photos.bad` (progresiva o demasiado grande) o en `photos.skipped` (un formato que no es JPEG ni PNG, como el HEIC que guarda el iPhone por defecto), y la página lo dice: «3 FOTOS DE LA TARJETA NO SE PUEDEN LEER».
+
+### 7.12 Memoria
+
+**PSRAM** (2 MB):
+
+| Uso | KB |
+|---|---|
+| Lienzo de la pantalla | 307 |
+| Sistema: hueco de imagen completa (307), anillo de eventos (64), zona de trabajo de imágenes (48), zona de compilación de recetas (48), tabla de MQTT (48), fondo de la faja del reloj (42), búferes HTTP (32), cola de salida de Telegram (32), cola de avisos (4) y otros (30) | 655 |
+| **Fondo de los plugins**, repartido según el `psram_kb` de los activos | 768 |
+| Compresor del estado de la URL (`tdefl_compressor` de miniz), solo mientras se genera la URL ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)) | 164 |
+| Margen **(medir)**: tras el lienzo quedan unos 1,7 MB libres | ≈ 320 (≈ 150 mientras se genera la URL) |
+
+Los seis plugins de referencia piden 304 KB entre todos ([Anexo A](#anexo-a-los-seis-encajes-de-referencia)). La receta compilada y el estado de sus motores van dentro del `psram_kb` de cada receta. Leerla y compilarla, en cambio, se hace en la **zona de compilación** del sistema, que se usa para una receta cada vez y no cuenta en su `psram_kb`: el `plugin.json` se lee con el filtro de ArduinoJson, sin los textos de ayuda ([§13.17](#1317-cómo-lo-ejecuta-el-firmware)).
+
+**El compresor.** El compresor de miniz está en la ROM del ESP32-S3 (`tdefl_init` y `tdefl_compress` aparecen en `esp32s3.rom.ld` del core 3.3.12), pero la ROM trae el código, no la memoria: su `miniz.h` va con `MINIZ_NO_MALLOC` y `TDEFL_LESS_MEMORY=1`, así que el firmware reserva él mismo la estructura `tdefl_compressor`, de unos 164 KB (diccionario de 33 KB, `m_next` de 64 KB, búfer LZ de 24 KB, salida de 31 KB y tabla de 8 KB). Se reserva en PSRAM solo mientras se genera la URL, en el núcleo 0 ([§7.1](#71-tareas-y-núcleos)), o de forma fija si el margen medido lo permite. Si un plugin no cabe en el fondo, no se puede activar y la pantalla dice «No cabe: apaga otro plugin».
+
+**Ojo con `new`.** Con `SPIRAM_MALLOC_ALWAYSINTERNAL=4096`, todo `new` o `malloc` de menos de 4 KB va a la RAM interna. Por eso:
+
+- el sistema crea el objeto del plugin dentro del fondo, con un `new` de colocación (que construye el objeto en una memoria ya reservada);
+- los plugins piden memoria con `ctx.alloc()`, que va a PSRAM y lleva la cuenta por plugin; lo normal es pedirla en `begin()`;
+- los documentos de ArduinoJson usan `pauta::PsramAllocator`. El de los ajustes de cada plugin (`ctx.config()`, hasta 6 KB en el archivo) y el de su estado también viven en PSRAM y cuentan en su `psram_kb`;
+- **también los del bot**: el documento de `getUpdates` y el de los envíos de la tarea de Telegram. Hoy usan el reservador por defecto, y cada cadena de hasta 4 KB iría a la RAM interna: cinco `web_app_data` de 3-4 KB serían unos 20 KB de RAM interna con la conexión TLS abierta. Además, desde que hay Mini App, `getUpdates` pide `limit=2`, y la cadena `data` original se conserva para comprobar la firma antes de volver a leerla con `NestingLimit(8)`;
+- **en todo el código de un plugin** (no solo al pintar) no hay `String`, `std::vector` ni otros contenedores que crezcan, ni `new` o `malloc` propios, ni arrays locales de más de 1 KB. Los manejadores de comandos montan sus respuestas en búferes pedidos con `ctx.alloc()`.
+
+**RAM interna** (estimación; hay que medirla):
+
+| Uso | KB |
+|---|---|
+| Libre al arrancar | ≈ 272 |
+| WiFi y lwIP (la pila de red) | −55 |
+| Telegram: pila (12) y TLS (45) | −57 |
+| `loopTask` (12) y FreeRTOS | −24 |
+| Pilas de `net` (12) e `io` (8) | −20 |
+| TLS de plugins | −45 |
+| MQTT: pila (6) y búferes | −10 |
+| TinyUSB y pilas de `usbd` (4) y `hid` (4) | −11 |
+| Variables fijas de los plugins (`static_kb`) | −8 |
+| **Margen** | **≈ 42** |
+
+El suelo es de **40 KB**, medido con la conexión TLS de los plugins abierta: por eso el recadero no la abre con menos de 90 KB libres ([§7.4](#74-red-httptls-con-cola-el-recadero)). Si la RAM interna libre baja del suelo, el host no activa plugins hasta que se recupere. El margen es justo: hay que medirlo pronto (F0) y, si no llega, usar la válvula de escape del [§7.4](#74-red-httptls-con-cola-el-recadero). La prueba de 72 horas del [apartado 15](#15-conformidad) lo comprueba.
+
+### 7.13 OTA firmada
+
+Actualizar por WiFi, sin cable, con la imagen firmada y vuelta atrás automática si la nueva no arranca bien.
+
+- **De dónde.** Los binarios se publican en GitHub Releases, uno por variante: `pauta-<versión>-<variante>.bin` (por ejemplo, `pauta-1.5.0-v1-hid.bin`). GitHub Pages publica además un índice estático, `fw/latest.json`, con la última versión, sus notas en los dos idiomas y, por variante, la URL, el tamaño y el SHA-256. Así la placa nunca pregunta a `api.github.com`, que solo admite 60 consultas por hora y por IP.
+- **Cuándo mira.** Si el dueño lo deja activado, una vez al día entre las 03:00 y las 05:00, a un minuto al azar, con `ETag`. También al pulsar «Buscar actualización» en el menú o en la Mini App. Si hay una versión nueva, el bot lo dice una vez: «Hay una versión nueva de Pauta: 1.5.0».
+- **Instalar** lo decide siempre el dueño, desde el menú del sistema o desde la Mini App, y **siempre con un toque en la pantalla**, que enseña la versión y la variante. Es como aceptar permisos nuevos: una actualización cambia el código que corre en la placa.
+- **Volver a una versión anterior** solo se puede desde el menú de la pantalla, nunca desde la Mini App, para que una cuenta de Telegram robada no pueda instalar una versión vieja con fallos conocidos.
+- **Descarga.** La hace la tarea `net` con el hueco TLS de los plugins (que esperan mientras tanto), de `github.com` y de su redirección a `objects.githubusercontent.com`, hosts que solo usa el sistema. Escribe en la ranura que no está en uso (`app1` o `app0`). Son 1,3-2,6 MB y cada borrado de sector congela la placa 20-50 ms, así que mientras dura la pantalla enseña una página del sistema, «Actualizando 43 %», con un botón para cancelar. Los plugins siguen en marcha.
+- **Comprobaciones antes de arrancar la imagen nueva:** el SHA-256 de `latest.json`; la firma ECDSA P-256 con el `UpdaterECDSAVerifier` que ya trae el core (ejemplo `Signed_OTA_Update`; la firma va pegada al binario como espera ese ejemplo, **comprobar** en F2) contra las dos claves públicas compiladas en el firmware (la actual y la siguiente, como en [§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)); y **que la variante coincide**, porque instalar `v1` sobre una `v1-hid` quitaría Atajos sin avisar. La variante va en la cabecera de la imagen (`esp_app_desc_t`) y en la constante `PAUTA_VARIANT`.
+- **Reinicio.** Con `Event::Restarting` 3 s antes, como todos ([§4](#4-ciclo-de-vida)).
+- **Vuelta atrás.** El core tiene activada la vuelta atrás (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`). La imagen nueva arranca «pendiente de confirmar» y solo se da por buena (`esp_ota_mark_app_valid_cancel_rollback()`) al conectar con Telegram, o tras 10 minutos estables con WiFi si Telegram no responde. Si se cuelga o se reinicia antes, el cargador de arranque vuelve solo a la versión anterior, el contador de arranques anómalos se pone a cero y el bot avisa: «La 1.5.0 no arrancó bien; he vuelto a la 1.4.0».
+- **Datos.** Una versión nueva nunca deja los archivos de `/sys`, `/cfg` y `/state` ilegibles para la anterior: dentro de una misma versión mayor solo se añaden claves. Así la vuelta atrás no pierde nada.
+- **Coste.** El hueco TLS de los plugins (45 KB de RAM interna) mientras dura y 4 KB de búfer. El firmware tiene que caber en 2,6 MB ([§2](#2-tipos-de-plugin)).
+- **Claves.** La privada vive en un entorno de GitHub con aprobación obligatoria; nunca en el repositorio.
+
+## 8. Permisos y seguridad
+
+### 8.1 Permisos
+
+| Permiso | Qué deja hacer | Qué ve el dueño en la ficha | Sensible |
+|---|---|---|---|
+| `net` | HTTPS a los hosts de `net.hosts` | «Se conecta a api.ejemplo.com» | — |
+| `net.user` | HTTPS a los hosts que el dueño pone en los campos de `user_hosts_from` | «Se conecta a las webs que tú pongas» | — |
+| `lan` | IP privadas, `.local`, HTTP y TCP sin cifrar | «Habla con aparatos de tu red» | **Sí** |
+| `mqtt` | Los temas de `mqtt.sub` y `mqtt.pub` (exige `lan`) | «Escucha /+/post · publica en /+/post» | — |
+| `location` | Coordenadas del sistema, con 2 decimales | «Conoce tu ciudad» | — |
+| `notify` | Mensajes al dueño, con cupo | «Te escribe por Telegram» | — |
+| `alert.critical` | Capa crítica, despertar el reposo, mensajes con sonido | «Puede despertar la pantalla y escribirte con sonido» | — |
+| `photos` | Recibir las fotos que se mandan al bot (y los JPEG o PNG mandados como archivo), y reenviarlas | «Recibe las fotos que mandes» | — |
+| `files` | Recibir los demás documentos que se mandan al bot | «Recibe los archivos que mandes» | — |
+| `sd` | Carpeta propia en la microSD, y leer su `sd_shared` | «Guarda en la tarjeta» | — |
+| `idle` | Ser proveedor de reposo y probarlo con `previewIdle()` | «Puede ser tu salvapantallas» | — |
+| `hid` | Teclear en el ordenador | **«Puede escribir en tu ordenador»**, en arcilla | **Sí** |
+| `freetext` | El texto libre del bot | Solo la app de serie | — |
+| `tasks.read` / `tasks.write` | Leer la lista / añadir renglones propios | Reservados para la 1.1 | `tasks.read` con red: **sí** |
+
+**Permisos opcionales** (`optional_permissions`). Un plugin puede declarar un permiso que solo necesita a veces, como el Semáforo con `lan` (solo hace falta si vigilas algo de tu red). No se pide al activarlo: se pide la primera vez que hace falta, por ejemplo al guardar la primera dirección de la red local. Pedirlo es aceptar un permiso nuevo, así que lleva su toque en la pantalla, y el envío que lo necesita espera a ese toque. La ficha dice «puede pedir: hablar con aparatos de tu red». También se pide si una dirección del dueño resuelve a una IP privada ([§7.4](#74-red-httptls-con-cola-el-recadero)). Los permisos opcionales concedidos viajan en `inf.opt` del estado ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)), y la Mini App puede quitarlos con la operación `revoke`, que no pide toque: solo quita capacidades, igual que desactivar un plugin.
+
+**Recetas.** Piden los mismos permisos. Qué permiso exige cada orden y cada motor está en [§13.7](#137-eventos-y-órdenes).
+
+### 8.2 Reglas
+
+- **Cada servicio comprueba los permisos** del plugin que llama y devuelve `Err::Denied` si falta alguno. Los avisos `info` y `warn` no necesitan permiso, y `ctx.reply()` tampoco.
+- **Combinaciones prohibidas.** `mkmanifests.py` rechaza `hid` junto a `net`, `net.user`, `mqtt`, `photos` o `files`, también como permisos opcionales: ningún servidor ni mensaje maneja tu teclado. Vale igual para las recetas. `tasks.read` con red queda marcada en arcilla, y el PR tiene que justificarla.
+- **Ningún plugin recibe nunca** el token, el WiFi, el chat del dueño, el PIN, la NVS, los datos, ajustes o secretos de otro plugin, los ajustes del sistema, el sistema de archivos general, acceso a `api.telegram.org`, sus propios secretos en claro ni las claves del emparejamiento.
+- **Lint para nativos.** En `src/plugins/**` se rechazan:
+  - los `#include` de `WiFi*`, `Network*`, `HTTPClient`, `WiFiClientSecure`, `Preferences`, `nvs*`, `USB*`, `BLE*`, `NimBLE*`, `FFat`, `SD`, `SPI`, `Wire`, `mqtt_client.h`, `esp_http_client.h`, `freertos/*`, `settings.h`, `secrets.h`, `telegram.h` y `ui.h`; y el de `model.h` fuera de `src/plugins/pauta/` (el almacén de la lista, [§10.1](#101-nvs-20-kb-solo-lo-pequeño-y-crítico));
+  - las llamadas a `delay(`, `pushSprite`, `fillScreen`, `setRotation`, `xTaskCreate` y `esp_restart`, y el uso de `String`, `std::vector`, `new` y `malloc` (salvo el `new` de colocación de `PAUTA_PLUGIN`);
+  - más de 4 KB de variables fijas (8 KB en la app de serie), que se miden con `xtensa-esp32s3-elf-size`.
+
+  La revisión humana hace el resto.
+- **Recetas.** No tienen código, así que el lint no les aplica: su papel lo hacen el esquema y las reglas de [§13.14](#1314-validación-en-tres-capas), y la placa las vuelve a validar al instalarlas.
+- **Solo el dueño** configura, activa y manda archivos, y solo desde un chat privado. Lo que llegue de otros chats se ignora.
+- **Lo que manda la Mini App no es de fiar.** La propia Bot API avisa de que un cliente malicioso puede mandar cualquier cosa en `web_app_data`. Además, al abrirse desde un botón de teclado, `initData` llega vacío. Por eso:
+  - **todo envío, salvo la petición de emparejar, tiene que llevar la firma de un dispositivo emparejado** ([§9.4](#94-emparejar-dispositivos)). Sin ella se rechaza con «Empareja este dispositivo»;
+  - todo se valida contra las tablas generadas;
+  - una receta que se pide instalar tiene que estar en el índice firmado, con la misma huella ([§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas));
+  - se lee con `DeserializationOption::NestingLimit(8)` y un tope de 4096 bytes;
+  - una operación, un campo o una versión `v` desconocidos hacen rechazar el envío entero, con «Actualiza Pauta» si `v` es más nueva o «Dato no válido» si no.
+- **Confirmación en la pantalla.** Piden un toque en la placa en menos de 2 minutos:
+  - meter, cambiar o borrar un secreto, y poner, cambiar o quitar el PIN, con un código que también enseña la Mini App cuando hay sobre;
+  - cambiar un campo marcado `confirm`. **«Cambiar los botones de Atajos»** es cualquier cambio en la lista `buttons` (añadir, cambiar, borrar o reordenar un botón, también solo su etiqueta, su icono o su casilla), en `rows`, `cols` o `pages` (cambiar las columnas recoloca todos los botones, porque las casillas se cuentan por filas) y su `reset`. En el manifiesto, `confirm` va en la lista entera y en esos tres campos. Así nadie con un dispositivo emparejado robado puede ponerle a una macro la etiqueta, el icono y la casilla de «Micro» sin pasar por la pantalla. El `reset` de cualquier plugin con campos `confirm` pide toque. En un `bool`, `confirm` solo pide toque al encenderlo;
+  - activar desde la Mini App un plugin con un permiso sensible (`hid` o `lan`);
+  - aceptar permisos nuevos, también los opcionales y los de un plugin actualizado;
+  - borrar datos de la microSD: la carpeta de un plugin, o archivos de la tarjeta cuando la orden llega de Telegram o de la Mini App (una acción que los borra se declara con `confirm: "screen"`). Con [P26](#p26-borrar-fotos-siempre-con-un-toque), cualquier orden de borrar fotos que llegue por Telegram o por la Mini App, esté la foto en la tarjeta o en la FAT;
+  - instalar una receta: la pantalla enseña su origen («no verificada» si no viene del catálogo firmado) y sus permisos, porque es aceptar permisos nuevos;
+  - encender «Desbloquear desde Telegram» (`sys.unlock_tg`, [P27](#p27-encender-desbloquear-desde-telegram-con-un-toque)). Apagarlo no lo pide.
+
+  Además, también piden toque **emparejar un dispositivo** ([§9.4](#94-emparejar-dispositivos)) e **instalar una OTA** ([§7.13](#713-ota-firmada)) y, con la recomendación de [P19](#p19-toque-para-los-destinos-nuevos-de-la-red-local), guardar un destino nuevo de la red local. Con la pantalla bloqueada, la pantalla de confirmación sale después de desbloquear con el PIN, para que un envío no pueda saltarse el bloqueo, y sus 2 minutos empiezan al desbloquear.
+- **Una sola pantalla por envío.** Si un envío lleva varias cosas que piden toque, la placa las enseña juntas: «Activar nicscom (habla con aparatos de tu red) · Guardar contraseña · código K7QF · [Mantén para confirmar] [Cancelar]». Un cambio largo sale como un resumen desplazable («3 botones nuevos, 1 cambiado») con el detalle de cada elemento («Micro → ctrl+shift+m», «Micro: casilla 1 → 2», «Firma → etiqueta Micro»). Los `multiselect` con `options_from` se enseñan con sus etiquetas («Borrar 3 fotos: 57 · playa, 61 · nieve, 63…»). Lo que `printable()` cambia al pintarlo se marca («ç (sin glifo)»), para que se vea exactamente lo que se va a teclear o guardar. Si nadie toca a tiempo, se descarta entero y el bot lo dice.
+- **Cómo es la pantalla de confirmación** (normativo; se prueba en `pauta-sim` y en la placa). Atajos es la página que más se toca, y un emparejamiento lo puede pedir cualquiera que tenga la cuenta de Telegram, así que un toque pensado para un botón nunca puede aprobar nada:
+  - despierta el reposo y va por encima de todo, también de la capa crítica; mientras se ve, los avisos esperan en la cola;
+  - no hace caso a ningún gesto que empezó antes de aparecer (la página que había debajo recibe `Cancel`);
+  - el botón de aceptar no responde durante el primer segundo y, después, **acepta manteniéndolo pulsado 1 s**, con una barra de filete que se llena; un toque suelto no aprueba nada. [Cancelar] es un toque normal;
+  - el botón de aceptar va arriba a la derecha, en la franja de la cabecera (y=16 a 62), donde ninguna página tiene controles: no coincide con las casillas de la rejilla de Atajos ni con los botones del Pomodoro. [Cancelar] va abajo a la izquierda;
+  - si desaparece sola (pasan los 2 minutos), vale la guarda de toque tardío de 400 ms ([§6.1](#61-táctil)).
+
+  Mantener pulsado 1 s cuenta como «un toque en la placa»: demuestra que hay alguien delante y que ha querido aceptar.
+- **Una confirmación cada vez.** Si llega un envío que pide toque mientras otro espera el suyo, se rechaza con «Hay una confirmación pendiente en la pantalla»; uno que no pide toque se aplica sin esperar. Un plugin pide la suya con `ctx.confirmScreen(texto, &ficha)` (por ejemplo, el motor `photos` para «/fondo borrar 57»): solo atendiendo un comando o una acción, una cada vez (si no, `Err::Busy`), y le llega `Event::Confirmed` o `Event::Declined` (también a los 2 minutos). Mientras tanto contesta con una respuesta diferida («Confirma en la pantalla»).
+- **Sin puertas traseras.** Un plugin solo puede escribir (`setConfig`, `listAdd`, `listSet`, `listDel`; en una receta, `list.add`) un campo marcado `confirm` en respuesta a un toque en su página (en los 2 s siguientes a un `Tap` o `LongPress`) o dentro de un envío ya confirmado. Si no, recibe `Err::Denied`. Así una acción de la Mini App no puede colar un cambio sin toque.
+- **`actions[].confirm`:** `"app"` pide un «¿seguro?» en la Mini App; `"screen"`, un toque en la placa.
+- **Cadena de suministro de la Mini App.**
+  - Se publica en GitHub Pages con una GitHub Action, solo desde la rama `main` protegida.
+  - Lleva su propia copia fijada de `telegram-web-app.js`, servida desde Pages y comprobada con SRI: una huella que hace que el navegador rechace el archivo si alguien lo cambia.
+  - Una CSP (lista de orígenes permitidos) en una etiqueta `meta` solo deja hablar con la propia Pages y con Open-Meteo.
+  - Pinta los textos con `textContent`, nunca como HTML, y no carga scripts de terceros.
+
+### 8.3 Amenazas
+
+| Amenaza | Qué podría hacer | Qué lo frena |
+|---|---|---|
+| Cuenta de Telegram robada | Apuntar y borrar tareas, mandar comandos (`/nics AGUA`), mandar fotos que salen en la pantalla | Sin un dispositivo emparejado no puede cambiar ajustes ni lanzar acciones de la Mini App, salvo que la Mini App guardara la clave en CloudStorage, que va con la cuenta ([§9.4](#94-emparejar-dispositivos)). No teclea en el PC (HID solo con un toque real). No cambia secretos, PIN ni botones de Atajos ni instala firmware sin un toque, y emparejar su móvil exige ver el código de 6 caracteres y mantener pulsado en la pantalla. No lee secretos. No desbloquea: `/unlock` viene apagado y encenderlo pide un toque ([P27](#p27-encender-desbloquear-desde-telegram-con-un-toque)). MQTT tiene un tope de 10 publicaciones por minuto. Con la placa bloqueada, las fotos nuevas no salen en el reposo hasta desbloquear ([A.5](#a5-salvapantallas-receta-f5)) |
+| Telegram, el servicio | Ver el chat y los ajustes no secretos que viajan en `sendData` | Secretos y PIN van cifrados de extremo a extremo y el estado de la URL va cifrado. El código en la pantalla delata si alguien cambia una clave pública por el camino (6 caracteres al emparejar, para que probar claves hasta dar con el código no quepa en 2 minutos), y la Mini App guarda la huella completa de la clave de la placa y se niega a seguir si cambia. Si la Mini App usa CloudStorage, Telegram tiene la clave del estado, y la Mini App lo dice |
+| GitHub Pages ve la URL | Solo versión, idioma, la clave pública de la placa y datos cifrados | Cifrado AES-GCM con la clave que comparten la placa y los dispositivos emparejados. Ni los secretos ni los campos `private` viajan nunca, ni siquiera cifrados |
+| Móvil emparejado perdido | Leer el estado y mandar cambios | Olvidar ese dispositivo desde la Mini App, o «Olvidar todos» desde la pantalla. La clave del estado se cambia y la de firma de ese dispositivo se borra, así que sus envíos se rechazan desde ese momento |
+| Mini App alterada | Leer lo que se teclea en ella o la clave del estado | Publicación solo desde `main` protegida, SRI, CSP y sin scripts ajenos |
+| Imagen de firmware falsa | Instalar código ajeno por OTA | Firma ECDSA contra claves compiladas, comprobación de variante, toque en la pantalla y vuelta atrás automática ([§7.13](#713-ota-firmada)) |
+| Datos hostiles por la red o por MQTT (credencial compartida) | Mensajes malformados, ráfagas | Tamaños máximos, reensamblado con tope, validación en el plugin probada con datos rotos y topes de avisos |
+| Un mensaje que cuelga la placa | Bucle de reinicios | Marca RTC del `update_id` y salto al arrancar ([§6.2](#62-telegram)) |
+| Alguien con la placa en la mano | Resetearla para vincular su bot, reflashear | El reset del logotipo no funciona con la pantalla bloqueada y el portal de fondo tampoco se abre. El bloqueo no frena un reflasheo, y se dice claro |
+| Un nativo con un fallo | Colgar la placa | Marcas RTC, `fallido` tras 2 fallos graves y modo seguro |
+| Receta maliciosa en el catálogo | Pedir permisos de más, gastar la cuota de red | Revisión humana antes de firmar el índice, validación en la placa, toque con los permisos al instalar y órdenes que no pueden sacar datos ([§13.16](#1316-seguridad)) |
+| Receta sin firmar en la microSD | Lo mismo, sin revisión | Solo con la placa en la mano, marcada «no verificada» y con su toque ([P23](#p23-recetas-sin-firmar-en-la-v1)) |
+| Índice del catálogo viejo o falso | Instalar una versión con fallos conocidos | Firma ECDSA con claves propias del catálogo y contador `seq` ([§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)) |
+| Un grupo vinculado como dueño | Que cualquiera del grupo mande órdenes | Solo se puede vincular un chat privado |
+
+## 9. Ajustes y Mini App
+
+### 9.1 Tipos de campo
+
+Todos los campos llevan `key` (`^[a-z][a-z0-9_]{0,15}$`), `type` y `label` {es,en}. Además pueden llevar:
+
+- `help` {es,en} y `default`;
+- `required`: sin él, el plugin queda `sin_configurar`. Vale también en los secretos y en los subcampos de una lista (un elemento sin él no se guarda). **Solo cuenta cuando el campo se ve**: un campo que `visible_if` oculta nunca falta, así que las teclas de un botón pueden ser obligatorias solo en los botones que teclean combinaciones;
+- `visible_if`, por ejemplo `{"kind": "text"}`, `{"tg": true}` o, para varios valores, `{"kind": ["combo", "macro"]}`. Admite cadenas, números, booleanos o una lista de ellos. Dentro de un elemento de lista mira primero los campos de ese mismo elemento y, si no está, los de fuera. **Al guardar, los campos que `visible_if` oculta se borran**: la Mini App no los manda y la placa no los guarda, así que no ocupan sitio, salvo los que llevan `keep_hidden`;
+- `group` {es,en}, para agrupar campos en la Mini App;
+- `private`: el valor no viaja en la URL, ni siquiera cifrado, y la Mini App solo puede sobrescribirlo;
+- `confirm`: cambiarlo exige un toque en la pantalla ([§8.2](#82-reglas)). Vale en campos sueltos, en una lista entera (cualquier cambio en ella, también reordenarla o devolverla a lo de fábrica) y en subcampos de una lista. En un `bool`, solo al encenderlo;
+- `keep_hidden`: el campo se conserva aunque `visible_if` lo oculte, y cuenta siempre en el peor caso de `/cfg`. Lo usan las fotos elegidas del Salvapantallas, para no perder 30 fotos marcadas a mano al pasar a «Todas»;
+- `ack` {es,en}: un aviso que la Mini App enseña con una casilla «Lo entiendo», que hay que marcar antes de enviar un cambio de ese campo. Lo usa el PIN ([§5.7](#57-bloqueo-con-pin));
+- `bound_to`: solo en los secretos ([§7.7](#77-secretos));
+- `scope`: solo en `host` y `url`. `"public"` (solo Internet; por defecto en `url`), `"private"` (solo la red local: IP privada o `.local`) o `"any"`. `"private"` y `"any"` exigen `lan`, como permiso o como permiso opcional.
+
+| `type` | Valor guardado | Atributos |
+|---|---|---|
+| `text` | Cadena de una línea: sin caracteres de control (saltos de línea, tabuladores) ni de más de 2 bytes en UTF-8, como los emojis | `max` en caracteres (64 por defecto, 200 como mucho), `pattern` |
+| `number` | Número | `min`, `max`, `step`, `unit` |
+| `bool` | `true` / `false` | — |
+| `select` | Cadena | `options: [{"v", "es", "en"}]` u `options_from`; `pattern` (validación blanda, abajo); `max` (largo de un valor escrito a mano); `options_if` (filtra una lista de la placa con columnas, abajo) |
+| `multiselect` | Lista de cadenas | Lo mismo, más `max` (64 como mucho) |
+| `time` | `"HH:MM"` | — |
+| `days` | Número de 0 a 127 (bit 0 = lunes) | `min`: días marcados como mínimo (1 para que no exista «ningún día») |
+| `date` | `"AAAA-MM-DD"` | `min`, `max` |
+| `duration` | Segundos | `min`, `max` |
+| `color` | `"#rrggbb"` | `palette`: colores sugeridos |
+| `url` | `"https://…"` (`http://` solo con `lan`) | `max` (256 como mucho), `scope` |
+| `host` | Nombre o IP | `scope` |
+| `secret` | **Solo se escribe; nunca vuelve** | `max` (128 como mucho), `bound_to`, `required`, `pattern` (el PIN: `^[0-9]{4,8}$`) |
+| `keys` | Lista de pasos de teclado ([§7.10](#710-teclado-hid)) | Los topes del [§7.10](#710-teclado-hid): 16 pasos, 128 bytes en JSON compacto UTF-8, 3 s de esperas y 160 pulsaciones. La Mini App trae un selector, un grabador y preajustes por sistema operativo |
+| `icon` | Nombre del juego de iconos, o `"none"` | — |
+| `tz` | `{"iana", "posix"}` | — |
+| `location` | `{"n", "lat", "lon", "tz"}`: nombre, coordenadas con 2 decimales y zona IANA | Usa el buscador de la Mini App; la regla POSIX va en un campo `tz` aparte ([§9.8](#98-el-manifiesto-del-sistema)) |
+| `list` | Lista de objetos, cada uno con un `id` estable | `fields` (sin listas ni secretos dentro), `max_items` (32 como mucho), `min_items`, `item_label` (por ejemplo `"{at} · {days} · {ch}"`), `unique`, `sort_by`, `order`, `ui` |
+
+**Listas.**
+
+- **`id` de cada elemento:** 6 caracteres en base32 con el alfabeto de RFC 4648 en minúsculas (`^[a-z2-7]{6}$`), único dentro de su lista. Lo genera quien crea el elemento: la Mini App o la placa, si se crea en la pantalla. Los elementos que trae `default` declaran su `id` fijo en el manifiesto, y sus campos `text` pueden ir en `{es,en}`: el sistema los pasa al idioma del sistema la primera vez que crea el elemento y desde entonces son un texto más.
+- **`item_label`** se pinta igual en la Mini App y en la pantalla: `days` como «L-V», «L M X» o «Todos»; `time` como «08:30»; `select` con el texto de la opción; `bool` como punto lleno o hueco. `ctx.formatDays(máscara)` da el mismo texto para los días.
+- **`unique`**: lista de subcampos que no se pueden repetir juntos (`["ch", "at"]` en nicscom, `["page", "slot"]` en Atajos). Lo validan la Mini App y la placa **sobre el estado final del envío**, después de aplicar todas sus operaciones sobre esa lista, nunca entre una y otra: así, intercambiar dos botones de casilla (dos `item.set`) funciona. Qué pasa si un choque deja la lista a medias está en [§9.5](#95-la-vuelta-senddata).
+- **`sort_by`**: el subcampo por el que se enseña ordenada (nicscom ordena por hora). **`order: "manual"`** permite cambiar el orden con `item.order` ([§9.5](#95-la-vuelta-senddata)), como el de las webs del Semáforo, que es el de su página. No vale con `ui: grid`, donde la posición la deciden la página y la casilla (`mkmanifests.py` lo rechaza).
+- **`ui`**: una pista de presentación para la Mini App. `{"widget": "grid", "rows": "rows", "cols": "cols", "page": "page", "slot": "slot"}` hace que pinte la lista como una rejilla con las filas y columnas de esos campos ([§9.6](#96-la-mini-app)). Una Mini App que no conozca la pista pinta la lista de siempre. Una lista con `ui: grid` **nunca viaja por trozos**: la Mini App necesita la lista entera para pintar la rejilla, arrastrar y comprobar `unique`. `mkmanifests.py` rechaza la que, en el peor caso, no cabría sola en la URL de dos pasos con el presupuesto fijado en F2 (con 2048 caracteres, los 16 botones de Atajos dan unos 1.800).
+- **Revisión de cada elemento.** Cada elemento guarda `_r`, la revisión de su último cambio, y un elemento borrado deja una marca (`id` y `_r`) durante 7 días, 32 por lista como mucho, que el sistema guarda aparte, en `/state/<id>.sys.json`, sin gastar sitio de `/cfg`. Sirven para detectar choques entre la pantalla y la Mini App ([§9.5](#95-la-vuelta-senddata)).
+- **Desde la pantalla,** `ctx.listAdd()` y `ctx.listSet()` validan con las mismas tablas: `Err::Invalid` si algo no cumple y `Err::Quota` al llegar a `max_items`.
+
+**Listas de la placa** (`options_from: "runtime.<nombre>"`). La lista de opciones la publica la placa mientras funciona, con `ctx.publishList()`. Así salen los canales de nicscom o las fotos del Salvapantallas. El manifiesto del sistema usa además `system.pages`, `system.photos` y `system.idle`, que pone la propia Mini App ([§9.8](#98-el-manifiesto-del-sistema)).
+
+- **Entradas.** Cada entrada es una cadena; con `pairs`, un par `[valor, etiqueta]`; o, con `cols`, una fila `[valor, col1, col2…]` con hasta 4 columnas tipadas: `int`, `date` (una hora Unix que la Mini App pinta como fecha corta en el idioma de quien la abre), `text` (hasta `item_max` caracteres) y `tag` (un código corto). Con columnas, `label` dice cómo se compone la etiqueta (`"{n} · {at} · {cap}"`). Lo guardado es siempre el valor, un identificador estable, y nunca la etiqueta. Las columnas tienen tres ventajas: la fecha sale en el idioma de quien mira sin volver a publicar la lista, la Mini App puede ordenar y filtrar, y un campo puede quedarse solo con unas entradas con `options_if` (las acciones «Borrar» y «Verlas en el chat» del Salvapantallas solo ofrecen las fotos del bot: `{"src": "bot"}`).
+- **Topes.** `max` entradas (64 como mucho) e `item_max` caracteres por texto. **Si el peor caso pasa de 2 KB, la lista viaja por ventanas**, como las listas de ajustes: `{"o": desde, "n": total, "items": […]}`. La placa llena cada ventana con las entradas que caben en 2 KB y la Mini App ofrece «Siguientes» con la operación `open` (`f` = `"rt.<nombre>"`). `mkmanifests.py` avisa de las listas que pueden necesitar ventanas.
+- **Por dónde viajan.** Las listas de opciones (`kind: "options"`) **no viajan en la URL principal**: solo hacen falta para editar un campo con `options_from`, y entonces la Mini App abre ese plugin en dos pasos ([§9.2](#92-cómo-se-abre-un-solo-botón)). Hasta entonces enseña lo guardado tal cual (los canales de nicscom son nombres) o resumido («12 fotos elegidas»). Las de estado (`kind: "status"`) sí viajan con su plugin.
+- **Dónde se guardan.** El sistema guarda la última lista de opciones publicada en `/state/<id>.sys.json`, así que sobrevive a reinicios y desconexiones (nicscom sin broker sigue ofreciendo sus canales). Publicar el mismo contenido no sube la revisión. Las listas de tipo `status` **no se guardan en la flash ni suben la revisión**: cambian a menudo (bien, lenta, bien), viven en RAM y viajan en la siguiente URL que se genere por otro motivo.
+- **Validación blanda.** Un valor que no está en la lista se acepta si casa con el `pattern` del campo, y la Mini App lo enseña como «AGUA (no está ahora)». Así un canal que el administrador ha quitado no impide apagar o borrar la automatización que lo usa. Sin `pattern`, el valor se rechaza. Los campos que guardan identificadores (las fotos elegidas, los álbumes) llevan `pattern: ^[a-z2-7]{6}$`: un id que ya no está en la lista (una foto que salió por la rotación mientras la Mini App estaba abierta, o una más vieja que las 64 publicadas) se acepta y el plugin lo ignora. Y un plugin quita de sus ajustes lo que él mismo borra: el motor `photos` saca de `picked` las fotos que borra.
+- **`kind: "status"`** publica un mapa `id → estado` (`ok`, `warn`, `fail` o `stale`) que la Mini App pinta como un punto junto a cada elemento de una lista. Lo usa el Semáforo, cuyo motor traduce sus estados: `slow` y `unsupported` pasan a `warn`, `unknown` a `stale`, y un objetivo apagado no se publica.
+
+**URL que hacen de credencial** (un calendario privado, un *healthcheck*): se declaran como `secret` si caben en 128 bytes, o como `url` con `private` si no.
+
+**Direcciones bien escritas.** La Mini App normaliza cada `url` con `new URL()`: host en minúsculas y en *punycode* (la forma solo en ASCII que usa el DNS para los dominios con tildes), sin fragmento y sin el puerto por defecto. Rechaza las que llevan usuario y clave dentro (`https://yo:clave@…`). La placa vuelve a comprobar que el host está en ASCII y que no lleva credenciales.
+
+### 9.2 Cómo se abre: un solo botón
+
+- El bot mantiene un teclado de respuesta persistente (`ReplyKeyboardMarkup` con `is_persistent: true` y `resize_keyboard: true`) con **un solo botón**: «⚙ Ajustes» o «⚙ Settings». Es un `KeyboardButton` con `web_app`. Ocupa una fila, y el teclado con el que el dueño escribe sus tareas queda libre.
+- La URL del botón es `https://ignacio-aranda.github.io/pauta/miniapp/?v=1&l=es&fw=1.4.0&k=…&kf=…&e=3&z=1&s=…` ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)). El estado va en la *query* (lo que sigue a `?`), nunca en el *hash* (lo que sigue a `#`), que Telegram usa para sus propios datos.
+- **Apertura en dos pasos.** Los ajustes de un plugin que no caben en la URL viajan como `"@"`, junto con sus listas de la placa. La Mini App ofrece entonces «Abrir ajustes de nicscom» y manda la operación `open`. El bot contesta al momento, porque el sondeo largo vuelve en cuanto llega un mensaje. La respuesta trae un teclado con dos botones: «⚙ Ajustes» y «⚙ nicscom». La URL de este último lleva `p=nicscom` en claro y, cifrados, ese plugin con sus listas de la placa, `sys.lang`, `sys.kb` e `inf` (unos 150 B comprimidos: el formulario de Atajos necesita `sys.kb` para no dejar guardar textos imposibles, y el del Salvapantallas, `inf.sd`), sin los demás plugins, con todo el presupuesto para él. El segundo botón desaparece con el siguiente teclado que mande el bot (por ejemplo, con el «Guardado»); el refresco silencioso («Ajustes al día») nunca llega antes de 10 minutos desde que salió, para no quitarlo antes de que el dueño lo toque.
+- **Listas por trozos.** Si una lista de ajustes o de la placa no cabe ni así, `open` pide una ventana de ella (`f` = la lista, o `"rt.<nombre>"` para una de la placa; `o` = desde qué elemento) y la Mini App ofrece «Siguientes». Con una lista abierta por ventanas no se puede reordenar (`item.order`) ni arrastrar: la Mini App pide abrirla entera, y `unique` y `max_items` solo los comprueba la placa. Una lista con `ui: grid` nunca va por ventanas ([§9.1](#91-tipos-de-campo)).
+- **Lo normal será abrir en dos pasos.** Con el presupuesto provisional, una placa con un uso moderado (6 automatizaciones, 4 botones, 4 webs, 10 fotos elegidas y 2 dispositivos) ya ocupa unos 2.430 caracteres (medido con un prototipo del protocolo), así que nicscom, Atajos, el Semáforo y el Salvapantallas se abrirán casi siempre en dos pasos. Se acepta mientras no se mida (F2). Si el presupuesto medido es bajo, la alternativa es una segunda fila fija de botones para esos plugins, con cuidado con el tope del teclado (`REPLY_MARKUP_TOO_LONG`).
+- **Refresco.** Un teclado de respuesta no se puede editar, solo sustituir.
+  - Cuando cambia la revisión, el siguiente mensaje del bot (por ejemplo, el «Guardado») lleva el teclado nuevo, y `/settings` lo vuelve a mandar.
+  - Si se edita en la pantalla una lista que ve la Mini App, o cambia una lista de opciones de la placa que use algún campo, el bot manda en silencio un mensaje corto con el teclado nuevo («Ajustes al día»), como mucho uno cada 2 minutos y nunca antes de 10 minutos desde que salió un botón de dos pasos, y borra el anterior. Así la Mini App no se abre con datos viejos. Las listas de tipo `status` nunca lo provocan. Y si el cambio ya trae una respuesta del bot (por ejemplo, «10 fotos guardadas»), esa respuesta lleva el teclado nuevo y no hay mensaje aparte.
+  - Se borra con `deleteMessage` el mensaje que llevaba el teclado anterior, para no llenar el chat. Un bot puede borrar sus mensajes de menos de 48 horas. En F2 hay que **comprobar** que eso no oculta el teclado nuevo en ningún cliente; si lo oculta, no se borra.
+  - El mensaje `web_app_data` del dueño también se borra tras aplicarlo, porque en un chat privado el bot puede borrar los mensajes que recibe **(comprobar)**.
+
+### 9.3 Estado en la URL (cifrado y comprimido)
+
+GitHub Pages recibe la *query* de cada apertura. Para que solo vea datos cifrados, el estado viaja cifrado con una clave que comparten la placa y los dispositivos emparejados ([§9.4](#94-emparejar-dispositivos)). Y como sin comprimir no cabe (una placa con los seis plugins ocupaba 3.063 caracteres frente a los 2.048 del presupuesto), se comprime antes de cifrar.
+
+- **En claro** solo va lo que la Mini App necesita antes de descifrar: `v` (versión del formato, `1`), `l` (idioma: va aquí porque `initData` llega vacío desde un botón de teclado), `fw` (versión del firmware: con ella, la Mini App carga `fw/<fw>/manifests.json`), `k` (clave pública de la placa, 65 bytes en 87 caracteres), `kf` (su huella, que también sale en «Acerca de»), `e` (la época de la clave del estado), `z=1` (el estado va comprimido) y `s` (el estado). En la apertura en dos pasos, también `p` (el plugin que se abre, [§9.2](#92-cómo-se-abre-un-solo-botón)); mientras haya dispositivos que tienen que recoger la clave del estado, también `pk` ([§9.4](#94-emparejar-dispositivos)). Los parámetros van **en este orden fijo**: `v`, `l`, `fw`, `k`, `kf`, `e`, `z`, `p` (si va), `s` y `pk` (si va). `kf` va en hexadecimal en mayúsculas. Se describen en [`url-state.schema.json`](../schemas/url-state.schema.json) (`$defs/query`).
+- **Orden de las transformaciones** (normativo): JSON → **deflate-raw** → **AES-256-GCM** → **base64url**. La Mini App deshace los pasos al revés.
+  - **Comprimir.** La placa usa el compresor de miniz (`tdefl`) que trae la ROM del ESP32-S3 (está en `esp32s3.rom.ld` del core 3.3.12; hay que **comprobar** en F0 que enlaza desde Arduino). La ROM trae el código, no la memoria: la estructura del compresor mide unos 164 KB y se reserva en PSRAM mientras se genera la URL ([§7.12](#712-memoria)). Si no enlaza, se compila miniz en la flash (unos 10 KB). La Mini App descomprime con `DecompressionStream("deflate-raw")` y corta a los **64 KB**, para que una URL maliciosa no pueda inflarse hasta colgar el navegador. `DecompressionStream("deflate-raw")` existe desde Chrome 103, Safari 16.4 y Firefox 113; en un iPhone con iOS anterior a 16.4 no basta con actualizar Telegram, porque el navegador es el del sistema, así que la Mini App lleva un descompresor pequeño propio (de 3 a 10 KB) como respaldo, con el mismo tope. Medidas con un prototipo del protocolo: el estado del ejemplo de abajo ocupa unos 1.100 caracteres de URL; una placa con un uso moderado, unos 2.430; y con todas las listas llenas, unos 4.870 (3.440 sin las listas de la placa).
+  - **Cifrar** (normativo, byte a byte; los vectores de prueba están en [`examples/wire/vectors.json`](../examples/wire/vectors.json), [§15](#15-conformidad)):
+    - clave: `Kurl` = HKDF-SHA256(`S`, sal = SHA-256 de los 65 bytes de `k`, `info` = `"pauta-url-v1|<e>"`), 32 bytes;
+    - dato asociado (AAD): **el texto exacto de la *query* desde `v=` hasta justo antes de `&s=`**, tal como va en la URL: con `p` si va, sin `pk`. Así nadie puede cambiar la parte en claro sin que se note, y `pk` puede cambiar sin tocar `s`;
+    - `s` = base64url(vector inicial de 12 bytes, aleatorio en cada URL | estado comprimido y cifrado con AES-256-GCM | etiqueta de 16 bytes).
+
+    Comprimir y cifrar unos 3 KB cuesta menos de 10 ms **(medir)**, en el núcleo 0 ([§7.1](#71-tareas-y-núcleos)).
+  - **Lo que deja ver la compresión.** La longitud de la URL comprimida dice algo del tamaño del estado, nunca su contenido. Se acepta: lo único que alguien de fuera podría influir son los nombres de los canales de nicscom o los pies de foto, y eso no le deja leer nada.
+- **El estado, descifrado**, es un JSON ([`url-state.schema.json`](../schemas/url-state.schema.json)). Por ejemplo:
+
+```json
+{
+  "r": 57,
+  "t": 1792330000,
+  "sys": {
+    "lang": "es", "theme": "night",
+    "loc": {"n": "Málaga", "lat": 36.72, "lon": -4.42, "tz": "Europe/Madrid"},
+    "tz": {"iana": "Europe/Madrid", "posix": "CET-1CEST,M3.5.0,M10.5.0/3"},
+    "idle": 10, "idle_by": "auto", "night": true, "night_from": "23:30", "night_to": "07:30",
+    "home": "pauta", "pin": "*", "lock_min": 0, "unlock_tg": false,
+    "photos": "auto", "kb": "es"
+  },
+  "inf": {
+    "var": "v1-hid",
+    "dev": [["q3x7ab", "Android", 1792300000], ["m2k7td", "Escritorio", 1792310000]],
+    "safe": 0, "ota": null, "sd": true, "hid": "ready",
+    "last": [["m3ka7q2b", "ok", 4, 0], ["t5vwxa2c", "partial", 2, 1]],
+    "opt": {"semaforo": ["lan"]}
+  },
+  "p": [
+    ["pauta", 1, {"new_alert": false}],
+    ["pomodoro", 1, {"work": 50, "short": 10}],
+    ["nicscom", 1, "@"],
+    ["atajos", 1, {"cols": 4, "buttons": [
+      {"id": "dmicro", "label": "Micro", "icon": "mic_off", "page": 1, "slot": 1, "kind": "combo", "keys": ["ctrl+shift+m"]},
+      {"id": "k2m3n4", "label": "Firma", "icon": "mail", "page": 1, "slot": 5, "kind": "text", "text": "Un saludo, Ignacio", "enter": false}
+    ]}],
+    ["semaforo", 1, {"sites": [
+      {"id": "k3f7a2", "name": "Tienda", "url": "https://tienda.es"},
+      {"id": "z5a6b7", "name": "GitHub", "url": "https://www.githubstatus.com", "mode": "statuspage"}
+    ], "tg_slow": true}],
+    ["salvapantallas", 0, null]
+  ],
+  "rt": {
+    "semaforo": {"status": {"k3f7a2": "ok", "z5a6b7": "warn"}}
+  }
+}
+```
+
+- **Campos.**
+  - `r`: revisión. `t`: cuándo se generó.
+  - `sys`: los ajustes del sistema, con las claves del manifiesto del sistema ([§9.8](#98-el-manifiesto-del-sistema)). El PIN puesto sale como `"pin": "*"`.
+  - `inf`: lo que la Mini App solo enseña o usa para decidir: la variante del firmware (`var`), los dispositivos emparejados (`dev`: id, nombre y fecha), si está en modo seguro (`safe`), la versión nueva disponible (`ota`), si hay microSD (`sd`), el estado del teclado (`hid`), los 4 últimos envíos aplicados (`last`: `[id, resultado, aplicados, choques]`, con resultado `ok`, `partial`, `pending`, `error` o `cancelled`, para saber si borrar el borrador o mandar la parte siguiente, [§9.5](#95-la-vuelta-senddata)), los permisos opcionales concedidos (`opt`: plugin → lista) y las recetas que no vienen con este firmware (`ext`: id → [versión, origen], con origen `catalog` o `sd`), cuyos manifiestos la Mini App saca del catálogo.
+  - **`p`**: una entrada por plugin, `[id, estado, ajustes | "@" | null, motivo]`.
+    - Estado: 0 inactivo, 1 activo, 2 sin configurar, 3 no disponible, 4 fallido y 5 en cuarentena.
+    - **`null`**: no hay nada guardado. Valen los valores de fábrica y se puede editar como cualquier otro.
+    - **`"@"`**: no cabe; se abre en dos pasos ([§9.2](#92-cómo-se-abre-un-solo-botón)). Sus listas de la placa tampoco viajan.
+    - Los ajustes van por nombre de clave, nunca por posición, para que no se rompan entre versiones. Un plugin «no disponible» también manda sus ajustes, para poder prepararlo antes de flashear el firmware que lo trae.
+    - Un secreto ya puesto y un campo `private` con valor salen como `"*"`.
+    - `motivo`: por qué no está disponible (`"hid"`, `"api"`) o el estado que da el plugin con `ctx.setStatus()` («CONTRASEÑA INCORRECTA»).
+  - **`rt`**: las listas de la placa de cada plugin: opciones sueltas, pares `[valor, etiqueta]`, filas con columnas, una ventana `{o, n, items}` o, las de tipo `status`, un mapa `id → estado`. Las de opciones solo viajan en la URL de dos pasos de su plugin ([§9.1](#91-tipos-de-campo)).
+- **Codificación** (normativa; la Mini App y la placa usan las mismas reglas):
+  - las claves van por nombre; lo que vale lo de fábrica puede no viajar (la Mini App lo completa con el manifiesto);
+  - una lista es una lista de objetos, cada uno con su `id`; las horas van como `"HH:MM"`, los días como número y los sí/no como `true`/`false`;
+  - una lista que no cabe entera viaja a trozos como `{"o": desde, "n": total, "items": […]}`, también las de la placa.
+- **Presupuesto.** Mientras no se mida, la URL entera puede ocupar **2048 bytes**. El cifrado añade unos 40 caracteres. Es lo primero que se hace en F2:
+  - mandar con `curl` botones de 500 a 8000 caracteres y abrirlos en Android, iOS, Escritorio y Web;
+  - medir también el tamaño total del teclado, porque Telegram rechaza los demasiado grandes con `REPLY_MARKUP_TOO_LONG` (el umbral no está documentado; se habla de unos 10 KB);
+  - fijar el presupuesto en el 75 % del máximo más pequeño que funcione en todos;
+  - medirlo con un estado realista (uso moderado, unos 2.430 caracteres), no solo con el del ejemplo.
+- **Cómo se llena.** Siempre van los campos fijos, `sys`, `inf`, las entradas `pk` que haya (90 caracteres cada una, hasta 364 con cuatro) y la lista de plugins con su estado. Después, los ajustes de cada plugin (con sus listas de estado; las de opciones, no), por orden de páginas, hasta llenar el presupuesto, que la placa mide ya comprimido y cifrado. El que no cabe va como `"@"`. Si un plugin no cabe ni solo en su botón, sus listas largas se abren por trozos ([§9.2](#92-cómo-se-abre-un-solo-botón)), salvo una lista con `ui: grid`. `mkmanifests.py` calcula el peor caso de cada plugin sin comprimir (una cota por arriba) y avisa si no cabría ni solo.
+- **Datos viejos.** La Mini App enseña, solo como dato, «Estado de las 18:02». No avisa de «datos viejos»: el teclado solo se renueva cuando algo cambia, así que una URL de ayer puede estar al día, y lo que sí haya cambiado lo resuelven los choques, elemento a elemento ([§9.5](#95-la-vuelta-senddata)).
+- **Sin emparejar,** la Mini App no puede descifrar: enseña el catálogo y los valores por defecto, y solo ofrece «Emparejar este dispositivo» ([§9.4](#94-emparejar-dispositivos)). Y si la URL trae otra `k` que la que guardó al emparejarse (compara el SHA-256 entero), se niega a descifrar y a sellar: «La placa ha cambiado de clave: empareja este dispositivo otra vez».
+
+### 9.4 Emparejar dispositivos
+
+Para leer el estado cifrado y firmar sus envíos, cada móvil u ordenador se empareja una vez con la placa. Se reutiliza el ECDH del sobre sellado ([§9.7](#97-cómo-se-meten-los-secretos-el-sobre-sellado)), con un código en la pantalla y un toque.
+
+- **La clave del estado** `S` son 32 bytes aleatorios que genera la placa al emparejar el primer dispositivo, con su número de época `e`. Vive en el cofre ([§7.7](#77-secretos)).
+- **Dónde la guarda la Mini App.** En `SecureStorage` de Telegram (desde la Bot API 9.0; usa el llavero de iOS o el almacén de claves de Android; 10 elementos como mucho), si existe. Si no, en `DeviceStorage` (también desde la 9.0; se queda en ese dispositivo). Si tampoco, en `CloudStorage` (desde la 6.9). Ojo: `CloudStorage` se guarda en los servidores de Telegram y va con la cuenta, así que todos tus dispositivos comparten el emparejamiento y Telegram podría leer la clave. La Mini App dice cuál usa: «Clave guardada en este dispositivo» o «Clave guardada en tu nube de Telegram». Si `SecureStorage` existe pero da error, pasa al siguiente.
+- **Qué guarda la Mini App:** un solo registro por placa, `{sha256(k), dev, Kdev, S, e}`: la huella completa de la clave de la placa, el id del dispositivo, su clave propia `Kdev` y la clave del estado con su época. No lo borra hasta que la desemparejan. La clave privada temporal del emparejamiento, que tiene que sobrevivir a que la Mini App se cierre al enviar, va exportada (JWK) en `DeviceStorage` hasta terminar.
+- **Pasos.**
+  1. La Mini App sin emparejar crea con WebCrypto un par de claves ECDH P-256 temporal (guarda la privada hasta terminar) y un `id` de dispositivo de 6 caracteres. Enseña «Emparejar este dispositivo · código K7Q·F2M», donde el código son los **6 primeros caracteres** en base32 (RFC 4648, en mayúsculas), escritos en dos grupos de 3, del SHA-256 de **los bytes** de su clave pública (65) seguidos de los de `k` (65). Son 30 bits: probar claves hasta dar con el mismo código no cabe en los 2 minutos. Manda la operación `pair` con el `id` (`dev`), un nombre de 16 caracteres como mucho (`name`; sale de `Telegram.WebApp.platform`: «Android», «iPhone», «Escritorio»…) y su clave pública (`pk`).
+  2. La placa enseña durante 2 minutos «Emparejar «Android» · código K7Q·F2M · [Mantén para emparejar] [Cancelar]», con las reglas de la pantalla de confirmación ([§8.2](#82-reglas)). Si los códigos no coinciden, alguien ha cambiado una clave por el camino: hay que cancelar.
+  3. Con el toque, la placa calcula la clave del dispositivo, `Kdev` = HKDF-SHA256(ECDH(su clave privada, la del dispositivo), sal = SHA-256(`k`), `info = "pauta-pair-v1|<id>"`). Crea `S` si no existía, apunta el dispositivo (id, nombre y fecha) en `/sys/devices.json` y guarda `Kdev` en el cofre. Contesta «Emparejado: Android. Abre ⚙ Ajustes otra vez» con un teclado nuevo cuya URL lleva su entrada `pk` = `<id>.<base64url(vector de 12 bytes | AES-256-GCM con Kdev de S (32 bytes) seguida de e como entero de 2 bytes big-endian, con AAD = "pauta-pk-v1|<id>|<e>" | etiqueta)>`, de 90 caracteres.
+  4. Al abrirse otra vez, la Mini App encuentra su `id` en `pk`, calcula `Kdev`, descifra `S` y `e`, los guarda en su registro junto con `Kdev` y el SHA-256 completo de `k`, y borra la clave privada temporal. Desde ahí descifra `s`.
+  5. La placa deja de mandar ese `pk` cuando recibe un envío firmado por ese dispositivo, o a los 7 días.
+- **Varias entradas.** `pk` lleva hasta 4 entradas separadas por `~`, una por cada dispositivo que aún tiene que recoger la clave (por ejemplo, tras emparejar un segundo dispositivo, o tras olvidar uno). Con cuatro ocupan 364 caracteres, que cuentan en el presupuesto antes de decidir qué plugin va como `"@"` ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)). `pk` no entra en el dato asociado de `s`.
+- **Hasta 4 dispositivos.** Para un quinto, la placa pide olvidar antes uno.
+- **Firma de los envíos.** Cada envío de un dispositivo emparejado lleva `"d": "<id>"` y termina con un salto de línea y su firma: HMAC-SHA256 de **los bytes UTF-8 del JSON tal cual se manda, hasta el último salto de línea** (sin incluirlo), recortado a 16 bytes y en base64url (22 caracteres). La clave de firma es **propia de cada dispositivo**: `Ksend` = HKDF-SHA256(`Kdev`, sal = SHA-256(`k`), `info` = `"pauta-send-v1|<id>"`). Así `d` prueba de verdad qué dispositivo manda, y uno olvidado no puede firmar aunque conserve una clave del estado vieja. La placa rechaza sin firma válida todo menos `pair`. Consecuencia: un dispositivo sin emparejar ve los valores por defecto y solo puede pedir emparejarse, y una cuenta de Telegram robada no basta para cambiar nada desde la Mini App.
+- **Olvidar.**
+  - Desde la Mini App, en «Dispositivos emparejados»: «Olvidar» en cada uno y «Olvidar todos» (operación `unpair`).
+  - Desde la pantalla: menú del sistema → «Dispositivos emparejados» → «OLVIDAR TODOS», con un toque.
+  - El reset de fábrica genera una clave de placa nueva: la huella `kf` cambia y todos los dispositivos piden emparejarse otra vez.
+  - Al olvidar un dispositivo, la placa borra su `Kdev` (sus envíos se rechazan desde ese momento) y **cambia `S`** (y sube `e`), así que el olvidado ya no puede leer las URL nuevas. A los que quedan les manda la clave nueva en sus entradas `pk`, cifradas con el `Kdev` de cada uno, durante 7 días; el que no abra la Mini App en ese tiempo tendrá que emparejarse otra vez. «Olvidar todos» lo borra todo y el siguiente dispositivo empieza de cero.
+- **Lo que no protege:** a Telegram si se usa `CloudStorage`, ni un dispositivo emparejado que caiga en otras manos mientras no se olvide.
+
+### 9.5 La vuelta: `sendData`
+
+`Telegram.WebApp.sendData()` admite **4096 bytes**, solo funciona si la Mini App se abrió desde un botón de teclado y la cierra al enviar. Llega a la placa como `message.web_app_data.data`. Cada envío es **una transacción**: un JSON ([`miniapp-message.schema.json`](../schemas/miniapp-message.schema.json)) y, en otra línea, la firma del dispositivo ([§9.4](#94-emparejar-dispositivos)).
+
+```
+{"v": 1, "id": "7hq2mx4a", "d": "q3x7ab", "base": 57, "t": 1792330412, "ops": [
+  {"op": "sys", "set": {"idle": 5, "lock_sched": true, "lock_from": "19:00", "lock_to": "08:00"},
+   "box": {"pin": "BGjfe0Cf6ZkmsKD9NFTCicroWGIou6Xmoo0pUU2A1TLuzxVi5UksNKJ26TjPtoVi6mnLmNo_hrzpvZVlEn7VZw4ZdWvcaG66FFMYYFD-hzMA54kJrdMr6CJSXS_U-G6P0pYGsRIq33jYDauyCw"}},
+  {"op": "cfg", "p": "pomodoro", "set": {"work": 50, "short": 10}},
+  {"op": "enable", "p": "semaforo", "on": true},
+  {"op": "item.add", "p": "nicscom", "f": "autos", "id": "k3f7a2", "val": {"ch": "AGUA", "at": "09:00", "days": 31, "on": true}},
+  {"op": "item.set", "p": "nicscom", "f": "autos", "id": "q7c2d3", "val": {"at": "08:45"}},
+  {"op": "item.del", "p": "nicscom", "f": "autos", "id": "x2b4e7"},
+  {"op": "item.set", "p": "atajos", "f": "buttons", "id": "dmicro", "val": {"slot": 2}},
+  {"op": "item.set", "p": "atajos", "f": "buttons", "id": "dbloqu", "val": {"slot": 1}},
+  {"op": "item.order", "p": "semaforo", "f": "sites", "ids": ["z5a6b7", "k3f7a2"]},
+  {"op": "secret", "p": "nicscom", "f": "pass", "box": null},
+  {"op": "order", "ids": ["pauta", "pomodoro", "nicscom", "semaforo", "atajos", "salvapantallas"]},
+  {"op": "install", "p": "frase-dia", "ver": "1.0.0", "sha": "9f2c11a03b7e44d1"},
+  {"op": "action", "p": "nicscom", "a": "post", "args": {"ch": "CAFE"}}
+]}
+<firma: HMAC-SHA256 recortado a 16 bytes, en base64url, 22 caracteres; la de este envío, en JSON compacto, está en examples/wire/vectors.json>
+```
+
+| `op` | Qué hace | Campos |
+|---|---|---|
+| `sys` | Cambia ajustes del sistema, mete o quita el PIN y lanza acciones del sistema | `set` (claves de [§9.8](#98-el-manifiesto-del-sistema), sin `pin`); `box` = `{"pin": sobre}` o `{"pin": null}` para quitarlo; `act` = `{"a": "ota.check" \| "ota.install" \| "safe.exit", "ver"}` |
+| `enable` | Activa o desactiva un plugin | `p`, `on` |
+| `order` | Cambia el orden de las páginas | `ids`: la lista de plugins en el orden nuevo |
+| `cfg` | Cambia campos sueltos de un plugin; lo que no se nombra no se toca | `p`, `set` |
+| `item.add` | Añade un elemento a una lista, con el valor entero | `p`, `f`, `id`, `val` |
+| `item.set` | Cambia parte de un elemento | `p`, `f`, `id`, `val` |
+| `item.del` | Borra un elemento | `p`, `f`, `id` |
+| `item.order` | Reordena una lista con `order: "manual"` (no una con `ui: grid` ni una abierta por ventanas) | `p`, `f`, `ids`: el orden nuevo |
+| `secret` | Guarda un secreto en un sobre sellado ([§9.7](#97-cómo-se-meten-los-secretos-el-sobre-sellado)), o lo borra con `null` | `p`, `f`, `box` |
+| `action` | Lanza una acción del manifiesto (por ejemplo, «Avisar ahora») | `p`, `a`, `args` |
+| `open` | Pide la apertura en dos pasos de un plugin, o un trozo de una lista | `p`, y `f` y `o` para un trozo (`f` = `"rt.<nombre>"` para una lista de la placa; `o` hasta 63) |
+| `reset` | Borra los datos de un plugin | `p` |
+| `accept` | Acepta los permisos nuevos de un plugin actualizado | `p`, `perm`: la huella de permisos que la Mini App enseñó |
+| `revoke` | Quita un permiso opcional concedido (no pide toque) | `p`, `perm`: el permiso |
+| `install` | Instala una receta del catálogo ([P22](#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1)) | `p`, `ver`, `sha`: los 16 primeros caracteres hexadecimales del SHA-256 del archivo de la receta, como figura en el índice firmado |
+| `remove` | Desinstala una receta que no vino de serie | `p` |
+| `pair` / `unpair` | Empareja este dispositivo / olvida uno o todos ([§9.4](#94-emparejar-dispositivos)) | `dev`, `name`, `pk` / `dev` (un `id` o `"*"`) |
+
+- **`item.order`.** `ids` es el orden deseado. Un `id` que ya no existe se ignora; un elemento que no aparece (por ejemplo, uno que se acaba de añadir en la pantalla) queda al final, en su orden. Reordenar nunca choca: gana el último. En `Event::Settings` sale como `sites^`.
+- **Borrar un secreto** (`"box": null`) o **quitar el PIN** cuenta como cambiarlo: pide su toque en la pantalla ([§8.2](#82-reglas)), sin código, porque no hay sobre.
+- **`pair`** va solo y sin firma (el dispositivo aún no tiene clave); todo lo demás lleva `d` y la firma.
+- **Errores frente a choques.**
+  - **Un error** (operación o campo desconocido, valor fuera de rango, `unique` o `max_items` incumplidos en el estado final, firma mala, envío demasiado viejo, receta que no está en el índice firmado, un `"*"` mandado a un campo `private` o a un secreto) hace rechazar el envío entero, sin aplicar nada, y la respuesta dice cuál y por qué. La placa valida solo las claves que llegan en cada operación, no la configuración entera.
+  - **Un choque** es un `item.set` o un `item.del` cuyo `base` es anterior a la revisión `_r` del elemento (alguien lo cambió después en la pantalla o desde otro dispositivo), o un `item.set` que apunta a un elemento que no existe (borrado, con marca o sin ella). Lo que cambia el propio envío no cuenta: un `item.add` y un `item.set` del mismo `id` en el mismo envío no chocan. Esa operación se salta, las demás se aplican, y la respuesta lo dice: «1 cambio no aplicado: “08:30 AGUA” se cambió en la pantalla. Abre ⚙ Ajustes otra vez».
+  - **`unique` y `max_items` se miden sobre el estado final** de cada lista, después de aplicar todas sus operaciones del envío. Si un choque saltado deja la lista incumpliendo `unique` (por ejemplo, de un intercambio de casillas solo se aplicó la mitad), se saltan también todas las operaciones de esa lista en ese envío, y la respuesta lo explica: «Los botones no se han cambiado: “Micro” se cambió en la pantalla. Abre ⚙ Ajustes otra vez». Así nunca quedan dos botones en la misma casilla. Si lo que choca es lo que añadió otro dispositivo (dos elementos iguales), solo se salta esa operación.
+  - `item.set` nunca crea elementos: crear es siempre `item.add`, con el valor entero. `item.del` sobre un `id` que no existe no hace nada: ya estaba borrado.
+  - En los campos sueltos (`cfg`) gana el último, campo a campo.
+- **Orden dentro de un envío.** Da igual cómo vengan; la placa los aplica así: `reset` y `remove`; `install`; `sys` y `cfg`; el borrado de secretos por `bound_to`; los secretos; las listas (`item.add`, `item.set`, `item.del` e `item.order`), y después la comprobación de `unique` y `max_items` sobre el estado final; `accept` y `revoke`; `enable`; `order`; las acciones; y al final `open`.
+- **Confirmación.** Si el envío lleva algo que pide toque ([§8.2](#82-reglas)), entero espera el toque, 2 minutos como mucho, con una sola pantalla de confirmación ([§8.2](#82-reglas)), y el bot contesta: «Confirma en la pantalla (código K7QF)». Solo puede haber uno esperando: otro envío que también pida toque se rechaza con «Hay una confirmación pendiente en la pantalla».
+- **Código con varios secretos.** El código son los 4 primeros caracteres, en base32 de RFC 4648 **en mayúsculas**, del SHA-256 de **los bytes de todos los sobres del envío** (ya descodificados de base64url) **concatenados en el orden de sus operaciones** (el PIN de `sys` cuenta donde va su operación; un `null` no aporta nada). Así la Mini App y la placa enseñan un solo código por envío. Los `id` de los elementos usan el mismo alfabeto **en minúsculas**.
+- **Guardado de verdad.** Lo que llega de la Mini App se escribe en la flash en menos de 10 s, sin esperar a que la pantalla esté quieta, porque pasa pocas veces. La respuesta sale después de escribir: «Guardado: Pomodoro, nicscom (4 cambios)», con el teclado nuevo y, detrás, lo que hayan contestado los plugins.
+- **Límites.** 32 operaciones y 4096 bytes por envío, firma incluida. La Mini App enseña un contador («3,1 de 4 KB»). Conserva el borrador en el almacenamiento del dispositivo hasta que la placa confirma, para no perder lo tecleado si vuelve un error. El borrador **nunca guarda secretos ni el PIN**: se vuelven a pedir.
+- **Envíos en varias partes.** Si un cambio no cabe (por ejemplo, crear la rejilla entera de Atajos en el peor caso, unos 4.740 bytes, o nicscom la primera vez con nombres de canal muy largos), la Mini App lo parte. `sendData` cierra la Mini App, así que cada parte es volver a abrirla:
+  1. Manda la parte 1 («Parte 1 de 2»). El bot contesta «Parte 1 de 2 guardada. Abre ⚙ Ajustes para mandar el resto», con el teclado nuevo.
+  2. Al abrirse, la Mini App mira en `inf.last` qué pasó con la parte 1. Si se aplicó, monta y sella la parte 2 con la revisión nueva como `base`, así que no choca con lo que acaba de cambiar la parte 1. Si espera su toque o falló, no deja mandar la parte 2 y lo dice.
+  3. Cada parte tiene su propia pantalla de confirmación, si la necesita.
+
+### 9.6 La Mini App
+
+- **Dónde está.** En la carpeta `miniapp/` del repositorio, publicada en `https://ignacio-aranda.github.io/pauta/miniapp/`. Lleva su HTML, JS y CSS, la copia fijada de `telegram-web-app.js`, `tz.json` (generado desde tzdata, [§7.3](#73-ubicación-y-tiempo)), los iconos en SVG, `fw/latest.json` (la OTA, [§7.13](#713-ota-firmada)) y un `fw/<versión>/manifests.json` por firmware, con el manifiesto del sistema, los de los plugins y las tablas generadas (campos, distribuciones de teclado y anchos de las letras de `Meta13` para las vistas previas). Estos últimos no cambian nunca, así que una placa vieja siempre encuentra los suyos. Las fichas, incluidos los plugins de firmwares más nuevos («llega con la 1.6.0»), salen del índice firmado del catálogo ([§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)), servido desde la misma Pages. No usa ningún framework y pesa menos de 150 KB, sin contar los manifiestos.
+- **Qué pinta.** Los formularios salen solos del manifiesto, sin programar una pantalla por plugin. Tiene tres partes:
+  - **Sistema**: ubicación, servidor de hora, reposo y vuelta al inicio, bloqueo y PIN (con el aviso del [§5.7](#57-bloqueo-con-pin)), qué se ve bloqueada, líneas vivas, inicio y orden, receptor de fotos, distribución y velocidad del teclado, desbloqueo por Telegram, dispositivos emparejados, actualizaciones y modo seguro;
+  - **Plugins**: fichas con permisos, botón de activar y, para las recetas del catálogo, «Instalar» y «Desinstalar» ([P22](#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1));
+  - **una pantalla por plugin**.
+- **Rejilla.** Una lista con la pista `ui: grid` se pinta como la botonera de verdad, con sus etiquetas e iconos: se toca una casilla para editarla o se arrastra para moverla. La etiqueta se previsualiza con los anchos reales de la fuente, con su «…» si no cabe. Enseña «16 de 16 botones», avisa de que cualquier cambio en los botones se confirma en la pantalla y, antes de bajar filas, columnas o páginas, avisa de los botones que quedarían fuera y ofrece recolocarlos en las primeras casillas libres.
+- **Teclas** (`keys`). Dos editores: el principal es un selector, con fichas para los modificadores, una lista de teclas y los preajustes de cada sistema operativo, porque en el móvil no hay Ctrl ni Win. El grabador, con `KeyboardEvent.code`, solo aparece si hay un teclado físico, y avisa de que el propio sistema se queda con Win+L, Ctrl+Alt+Supr o Cmd+Tab. Si un texto parece una contraseña, avisa de que Atajos no es sitio para guardarlas. No deja guardar un texto con caracteres que la distribución de `sys.kb` no puede escribir, ni con saltos de línea, y comprueba los topes del [§7.10](#710-teclado-hid) al guardar.
+- **Estilo.** De Telegram solo toma `colorScheme` (día o noche) y pinta con las paletas exactas DAY y NIGHT de `theme.cpp` ([§5.9](#59-guía-visual)), con la tipografía y los filetes de libreta: así se parece a la placa y no al tema del móvil. El idioma sale de `l`.
+- **Validación.** Valida exactamente igual que la placa, con las mismas tablas, antes de enviar.
+- **Criptografía.** Usa WebCrypto para todo (ECDH, HKDF, AES-GCM y HMAC) y, en sus pruebas, comprueba su código contra los vectores de [`examples/wire/vectors.json`](../examples/wire/vectors.json), igual que el firmware.
+
+### 9.7 Cómo se meten los secretos: el «sobre sellado»
+
+1. Con la WiFi ya encendida, la placa genera una sola vez un par de claves ECDH P-256 con mbedTLS (el core trae activados ECDH, HKDF y GCM). La radio encendida hace falta para que `esp_random()` dé azar de verdad, igual que en `settingsEnsureApPassword()`. La clave privada va a `psys/dk` y la pública viaja en `k`. El reset de fábrica la regenera.
+2. La Mini App, con WebCrypto (la criptografía del propio navegador):
+   - crea una clave de un solo uso;
+   - calcula el secreto compartido con `k` (ECDH);
+   - deriva 32 bytes con HKDF-SHA256, con sal = SHA-256(`k`) e `info = "pauta-sec-v1|<id>|<campo>|<base>|<t>"` y, si el campo tiene `bound_to`, `"|<h>"` al final, donde `<h>` son los 16 primeros caracteres hexadecimales del SHA-256 del valor de su campo `bound_to`. Para el PIN, `<id>` es `sys` y `<campo>` es `pin`: `pauta-sec-v1|sys|pin|<base>|<t>`. Así el sobre solo vale para ese campo, esa revisión, ese momento y ese destino;
+   - rellena el texto en claro con bytes 0x00 hasta un tamaño fijo: 16 bytes para el PIN y el múltiplo de 32 siguiente (32, 64, 96 o 128) para un secreto. Así el largo del sobre no delata cuántas cifras tiene el PIN. Un valor no puede llevar el byte 0x00, y la placa quita el relleno al abrirlo;
+   - cifra con AES-256-GCM, un vector inicial aleatorio de 12 bytes y sin dato asociado (el contexto ya va en `info`).
+3. Manda `box = base64url(clave de un solo uso de 65 B | vector inicial de 12 B | cifrado | etiqueta de 16 B)`: 146 caracteres el PIN y de 167 a 295 un secreto. **Telegram solo ve datos cifrados.**
+4. **Código.** El botón de enviar de la Mini App dice «Enviar · código K7QF», con los 4 primeros caracteres en base32 (en mayúsculas) del SHA-256 de los bytes de los sobres del envío, concatenados en el orden de sus operaciones ([§9.5](#95-la-vuelta-senddata)). La placa enseña durante 2 minutos «nicscom quiere guardar su contraseña · código K7QF · [Mantén para guardar] [Cancelar]», dentro de la pantalla de confirmación única del envío. Si los códigos no coinciden, alguien ha cambiado la clave por el camino: hay que cancelar. El toque demuestra además que quien cambia el secreto está delante de la placa.
+5. La placa rechaza los sobres con `t` de más de 10 minutos o que no casan con su `info` (así no sirve reenviar uno viejo, ni uno sellado para otro broker), y los secretos iguales al token o a la clave WiFi. Lo demás lo guarda en el cofre.
+
+- **PIN.** Viaja igual, en el `box` de la operación `sys` (`{"op": "sys", "box": {"pin": "…"}}`), y se guarda con PBKDF2 ([§5.7](#57-bloqueo-con-pin)). `{"pin": null}` lo quita.
+- **Borrar un secreto.** `{"op": "secret", "p": …, "f": …, "box": null}`. Pide su toque como cualquier cambio de un secreto.
+- **Huella.** `kf` son los 8 primeros caracteres hexadecimales del SHA-256 de `k`. Sale en la Mini App y en «Acerca de».
+
+### 9.8 El manifiesto del sistema
+
+El sistema no es un plugin, pero sus ajustes se describen con los mismos tipos de campo ([§9.1](#91-tipos-de-campo)), para que la Mini App los pinte con el mismo motor de formularios. El manifiesto del sistema va en `fw/<versión>/manifests.json`, junto con los de los plugins, y se valida con [`system.schema.json`](../schemas/system.schema.json); el de referencia está en [`examples/system/system.json`](../examples/system/system.json). Sus claves son **las mismas** en `/sys/system.json`, en `sys` del estado de la URL ([§9.3](#93-estado-en-la-url-cifrado-y-comprimido)) y en la operación `sys` ([§9.5](#95-la-vuelta-senddata)).
+
+| Clave | Tipo | Por defecto | Qué es | Dónde se usa |
+|---|---|---|---|---|
+| `lang` | `select`: `es`, `en` | `es` | Idioma de la placa, el bot y la Mini App. Se guarda en `tdcfg/lang`, como hoy | [§14](#14-idiomas) |
+| `theme` | `select`: `day`, `night`, `auto` | `night` | Tema. `day` y `night` se guardan en `tdcfg/dark`, como hoy; `auto` sigue el `is_day` del tiempo de la cabecera y no escribe en NVS en cada cambio ([P24](#p24-las-claves-del-sistema)) | [§5.9](#59-guía-visual) |
+| `loc` | `location`: `{n, lat, lon, tz}` | — | Ciudad del tiempo de la cabecera, con coordenadas de 2 decimales y su zona IANA | [§7.3](#73-ubicación-y-tiempo) |
+| `tz` | `tz`: `{iana, posix}` | `Europe/Madrid` y `CET-1CEST,M3.5.0,M10.5.0/3` | La zona horaria que se aplica. Al elegir ciudad, la Mini App propone la suya | [§7.2](#72-hora-y-zona-horaria) |
+| `ntp` | `host` | vacío | Servidor de hora propio ([P24](#p24-las-claves-del-sistema)) | [§7.2](#72-hora-y-zona-horaria) |
+| `idle` | `number` (min) de 0 a 240 | 10 ([P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso)) | Reposo tras ese tiempo sin tocar; 0 = nunca | [§5.6](#56-reposo) |
+| `idle_by` | `select` de `system.idle` | `auto` | Qué sale en reposo: `auto` (el único plugin activo con `surfaces.idle`, si hay exactamente uno; si no, el reloj), `clock` o el `id` de un plugin ([P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)) | [§5.6](#56-reposo) |
+| `night` | `bool` | no | Reposo en una franja nocturna | [§5.6](#56-reposo) |
+| `night_from` / `night_to` | `time` | 23:30 / 07:00 | La franja | [§5.6](#56-reposo) |
+| `live_idle` | `bool` | sí | Líneas vivas en el reposo ([P24](#p24-las-claves-del-sistema)) | [§5.6](#56-reposo) |
+| `home` | `select` de `system.pages` | `pauta` | Página de inicio | [§5.2](#52-inicio-y-páginas) |
+| `home_min` | `number` (min) de 0 a 60 | 3 | Vuelta al inicio; 0 = nunca ([P24](#p24-las-claves-del-sistema)) | [§5.2](#52-inicio-y-páginas) |
+| `pin` | `secret`, de 4 a 8 cifras, `confirm`, `ack` | — | PIN de bloqueo. Solo se escribe, en el `box` de `sys`. El `ack` lleva el aviso del [§5.7](#57-bloqueo-con-pin) | [§5.7](#57-bloqueo-con-pin), [§9.7](#97-cómo-se-meten-los-secretos-el-sobre-sellado) |
+| `lock_min` | `number` (min) de 0 a 240 | 0 | Bloqueo tras ese tiempo sin uso; 0 = solo a mano | [§5.7](#57-bloqueo-con-pin) |
+| `lock_sched` | `bool` | no | Bloqueo por horario | [§5.7](#57-bloqueo-con-pin) |
+| `lock_from` / `lock_to` | `time` | 19:00 / 08:00 | El horario | [§5.7](#57-bloqueo-con-pin) |
+| `lock_show` | `select`: `idle`, `clock` | `idle` ([P18](#p18-con-la-pantalla-bloqueada-se-ven-las-fotos-o-solo-el-reloj)) | Qué se ve con la pantalla bloqueada ([P24](#p24-las-claves-del-sistema)) | [§5.7](#57-bloqueo-con-pin) |
+| `live_lock` | `bool` | sí | Líneas vivas con la pantalla bloqueada ([P24](#p24-las-claves-del-sistema)) | [§5.6](#56-reposo) |
+| `unlock_tg` | `bool`, `confirm` | no | `/unlock` desde Telegram. Encenderlo pide un toque ([P27](#p27-encender-desbloquear-desde-telegram-con-un-toque)) | [§5.7](#57-bloqueo-con-pin) |
+| `photos` | `select` de `system.photos` | `auto` | Qué plugin recibe las fotos que no llevan un comando en el pie: `auto` (el único plugin activo con el permiso `photos`, si hay exactamente uno), `none` o el `id` de un plugin ([P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)) | [§6.2](#62-telegram) |
+| `kb` | `select`: `es`, `es-mac`, `us` | `es` | Distribución del teclado del ordenador | [§7.10](#710-teclado-hid) |
+| `kb_speed` | `select`: `50`, `20`, `10` | `20` | Teclas por segundo ([P24](#p24-las-claves-del-sistema)) | [§7.10](#710-teclado-hid) |
+
+- **Claves pendientes.** `home_min`, `live_idle`, `live_lock`, `lock_show`, `ntp`, `kb_speed` y el valor `auto` de `theme` dependen de [P24](#p24-las-claves-del-sistema); `idle_by`, de [P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos). Las otras 17 claves están fijadas.
+- **`tz` va aparte de `loc`.** La ciudad dice dónde mirar el tiempo; la zona, qué hora pintar. Casi siempre coinciden, y la Mini App rellena las dos a la vez, pero así una placa puede enseñar el tiempo de Málaga con la hora de Canarias.
+- **Listas de opciones del sistema.** `system.pages` (los plugins activos con página), `system.photos` (los plugins con el permiso `photos`, más `auto` y `none`) y `system.idle` (los plugins con `surfaces.idle`, más `auto` y `clock`) las pone la propia Mini App a partir del estado; solo valen en este manifiesto. Por eso `auto`, `clock` y `none` no pueden ser el `id` de un plugin ([§3](#3-manifiesto)).
+- **Sin permisos.** El sistema no los necesita: `ntp` admite una IP de la red local sin el permiso `lan`.
+
+## 10. Almacenamiento
+
+### 10.1 NVS (20 KB): solo lo pequeño y crítico
+
+| Espacio | Claves | Estado |
+|---|---|---|
+| `tdcfg` | `ssid`, `pass`, `token`, `chat`, `dark`, `lang`, `appass` | **Sin cambios** |
+| `taskdesk` | `tasks`, `lastmsg` | **Sin cambios de formato.** Los escribe el almacén de la lista, que es del sistema |
+| `psys` (nuevo, menos de 512 B) | `dk` (32 B), `vk` (32 B), `pin` (sal de 16 B, hash de 32 B e iteraciones), `boots` (1 B) y `fatok` (1 B) | Sistema |
+
+- **El almacén de la lista es del sistema.** `model.h` y `model.cpp` se quedan en la raíz, con su cerrojo, su revisión y el formato de `taskdesk` con tabuladores, sin quinto campo: volver a la 1.1.0 sigue leyendo la lista. No es código de Pauta, por varios motivos: el sistema ya lo llama hoy (`setup()` llama a `tasksBegin()`; `settingsSetChatId()` y `settingsSetToken()` llaman a `tasksResetLastMsg()`), guarda `lastmsg`, que protege a todos los plugins ([§6.2](#62-telegram)), y el lint prohíbe `Preferences` en `src/plugins/**`. En la 1.1 será el servicio de tareas (`tasks.read` y `tasks.write`).
+  - El host llama a `tasksFlushIfDirty()` en cada vuelta de `loop()` y a `tasksFlushNow()` antes de cualquier reinicio, **esté Pauta activa, apagada, en cuarentena o fallida**.
+  - Gana una sola función, `tasksCommitLastMsg()`, que guarda solo `lastmsg` en el momento ([§6.2](#62-telegram)). El formato no cambia.
+  - Pauta usa la API de `model.h`, y es el único plugin al que el lint deja incluirlo. `legacy: {"nvs": "taskdesk"}` documenta esos datos en su manifiesto, pero no da ningún permiso. Los 4,2 KB fijos de la lista son del sistema, así que Pauta pide `static_kb: 1` sin exenciones.
+  - **Guardado de la lista.** Como hoy, 1,5 s después del último cambio, pero esperando a que acabe la animación en curso, y nunca más de 5 s desde el cambio. Es una excepción documentada a «escribir solo con la pantalla quieta» ([§10.2](#102-fat-interna-96-mb-el-almacén-por-defecto)): perder una tarea tachada en un apagón es peor que un tirón de 20-50 ms. La prueba de 72 horas cuenta estos guardados.
+- **Ningún plugin escribe en NVS.**
+- **Por qué tan poco.** La NVS tiene 5 páginas de 4 KB, y una queda siempre reservada. La calibración de la radio ya ocupa unos 1,9 KB. Además, la cadena `tasks` (hasta 3600 bytes) no se puede repartir entre páginas, y NVS escribe la copia nueva antes de borrar la vieja, así que cada guardado de la lista necesita una página con 3600 bytes libres. Por eso los secretos de los plugins, la clave del estado y las de los dispositivos van al cofre de la FAT.
+- **Prueba.** Con la lista llena y todas las claves de `psys` escritas, `nvs_get_stats()` tiene que dar al menos dos páginas de entradas libres.
+
+### 10.2 FAT interna (9,6 MB): el almacén por defecto
+
+```
+/sys/plugins.json     estados, orden, versiones, huellas de permisos, fallos      ≤ 4 KB
+/sys/system.json      ajustes del sistema: las claves del manifiesto del sistema   ≤ 4 KB
+/sys/devices.json     dispositivos emparejados (id, nombre, fechas; sin claves)    ≤ 1 KB
+/sys/vault.bin        cofre: secretos, clave del estado y claves de dispositivos   ≤ 8 KB
+/sys/faults.log       anillo de fallos; solo se escribe al fallar                  ≤ 32 KB
+/plugins/<id>/plugin.json  recetas instaladas que no vienen de serie           ≤ 16 KB
+/cache/catalog/       índice del catálogo, su firma y el último seq visto          ≤ 40 KB
+/cfg/<id>.json        ajustes sin secretos                                          ≤ 6 KB
+/state/<id>.json      estado                                                        ≤ 8 KB
+/state/<id>.sys.json  lo que el sistema guarda por él: copia de sus listas de opciones
+                      de la placa, marcas de borrado, alarmas que están dentro e
+                      índice de las fotos del bot (file_unique_id y file_id)        ≤ 12 KB
+/data/<id>/           archivos del plugin               su data_kb (≤ 4 MB); 8 MB entre todos
+/cache/weather.json   el último tiempo
+/cache/<id>/          caché del plugin                                              1 MB entre todos
+```
+
+- **Montaje.** `FFat.begin(true)`, que formatea si no puede montar, solo se usa la primera vez (marca `psys/fatok`). Después se monta sin formatear. Si falla, la pantalla dice «Almacén dañado» y ofrece formatear con un toque, en vez de borrarlo todo sin avisar. La lista, que vive en NVS, no se ve afectada.
+- **Escritura segura ante apagones.** Una placa de escritorio se desenchufa a menudo, y en FAT renombrar un archivo no es atómico (un apagón a mitad puede dejarlo a medias). Por eso `cfg`, `state`, `sys`, el cofre y las recetas instaladas se guardan en **dos copias**, `<nombre>.0` y `<nombre>.1`:
+  - cada una empieza con una línea `#pauta seq=<n> crc=<8 hex> len=<bytes>`, seguida del JSON;
+  - se escribe siempre sobre la copia más vieja;
+  - al leer, se toma la copia válida con el `seq` más alto.
+
+  Un apagón deja la versión vieja o la nueva, nunca una mezcla.
+- **Escrituras pocas.** El core no tiene activado `SPI_FLASH_AUTO_SUSPEND`, así que cada borrado de sector congela los dos núcleos unos 20-50 ms **(medir)**. La regla general es escribir en diferido, agrupado y solo con la pantalla quieta (2 s sin dedo, sin animaciones y sin acciones de teclado en cola ni teclas pulsadas, [§7.6](#76-almacenamiento-para-los-plugins)). El objetivo es escribir menos de 120 sectores por hora entre todos. Excepciones documentadas:
+  - **el almacén de la lista**: a los 1,5 s, esperando como mucho 5 s a que acabe una animación ([§10.1](#101-nvs-20-kb-solo-lo-pequeño-y-crítico)). Cuenta en los 120;
+  - **lo que llega de la Mini App y las ediciones de listas en la pantalla**: en menos de 10 s, sin esperar a la pantalla quieta, porque pasan pocas veces y el «Guardado» tiene que ser verdad ([§9.5](#95-la-vuelta-senddata)). Cuenta en los 120;
+  - **las fotos que manda el dueño**: las escribe la tarea de Telegram al bajarlas ([§6.2](#62-telegram)). No cuentan en los 120, pero tienen su propio tope en la FAT, 8 MB al día (una foto de 300 KB son unos 75 sectores). En la microSD no hay tope ni tirones, porque va por su propio bus. La ficha del Salvapantallas recomienda la tarjeta;
+  - **la OTA**, que escribe en la partición de la aplicación y no en la FAT ([§7.13](#713-ota-firmada)).
+- **Nombres largos.** El core guarda en la pila el nombre largo de cada archivo (`CONFIG_FATFS_LFN_STACK`), así que los archivos solo se tocan desde `loopTask`, `io` y `telegram`, que tienen pila de sobra.
+- **Antes de reiniciar.** `restartNow()` lo guarda todo antes, como hoy `tasksFlushNow()`.
+
+### 10.3 microSD (opcional)
+
+- Tiene su propio bus SPI: CS 1, MOSI 2, MISO 41 y SCK 42, sin compartir pines con la pantalla. Va a 20 MHz (el core pone 4 MHz por defecto; **medir** también 40). El core admite dos volúmenes FAT a la vez (`CONFIG_FATFS_VOLUME_COUNT=2`). La acceden la tarea `io` y, para las descargas, la de Telegram, con un cerrojo por volumen.
+- **Cuándo se monta.** La placa no detecta cuándo se mete la tarjeta. Mientras haya un plugin activo con `sd` y no haya tarjeta, el sistema intenta montarla cada 60 s, y también cuando un plugin pide `files(Vol::Sd)`. Un error de lectura cuenta como tarjeta sacada (`SdRemoved`). En `begin()` el plugin consulta `files().onSd()`; `SdMounted` solo llega por cambios posteriores.
+
+```
+/pauta/<id>/      datos del plugin (su sd_mb; 1 GB como mucho), con su caché reducida
+                  de fotos (cache/) y, en el Salvapantallas, el índice de la tarjeta
+/pauta/fotos/     fotos que el dueño copia desde el PC (el Salvapantallas solo las lee)
+/pauta/backup/    copias sin secretos (futuro)
+/pauta/inbox/     recetas para instalar sin red, «no verificadas» (F5, P23)
+```
+
+- En la tarjeta no va nada imprescindible ni secreto. Sin tarjeta, un plugin con `sd: "optional"` usa la FAT con su cuota, y uno con `"required"` queda «no disponible».
+- Borrar datos de la tarjeta por orden de Telegram o de la Mini App pide un toque en la pantalla ([§8.2](#82-reglas)). Pauta nunca borra nada de la carpeta compartida (`/pauta/fotos/`): es del dueño, que la llena desde el PC.
+
+## 11. Distribución y catálogo
+
+### 11.1 Qué hay en la v1
+
+- **En el firmware.** Los plugins nativos (Pauta y nicscom) y las recetas de serie (Pomodoro, Atajos, Semáforo y Salvapantallas), incrustadas como datos. Los binarios van en GitHub Releases, uno por variante: `v1`, `v1-hid` (con teclado USB) y `v2`, con nombres `pauta-<versión>-<variante>.bin`. Se instalan por USB (ESP Web Tools o `arduino-cli`) o, desde F2, por la OTA firmada ([§7.13](#713-ota-firmada)).
+- **Fuera del firmware.** Las recetas del catálogo firmado ([§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)), que se instalan desde la Mini App (F2, [P22](#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1)), y las recetas sin firmar de `/pauta/inbox/` en la microSD (F5, [P23](#p23-recetas-sin-firmar-en-la-v1)).
+- **Variante.** Una constante de compilación, `PAUTA_VARIANT`, que sale en «Acerca de», en `/status`, en `inf.var` de la URL y en la cabecera de la imagen. La OTA solo acepta su misma variante.
+- **Repositorio** `Ignacio-Aranda/pauta`:
+
+```
+firmware/pauta/src/pauta/            la API (plugin.h), el host, el host de recetas y los servicios
+firmware/pauta/src/plugins/<id>/     nativos: plugin.json, <id>.cpp, strings.h, README.md, README_en.md, captura
+firmware/pauta/src/recipes/<id>/     recetas de serie: plugin.json, README.md, README_en.md, captura
+firmware/pauta/src/plugins/gen/      lo generado por mkmanifests.py
+firmware/pauta/src/plugins/registry.cpp
+catalog/recipes/<id>/                recetas del catálogo que no vienen de serie
+miniapp/                             la Mini App
+schemas/                             los esquemas JSON publicados (manifest, recipe, system, url-state,
+                                     miniapp-message, catalog-index)
+examples/                            los seis plugins de referencia, el manifiesto del sistema y
+                                     ejemplos de los mensajes con la Mini App
+tools/mkmanifests.py, tools/pauta-sim/
+.github/workflows/check.yml          valida cada PR (esquemas, reglas, lint, capturas)
+.github/workflows/pages.yml          publica la Mini App y el catálogo firmado
+.github/workflows/release.yml        compila, firma y publica las variantes
+```
+
+- **GitHub Pages** sirve la Mini App, los `fw/<versión>/manifests.json` (se conservan los de versiones viejas), `fw/latest.json`, `tz.json` y el catálogo (`catalog/v1/`).
+- **Versiones.** Cada plugin sigue semver y declara `min_firmware` y `api`. El firmware declara `PAUTA_API_MAJOR`/`MINOR` y lo comprueba con `static_assert`. Un plugin que pide otro `api` mayor, o un nivel menor más nuevo que el del firmware, sale como «no disponible».
+- **Terceros.** Proponen un PR (una receta en `catalog/recipes/`, o un nativo en el firmware), que pasa la CI y una revisión humana con reglas publicadas. Quedan fuera las obras con derechos sin licencia, las herramientas de ataque WiFi o Bluetooth, los mineros, el seguimiento de personas y las claves de API compartidas. La ficha avisa: «estar en el catálogo no es una garantía».
+
+### 11.2 El catálogo firmado (en la v1, para las recetas)
+
+Como en la v1 ya hay recetas que descargar, la v1 trae también la cadena de confianza del catálogo.
+
+- **Índice.** `catalog/v1/index.json` ([`catalog-index.schema.json`](../schemas/catalog-index.schema.json)), de 32 KB como mucho, con una ficha por plugin: id, tipo, versión, `api`, `min_firmware`, nombre, resumen, icono, permisos, hosts, `bundled` (primer firmware que lo trae de serie) y, en las recetas, `file`, `bytes`, `sha256` y `perm` (la huella de permisos). Los nativos salen para la Mini App, pero no se descargan.
+- **Firma.** `index.json.sig` es la firma ECDSA P-256 de los bytes exactos del índice. El campo `key` dice cuál de las **dos claves públicas del catálogo** compiladas en el firmware (la actual y la siguiente, `cat1` y `cat2`) firma, para poder cambiar de clave. Son claves distintas de las de la OTA: robar una no sirve para la otra. Las privadas viven en un entorno de GitHub con aprobación obligatoria.
+- **Contra versiones viejas.** El índice lleva un contador `seq`; la placa guarda el último que vio y rechaza uno menor.
+- **Rutas que no cambian nunca:** `p/<id>/<versión>.json`, más una captura `p/<id>/<versión>.png` para la ficha.
+- **Instalar** (`install`, [§9.5](#95-la-vuelta-senddata)). La placa baja el índice y su firma (si no los tiene del día), comprueba la firma y `seq`, busca la receta, comprueba que el `sha` del envío coincide con el del índice, baja el archivo de GitHub Pages (un host que solo usa el sistema, con el hueco TLS de los plugins), comprueba su SHA-256, la valida ([§13.14](#1314-validación-en-tres-capas)), enseña en la pantalla nombre, versión, origen y permisos, y la guarda tras el toque ([§8.2](#82-reglas)). Cualquier fallo deja todo como estaba y lo dice.
+- **Actualizar.** La comprobación diaria opcional (entre las 03:00 y las 05:00, a un minuto al azar, con `ETag`, la misma de la OTA) avisa por el bot de las recetas instaladas que tienen versión nueva. Nunca se actualizan solas. Si cambian los permisos, los hosts o los temas MQTT, es un permiso nuevo y pide `accept` con su toque.
+- **Sin firmar** ([P23](#p23-recetas-sin-firmar-en-la-v1)). Una receta de `/pauta/inbox/` en la microSD se valida igual, sale marcada «no verificada» y pide su toque en la pantalla. Nunca se actualiza sola.
+- **Catálogos de terceros** (otra URL de índice con su clave pública) quedan reservados para la v2.
+
+## 12. API C++ de los módulos nativos
+
+### 12.1 La interfaz
+
+Va en `firmware/pauta/src/pauta/plugin.h`. **Todas las llamadas a un plugin se hacen en el núcleo 1**, una detrás de otra, así que dentro de un plugin no hacen falta cerrojos. Los punteros que llegan dentro de un evento solo valen mientras dura la llamada.
+
+```cpp
+// firmware/pauta/src/pauta/plugin.h — Pauta Plugin API 1.0 (extracto)
+#pragma once
+#include <Arduino.h>
+#include <ArduinoJson.h>
+
+#define PAUTA_API_MAJOR 1
+#define PAUTA_API_MINOR 0
+
+namespace pauta {
+
+enum class Err : int8_t { Ok, Denied, Quota, Busy, NoNet, NoMem, Invalid, NotReady };
+enum class Role : uint8_t { Paper, PaperSoft, RowPress, Rule, RuleSoft,
+                            Ink, InkDim, InkMute, Accent, OnAccent, Clay };
+enum class Font : uint8_t { Meta13, Body19, BodyMedium19, Title23, Clock36, Digits96 };
+enum class Align : uint8_t { TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight };
+enum class Level : uint8_t { Info, Warn, Critical };
+enum class Status : uint8_t { None, Ok, Warn, Fail, Unknown, Stale };   // §5.9
+enum class Icon : uint8_t {
+  None, Pauta, Check, Cross, Plus, Minus, Play, Pause, Next, Prev, Stop, Reset, Timer, Bell,
+  Alert, Lock, Gear, Clock, Search, Photo, Lights, Antenna,
+  Keyboard, Mic, MicOff, Volume, VolumeOff, Camera, CameraOff, Hangup, Hand, Monitor, Window,
+  Globe, Mail, Terminal, Folder, Copy, Paste, Screenshot,
+  Sun, Moon, Cloud, SunCloud, Rain, Snow, Storm, Fog };
+
+struct Rect  { int16_t x, y, w, h; };
+struct Touch {
+  enum Kind : uint8_t { Down, Move, Up, Tap, LongPress, Cancel } kind;
+  int16_t  x, y;          // en coordenadas de la página
+  int16_t  dx, dy;        // desde el evento anterior
+  uint32_t t;             // uptimeMs() del evento
+};
+
+struct Event {
+  enum Kind : uint8_t {
+    Timer, Text, Command, Settings, Action, FooterAction, AlertTap,
+    Http, MqttMsg, MqttState, FileOffer, File, FileRead, FileList, Image, HidState, HidDone,
+    PageShown, PageHidden, Insets, TimeSynced, Uplink, Lang, Theme,
+    IdleOn, IdleOff, Locked, Unlocked, SdMounted, SdRemoved, Restarting, Confirmed, Declined
+  } kind;
+  uint16_t tag;            // temporizador, petición, acción, clave o motivo
+  const char *a, *b;       // texto; comando y argumentos; tema; nombre y pie; claves cambiadas
+  const uint8_t *data;     // carga en PSRAM (HttpResult, MQTT, FileInfo, ImageInfo, JSON...)
+  uint32_t len;
+  int32_t n;               // código, bytes, retenido, estado, motivo, margen...
+};
+
+// Los topes son en caracteres (16, 28, 18, 22); los búferes, 2 bytes por carácter más uno (§5.9)
+struct Header { char title[33]; char subtitle[57]; float progress; Icon icon; };  // ya rellena
+struct Footer { char action[37] = ""; };                                         // vacío = sin botón
+struct Glance {
+  enum Kind : uint8_t { Normal, Live, Sticky } kind = Normal;
+  char text[45];  char value[17] = "";      // «TRABAJO» y «12:34»: se recorta el texto, nunca el valor
+  Icon icon = Icon::None;  Status status = Status::None;  bool priv = false;
+};
+struct Alert {                       // ctx.alert() lo copia todo
+  Level level = Level::Info;  const char *title = "";  const char *body = "";
+  const char *big = "";              // cifra corta para la capa crítica (§5.5)
+  Icon icon = Icon::Bell;  const uint32_t *pixels = nullptr;   // 8×8 en 0xRRGGBB; 0 = apagado
+  bool pixelsRound = true;
+  uint16_t key = 0;                  // de cada plugin
+  uint16_t sec = 0;                  // 0 = el de su nivel: 4 s, 10 min o 30 s
+  bool priv = false;  bool bandAfter = false;  bool open = false;  bool flash = false;
+};
+struct Notify { bool loud = false; uint16_t ttlS = 0; uint16_t key = 0; bool dropOverQuota = false; };
+struct ReplyToken { uint16_t id = 0; };
+struct IdleOverlay { bool clock = true, date = false, weather = false, live = true, top = false; };
+struct Weather { bool valid; float temp, max, min; uint8_t wmo; bool isDay; time_t at; char place[33]; };
+struct Uplink { bool wifi, internet; };
+
+class Canvas {             // recortado y trasladado a su superficie; sin acceso al LGFX_Sprite
+ public:
+  int16_t width() const;  int16_t height() const;
+  void clip(Rect r);  void unclip();                                  // siempre dentro de la superficie
+  void fill(Role r);  void rect(Rect r, Role fill);  void hrule(int x, int y, int w, Role r);
+  void line(int x0, int y0, int x1, int y1, float w, Role r);          // suavizada
+  void circle(int cx, int cy, float r, Role fill);                     // suavizado
+  void ring(int cx, int cy, float r, float thick, Role role);
+  void fade(Rect r, Role to, bool down);                               // difuminado con transparencia
+  int  text(const char *s, int x, int y, Font f, Role r, Align a = Align::TopLeft);  // da el ancho
+  int  caps(const char *s, int x, int y, Role r, Align a = Align::TopLeft);         // versalitas
+  int  textWidth(const char *s, Font f) const;
+  int  fit(const char *s, Font f, int maxW, char *out, size_t n) const;             // recorta con «…»
+  void icon(Icon i, int cx, int cy, int size, Role r);
+  void mark(int x, int y, int size, float progress, Role ink, Role accent);         // logotipo
+  void status(int cx, int cy, Status s, int size = 10);
+  void dot(int cx, int cy, Role r, bool hollow = false);
+  void row(int y, const char *label, const char *value, Role valueRole = Role::Ink,
+           Status lead = Status::None);
+  void button(Rect r, const char *label, Icon icon = Icon::None, bool pressed = false);
+  void checkbox(int cx, int cy, bool done, float anim);                // la casilla de la lista
+  void progress(Rect r, float v);
+  void spark(Rect r, const int16_t *v, int n, Role r2);
+  void bigNumber(int cx, int cy, const char *digits, const char *caption, Font f = Font::Digits96);
+  void pixels(const uint32_t *rgb, int cols, int rows, int x, int y, int cell, bool round);
+  void image(uint8_t slot, Rect src, int x, int y);
+};
+
+class Http; class Mqtt; class Files; class Keyboard; class Images; enum class Vol : uint8_t;
+
+class Context {            // la única puerta del plugin al sistema
+ public:
+  // Textos e idioma
+  const char *t(uint16_t id) const;  uint8_t lang() const;
+  size_t printable(const char *in, char *out, size_t n, Font f) const;
+  size_t ago(time_t when, char *out, size_t n) const;                  // «hace 20 min»
+  size_t formatDays(uint8_t mask, char *out, size_t n) const;          // «L-V»
+  uint16_t keyOf(const char *itemId) const;                            // clave de aviso estable
+  // Ajustes, estado y listas para la Mini App
+  JsonObjectConst config() const;
+  Err  setConfig(const char *key, JsonVariantConst v);                 // desde la pantalla
+  Err  listAdd(const char *key, JsonObjectConst item, char id[7]);
+  Err  listSet(const char *key, const char *id, JsonObjectConst item);
+  Err  listDel(const char *key, const char *id);
+  bool secretSet(const char *key) const;
+  JsonObject state();  void saveState();
+  Err  publishList(const char *name, JsonArrayConst items);            // options_from "runtime.x"
+  void setStatus(const char *why);                                     // motivo para la Mini App
+  // Pantalla
+  void redraw();  void animate(uint16_t ms);  bool visible() const;  int16_t bottomInset() const;
+  void keepAwake(bool on);  void holdPage(bool on);  uint32_t msSinceTouch() const;
+  void idleOverlay(const IdleOverlay &o);  void idleReady(bool ready);  void previewIdle();
+  uint8_t idleReason() const;  bool locked() const;
+  // Avisos y Telegram
+  void alert(const Alert &a);  void clearAlert(uint16_t key);
+  bool notify(const char *text, const Notify &o = Notify());  uint8_t notifyBudget() const;
+  void reply(const char *text);                       // Command, Text, File, FileOffer, Action, Settings
+  ReplyToken deferReply(uint16_t sec);  bool replyTo(ReplyToken t, const char *text);   // ≤ 300 s
+  Err  confirmScreen(const char *text, uint16_t *ticket);   // → Confirmed / Declined (§8.2)
+  Err  replyPhotos(const char *const *names, uint8_t n, const char *caption);
+  Err  acceptFile(const char *name);  void rejectFile(const char *why);   // dentro de FileOffer
+  const char *botName() const;                        // @usuario del bot, sin la arroba
+  // Tiempo y red
+  time_t now() const;  bool timeValid() const;  uint32_t uptimeMs() const;
+  uint64_t monoMs() const;  bool coldBoot() const;
+  const Weather &weather() const;  bool location(float &lat, float &lon) const;  Uplink uplink() const;
+  // Programador
+  uint16_t every(uint32_t ms);  uint16_t after(uint32_t ms);
+  uint16_t at(uint8_t hh, uint8_t mm, uint8_t days);  void cancel(uint16_t id);
+  // Servicios
+  Http &http();  Mqtt &mqtt();  Files &files(Vol v);  Files &files();  Keyboard &keyboard();
+  Images &images();
+  // Memoria y fallos
+  void *alloc(size_t n);  void release(void *p);                       // PSRAM con cuota
+  void fail(const char *why);
+};
+
+class Plugin {
+ public:
+  virtual ~Plugin() = default;
+  virtual Err  begin(Context &ctx) = 0;                     // ≤ 50 ms
+  virtual void end() {}
+  virtual Err  migrate(const char *fromVersion) { return Err::Ok; }
+  virtual void onEvent(const Event &e) {}                   // ≤ 10 ms
+  virtual void header(Header &h) {}
+  virtual void footer(Footer &f) {}
+  virtual bool glance(Glance &g) { return false; }
+  virtual void paintPage(Canvas &c, uint32_t nowMs) {}      // 480×208, ≤ 25 ms
+  virtual void onTouch(const Touch &t) {}                   // ≤ 10 ms
+  virtual void paintCritical(Canvas &c, const Alert &a) {}  // 480×276
+  virtual void paintIdle(Canvas &c, uint32_t nowMs) {}      // 480×320, ≤ 40 ms
+};
+
+struct Entry {
+  const char *manifest; size_t size; Plugin *(*make)(void *mem);
+  const char *const *const *strings;  uint16_t nStrings;   // una tabla por idioma (strings.h)
+};
+}  // namespace pauta
+
+// Crea el objeto dentro del fondo de PSRAM con un new de colocación.
+#define PAUTA_PLUGIN(ID, CLASS, STRINGS, NSTRINGS)                    \
+  extern const pauta::Entry PAUTA_ENTRY_##ID = {                      \
+    MANIFEST_##ID, sizeof(CLASS),                                     \
+    [](void *mem) -> pauta::Plugin * { return new (mem) CLASS(); },   \
+    STRINGS, NSTRINGS };
+```
+
+**Fotogramas de una página.**
+
+- `paintPage()` recibe la hora (`nowMs`, de `uptimeMs()`), y ahí se puede avanzar el estado de una animación.
+- El sistema la llama tras `ctx.redraw()` y, mientras dure una animación pedida con `ctx.animate(ms)`, a 30 fotogramas por segundo como mucho. `animate()` se puede volver a llamar para alargarla, como hace la inercia de la lista, cuya duración no se sabe de antemano.
+- El tic de cada segundo del reloj solo repinta la cabecera: la página se queda como estaba en el lienzo, sin volver a llamar a `paintPage()`, y el sistema vuelca solo las franjas que cambian **(medir)**.
+- `paintPage()` tiene que caber en 25 ms también en el peor caso: se mide con Pauta y 40 tareas de 96 bytes. Para eso el `ListView` puede guardar los textos ya recortados con `fit()`, que se tiran al cambiar de tema o de idioma.
+
+**Textos.** `ctx.t(id)` lee la tabla de frases del plugin en el idioma actual. Esa tabla viaja en su `Entry` (`strings`, una tabla por idioma comprobada con `static_assert` en su `strings.h`), y la registra la macro `PAUTA_PLUGIN`.
+
+### 12.2 Clases de servicio y `ListView`
+
+```cpp
+namespace pauta {
+
+// Recadero (§7.4)
+enum class NetErr : uint8_t { None, NoNet, NoMem, Quota, Busy, Denied,          // locales
+                              Dns, Refused, Timeout, TlsProto, CertName,       // remotos
+                              CertUntrusted, CertExpired, Redirects, TooBig };
+enum class Stage : uint8_t { Local, Dns, Connect, Tls, Http, Done };
+struct HttpReq {
+  const char *url = nullptr;  enum Method : uint8_t { Get } method = Get;
+  const char *headers[4] = {};  uint16_t timeoutMs = 15000;  uint16_t maxBytes = 4096;
+  const char *jsonFilter = nullptr;  bool probe = false;  bool follow = true;  bool conditional = true;
+  bool owner = false;               // la pide el dueño: el host lo decide y lo corrige (§7.4)
+};
+struct HttpResult {
+  int16_t code;  NetErr err;  Stage stage;
+  uint16_t msDns, msConnect, msTls, msFirstByte, msTotal;   // sin la espera en la cola
+  int16_t certDays;  time_t certNotAfter;  time_t retryAt;
+  char location[64];  const uint8_t *body;  uint32_t bodyLen;  bool truncated;
+};
+class Http { public:
+  Err request(const HttpReq &r, uint16_t *id);  uint8_t pending() const;
+  void cancel(uint16_t id);  uint16_t budget() const; };
+
+// MQTT (§7.5)
+struct MqttOpts { const char *hostKey, *portKey, *userKey, *passSecret; };
+enum class MqttWhy : uint8_t { Ok, NoNet, Dns, Timeout, Refused, BadAuth, NotAllowed, PublicIp };
+class Mqtt { public:
+  Err  open(const MqttOpts &o);  void close();  bool connected() const;
+  Err  subscribe(const char *filter);  Err unsubscribe(const char *filter);   // valen sin conexión
+  Err  publish(const char *topic, const void *payload, size_t len, bool retain = false); };
+
+// Archivos (§7.6); todo lo que toca la flash o la tarjeta contesta con un evento
+enum class Vol : uint8_t { Auto, Fat, Sd };
+struct FileInfo { uint16_t w, h; uint32_t bytes; char uniqueId[33]; uint8_t album, pos;
+                  bool hasFileId; uint8_t vol; time_t at; };
+class Files { public:
+  bool onSd() const;  uint32_t freeKb() const;
+  uint16_t read(const char *name, uint32_t maxBytes);        // → Event::FileRead
+  Err  write(const char *name, const void *data, size_t n);  // copia y escribe en diferido
+  uint16_t list(uint16_t from = 0);                          // → Event::FileList (de 32 en 32)
+  Err  remove(const char *name);
+  uint16_t listShared(uint16_t from = 0); };                 // carpeta sd_shared, solo lectura
+
+// Teclado (§7.10)
+enum class HidLink : uint8_t { None, Unplugged, Suspended, Ready };  // Unplugged: nunca conectado
+                                                                     // desde el arranque; Suspended:
+                                                                     // dormido o desenchufado (§7.10)
+enum class Media : uint8_t { Mute, VolUp, VolDown, PlayPause, Next, Prev, Stop, Sleep };
+class Keyboard { public:
+  HidLink link() const;  bool available() const;  uint8_t transport() const;   // None, Usb, Ble
+  Err combo(const char *combo, uint16_t *id = nullptr);      // "ctrl+shift+m"
+  Err media(Media m, uint16_t *id = nullptr);
+  Err type(const char *text, uint16_t *id = nullptr);
+  Err macro(JsonArrayConst steps, uint16_t *id = nullptr);   // la gramática del §7.10
+  Err hold(const char *combo);  void release(); };
+
+// Imágenes (§7.11)
+enum class Fit : uint8_t { Fill, Fit };
+enum class ImgSrc : uint8_t { Own, Shared };
+enum Slot : uint8_t { Full = 0, Thumb = 1 };
+struct ImageInfo { uint16_t w, h; Rect used; uint8_t orientation; };
+class Images { public:
+  Err decode(ImgSrc src, const char *name, Fit fit, uint8_t slot, Rect box, uint16_t *id); };
+
+// Lista con inercia (§5.9), con las constantes de ui.cpp por defecto
+class ListView { public:
+  using RowFn = void (*)(Canvas &c, int idx, Rect r, bool pressed, void *user);
+  void begin(Context &ctx, Rect viewport, int16_t rowH = 46);   // Pauta: {0, 4, 480, 204}
+  void setCount(int n);                    // conserva la posición si la lista cambia
+  void setBottomInset(int16_t px);         // lo pone solo con Event::Insets
+  void paint(Canvas &c, RowFn row, void *user);   // difuminado de 18 px y filete de desplazamiento
+  int  onTouch(const Touch &t);            // índice tocado con Tap, o −1
+  int  rowAt(int16_t y) const;  int pressed() const;
+  void reveal(int idx, uint16_t ms = 350); // easeOut; solo si nadie tocó en 5 s
+  bool moving() const;  bool settled(uint32_t graceMs = 250) const;
+  float scroll() const;  void scrollTo(int idx);
+  void invalidate();                       // tira los textos recortados (tema o idioma)
+};
+}  // namespace pauta
+```
+
+`ListView` lleva dentro todo lo que hoy hace `ui.cpp` con la lista: arrastre con la velocidad suavizada (0,7 de la anterior y 0,3 de la nueva) y un tope de 3 px/ms; frenado en el tiempo con τ = 130 ms, parándose por debajo de 0,02 px/ms; tope en los extremos; lanzamiento al soltar salvo que el dedo llevara más de 90 ms quieto; difuminado de 18 px en los bordes y filete de desplazamiento con los roles; revelado de una fila nueva en 350 ms con *easeOut*; y la regla de que, si la lista se movía sola o paró hace menos de 250 ms, un toque solo la para. Pide fotogramas con `ctx.animate()` mientras se mueve. El renglón de cada fila lo pinta el plugin con su función `row`.
+
+**Registro.** Es una tabla fija, sin autorregistro, para no depender del orden en que se construyen los objetos globales al arrancar:
+
+```cpp
+// firmware/pauta/src/plugins/registry.cpp
+#include "../pauta/plugin.h"
+extern const pauta::Entry PAUTA_ENTRY_pauta, PAUTA_ENTRY_nicscom;
+const pauta::Entry *const PAUTA_PLUGINS[] = {
+  &PAUTA_ENTRY_pauta, &PAUTA_ENTRY_nicscom,
+};
+// Generado por mkmanifests.py: las recetas de serie, con su plugin.json incrustado y
+// make = pauta::recipeHost (§12.6). Pomodoro, Atajos, Semáforo y Salvapantallas.
+#include "gen/recipes.h"   // const pauta::Entry PAUTA_RECIPES[] = { … };
+```
+
+Atajos, que es una receta, viaja siempre en el firmware: sin un transporte de teclado queda «no disponible: necesita el firmware con teclado (v1-hid)».
+
+### 12.3 Ejemplo completo: el Pomodoro
+
+> **Nota.** El Pomodoro que trae el firmware es la receta del [Anexo A.4](#a4-pomodoro-receta-f1). Este código es un ejemplo completo de la API nativa (pausa, fases, avisos, línea viva y reanudación tras un reinicio) y es, casi línea a línea, lo que hace por dentro el motor `timer` ([§13.10](#1310-motor-timer-temporizador-por-fases)). Por eso aquí pinta su propia capa crítica, cosa que la receta deja al sistema.
+
+```cpp
+// firmware/pauta/src/plugins/pomodoro/pomodoro.cpp
+#include "../../pauta/plugin.h"
+#include "../gen/manifests.h"
+#include "strings.h"   // enum S_POMO_*, POMO_STRINGS (es/en) con static_assert, como i18n.cpp.
+                       // S_POMO_PHASE + fase da PARADO, TRABAJO, DESCANSO, DESCANSO LARGO.
+using namespace pauta;
+
+static const Rect BTN_MAIN = {26, 112, 202, 46};     // por encima de la zona de la banda (y=162)
+static const Rect BTN_SKIP = {252, 112, 202, 46};
+static bool inside(const Rect &r, int x, int y) {
+  return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+}
+
+class Pomodoro : public Plugin {
+  enum Phase : uint8_t { Stopped, Work, Break, LongBreak };
+  Context *ctx = nullptr;
+  Phase    phase = Stopped;
+  bool     paused = false;          // en pausa, o «LISTO» esperando a que toques
+  bool     waitingClock = false;    // reanudar cuando haya hora de NTP
+  uint16_t clockWait = 0;          // tras un apagón, la hora se espera 2 min como mucho
+  uint8_t  round = 0;               // ronda de trabajo, de 1 a "rounds"
+  uint32_t endsAtMs = 0;            // con uptimeMs(): se resta siempre sin signo
+  uint32_t leftPausedS = 0;
+  uint32_t totalS = 0;              // duración de la fase, fijada al empezarla
+  uint16_t tick = 0, stopAsk = 0;
+  uint8_t  pressed = 0;             // 1 = botón principal, 2 = SALTAR
+  char     title[32];
+
+  uint32_t phaseS(Phase p) const {
+    static const char *const KEY[] = {"work", "work", "short", "long"};
+    return 60UL * (ctx->config()[KEY[p]] | 25);
+  }
+  uint32_t leftS() const {
+    if (phase == Stopped) return phaseS(Work);
+    if (paused) return leftPausedS;
+    int32_t ms = (int32_t)(endsAtMs - ctx->uptimeMs());
+    return ms > 0 ? ((uint32_t)ms + 999) / 1000 : 0;
+  }
+  void armTick() {                                    // al siguiente cambio de segundo
+    ctx->cancel(tick);
+    tick = 0;
+    if (phase == Stopped || paused) return;
+    uint32_t ms = (uint32_t)(endsAtMs - ctx->uptimeMs()) % 1000;
+    tick = ctx->after(ms + 5);
+  }
+  void save() {                                       // para reanudar tras un reinicio
+    JsonObject s = ctx->state();
+    s["ph"] = (uint8_t)phase;  s["rd"] = round;  s["pz"] = paused;
+    s["left"] = leftS();       s["tot"] = totalS;
+    s["ends"] = (phase != Stopped && !paused && ctx->timeValid())
+                    ? (int64_t)ctx->now() + leftS() : (int64_t)0;
+    s["mend"] = (phase != Stopped && !paused)            // vale tras un reinicio por software
+                    ? (int64_t)(ctx->monoMs() + leftS() * 1000ULL) : (int64_t)0;
+    ctx->saveState();                                 // diferido: lo escribe el sistema
+  }
+  void awake() {                                      // solo vale con su página a la vista
+    ctx->keepAwake(phase != Stopped && !paused && (ctx->config()["awake"] | true));
+  }
+  void stopWaiting() {                                // cualquier orden del dueño cancela la espera
+    if (!waitingClock) return;
+    waitingClock = false;  ctx->cancel(clockWait);  clockWait = 0;
+  }
+  void settle() { armTick(); awake(); save(); ctx->redraw(); }
+  void run(Phase p, uint32_t seconds, uint32_t total = 0) {
+    stopWaiting();
+    phase = p;  paused = false;
+    totalS = (p == Stopped) ? 0 : (total ? total : phaseS(p));
+    endsAtMs = ctx->uptimeMs() + seconds * 1000UL;
+    settle();
+  }
+  void pause(bool on) {
+    stopWaiting();
+    if (on) { leftPausedS = leftS(); paused = true; }
+    else    { paused = false; endsAtMs = ctx->uptimeMs() + leftPausedS * 1000UL; }
+    settle();
+  }
+  void next(bool natural) {                           // fin de fase (natural) o SALTAR
+    uint8_t rounds = ctx->config()["rounds"] | 4;
+    bool wasRunning = !paused;
+    Phase n;
+    if (phase == Work) n = (round >= rounds) ? LongBreak : Break;
+    else { n = Work; round = round % rounds + 1; }
+    if (natural) announce(n);
+    bool go = natural ? (ctx->config()["auto_next"] | true) : wasRunning;   // SALTAR conserva el modo
+    if (go) { run(n, phaseS(n)); return; }
+    stopWaiting();
+    phase = n;  totalS = phaseS(n);  leftPausedS = totalS;  paused = true;     // «LISTO»
+    settle();
+  }
+  void announce(Phase n) {
+    strlcpy(title, ctx->t(n == Work ? S_POMO_TO_WORK : S_POMO_TO_REST), sizeof title);
+    bool full = strcmp(ctx->config()["alert"] | "full", "full") == 0;
+    Alert a;                                          // el sistema lo copia
+    a.level = full ? Level::Critical : Level::Warn;
+    a.title = title;  a.icon = Icon::Timer;  a.key = 1;  a.open = true;
+    a.sec = full ? 30 : 0;  a.bandAfter = full;  a.flash = full;
+    ctx->clearAlert(1);
+    ctx->alert(a);
+    if (ctx->config()["tg"] | false) {                // solo cuando la fase acaba sola
+      Notify o;  o.loud = ctx->config()["tg_sound"] | true;  o.ttlS = 300;  o.key = 1;
+      ctx->notify(title, o);                          // con sonido exige alert.critical
+    }
+  }
+  void resumeFromClock() {                            // solo con la hora ya válida
+    stopWaiting();
+    JsonObjectConst s = ctx->state();
+    int64_t ends = s["ends"] | (int64_t)0;
+    if (ends == 0) { settle(); return; }              // se guardó sin hora: sigue en pausa
+    int64_t left = ends - (int64_t)ctx->now();
+    if (left <= 0) { round = 0; run(Stopped, 0); return; }               // acabó con la placa apagada
+    run(phase, (uint32_t)left, s["tot"] | (uint32_t)0);
+  }
+  void resumeFromMono(int64_t mend) {                 // reinicio por software: monoMs() sigue contando
+    int64_t left = (mend - (int64_t)ctx->monoMs()) / 1000;
+    if (left <= 0) { round = 0; run(Stopped, 0); return; }
+    run(phase, (uint32_t)left, totalS);
+  }
+
+ public:
+  Err begin(Context &c) override {
+    ctx = &c;
+    JsonObjectConst s = ctx->state();
+    phase  = (Phase)(s["ph"] | (uint8_t)Stopped);
+    round  = s["rd"] | (uint8_t)0;
+    totalS = s["tot"] | (uint32_t)0;
+    if (phase == Stopped) return Err::Ok;
+    paused = true;                                    // congelada hasta saber cuánto queda
+    leftPausedS = s["left"] | (uint32_t)0;
+    if (!(s["pz"] | false)) {                         // estaba contando (§13.10)
+      int64_t mend = s["mend"] | (int64_t)0;
+      if (ctx->timeValid() && (s["ends"] | (int64_t)0)) resumeFromClock();  // también tras un reinicio por software
+      else if (!ctx->coldBoot() && mend) resumeFromMono(mend);
+      else { waitingClock = true;  clockWait = ctx->after(120000); }     // apagón sin hora: 2 min como mucho
+    }
+    return Err::Ok;
+  }
+  void end() override {                               // apagado no puede avisar al acabar la fase:
+    if (phase != Stopped && !paused) { leftPausedS = leftS(); paused = true; }   // queda en pausa
+    stopWaiting();  save();                           // el sistema escribe el estado pendiente
+  }
+  void onEvent(const Event &e) override {
+    switch (e.kind) {
+      case Event::Timer:
+        if (e.tag == tick) {
+          tick = 0;
+          if (leftS() == 0) next(true);
+          else { armTick(); ctx->redraw(); }          // oculta, solo repinta su línea de estado
+        } else if (e.tag == stopAsk) { stopAsk = 0; ctx->redraw(); }
+        else if (e.tag == clockWait) { clockWait = 0; waitingClock = false; settle(); }   // sin hora: en pausa
+        break;
+      case Event::FooterAction:                       // PARAR, con un segundo toque en 3 s
+        if (stopAsk) { ctx->cancel(stopAsk); stopAsk = 0; round = 0; run(Stopped, 0); }
+        else { stopAsk = ctx->after(3000); ctx->redraw(); }
+        break;
+      case Event::TimeSynced:
+        if (waitingClock) resumeFromClock();
+        else if (phase != Stopped && !paused) save(); // ahora ya puede guardar «ends»
+        break;
+      case Event::Settings:                           // la fase en curso no cambia: totalS ya está
+        awake();  ctx->redraw();                      // fijado; las duraciones valen para la siguiente
+        break;
+      case Event::Restarting: save(); break;
+      default: break;
+    }
+  }
+  void header(Header &h) override {                   // el sistema ya puso título, icono, "" y −1
+    if (phase == Stopped) return;
+    uint8_t rounds = ctx->config()["rounds"] | 4;
+    uint16_t what = waitingClock ? S_POMO_NO_CLOCK                  // «ESPERANDO LA HORA»
+                  : !paused ? S_POMO_PHASE + phase
+                  : (leftPausedS == totalS ? S_POMO_READY : S_POMO_PAUSED);
+    snprintf(h.subtitle, sizeof h.subtitle, "%s · %u/%u", ctx->t(what), round, rounds);
+    if (totalS) h.progress = 1.0f - (float)leftS() / totalS;
+  }
+  void footer(Footer &f) override {
+    if (phase != Stopped)
+      strlcpy(f.action, ctx->t(stopAsk ? S_POMO_STOP_SURE : S_POMO_STOP), sizeof f.action);
+  }
+  bool glance(Glance &g) override {                   // «TRABAJO 12:34» en las demás páginas
+    if (phase == Stopped) return false;
+    uint32_t s = leftS();
+    strlcpy(g.text, ctx->t(paused ? S_POMO_PAUSED : S_POMO_PHASE + phase), sizeof g.text);
+    snprintf(g.value, sizeof g.value, "%02lu:%02lu", (unsigned long)(s / 60), (unsigned long)(s % 60));
+    g.icon = Icon::Timer;
+    g.kind = paused ? Glance::Normal : Glance::Live;  // la viva sale también en reposo
+    return true;
+  }
+  void paintPage(Canvas &c, uint32_t) override {
+    uint32_t s = leftS();
+    char mmss[8];
+    snprintf(mmss, sizeof mmss, "%02lu:%02lu", (unsigned long)(s / 60), (unsigned long)(s % 60));
+    bool idle = phase == Stopped || paused;
+    Role r = idle ? Role::InkDim : (phase == Work ? Role::Ink : Role::Accent);
+    c.text(mmss, c.width() / 2, 54, Font::Digits96, r, Align::MiddleCenter);
+    uint16_t lbl = phase == Stopped ? S_POMO_START : (paused ? S_POMO_RESUME : S_POMO_PAUSE);
+    c.button(BTN_MAIN, ctx->t(lbl), idle ? Icon::Play : Icon::Pause, pressed == 1);
+    if (phase != Stopped) c.button(BTN_SKIP, ctx->t(S_POMO_SKIP), Icon::Next, pressed == 2);
+  }
+  void paintCritical(Canvas &c, const Alert &a) override {   // «A DESCANSAR» y cuánto dura
+    c.text(a.title, c.width() / 2, 40, Font::Title23, Role::Ink, Align::TopCenter);
+    char mmss[8];
+    snprintf(mmss, sizeof mmss, "%02lu:%02lu", (unsigned long)(totalS / 60),
+             (unsigned long)(totalS % 60));
+    c.text(mmss, c.width() / 2, 170, Font::Digits96, Role::Accent, Align::MiddleCenter);
+  }
+  void onTouch(const Touch &t) override {
+    uint8_t hit = inside(BTN_MAIN, t.x, t.y) || t.y < 104 ? 1      // el número también vale
+                : (phase != Stopped && inside(BTN_SKIP, t.x, t.y)) ? 2 : 0;
+    switch (t.kind) {
+      case Touch::Down:   if (hit) { pressed = hit; ctx->redraw(); } break;
+      case Touch::Up:
+      case Touch::Cancel: if (pressed) { pressed = 0; ctx->redraw(); } break;
+      case Touch::Tap:
+        ctx->clearAlert(1);
+        if (hit == 1) {
+          if (phase == Stopped) { round = 1; run(Work, phaseS(Work)); }
+          else pause(!paused);                        // también arranca la fase «LISTO»
+        } else if (hit == 2) next(false);             // SALTAR: sin aviso ni Telegram
+        break;
+      default: break;
+    }
+  }
+};
+
+PAUTA_PLUGIN(pomodoro, Pomodoro, POMO_STRINGS, S_POMO_COUNT)
+```
+
+### 12.4 Fragmento: nicscom, con un secreto que nunca ve
+
+El programador de nicscom lo lleva el sistema, con `"schedule": [{"list": "autos", "time": "at", "days": "days", "enabled": "on"}]` en el manifiesto ([§6.4](#64-programador-de-eventos)).
+
+```cpp
+Err Nicscom::begin(Context &c) {
+  ctx = &c;                                          // user y pass son required: sin ellos,
+  MqttOpts o;                                        // el sistema no llega a llamar a begin()
+  o.hostKey = "server";  o.portKey = "port";  o.userKey = "user";  o.passSecret = "pass";
+  Err e = c.mqtt().open(o);                          // conecta la tarea mqtt; avisa con MqttState
+  if (e != Err::Ok) return e;
+  c.mqtt().subscribe("/topics");                     // valen antes de conectar, y el servicio
+  c.mqtt().subscribe("/+/config");                   // las repite en cada reconexión
+  c.mqtt().subscribe("/+/post");
+  loadChannels();                                    // de state(): la página no arranca vacía
+  return Err::Ok;
+}
+
+void Nicscom::onEvent(const Event &e) {
+  switch (e.kind) {
+    case Event::MqttMsg:
+      if (endsWith(e.a, "/post"))        onPost(e.a);        // capa crítica, o banda si es su eco
+      else if (endsWith(e.a, "/config")) keepDrawing(e);     // exige 64 × "#rrggbb"
+      else if (!strcmp(e.a, "/topics"))  setChannels(e);     // ^[A-Za-z0-9_-]{1,64}$, ≤ 60
+      break;
+    case Event::MqttState:                                   // «CONTRASEÑA INCORRECTA»…
+      ctx->setStatus(whyText((MqttWhy)e.tag));  ctx->redraw();
+      break;
+    case Event::Timer:
+      if (e.tag & 0x8000) post(channelOfItem(e.a), /*scheduled=*/true);   // una automatización
+      else retryScheduled(e.tag);                                         // reintento de 5 s
+      break;
+    case Event::Action:  reply = ctx->deferReply(10); post(argChannel(e), false); break;
+    case Event::Command: onCommand(e.b); break;              // /nics y /nics AGUA
+    default: break;
+  }
+}
+
+void Nicscom::post(const char *ch, bool scheduled) {
+  char topic[72];
+  snprintf(topic, sizeof topic, "/%s/post", ch);
+  Err e = ctx->mqtt().publish(topic, "1", 1);
+  // Publicar en "/topics" o en "/AGUA/config" daría Err::Denied: no están en mqtt.pub.
+  if (e == Err::Ok) markSent(ch);                    // su eco en 2 s será «AVISADO AGUA 12:03»
+  else if (scheduled) queueRetry(ch);                // cada 5 s durante 60 s; después, «no salió»
+  else logMissed(ch, e);                             // «AGUA no salió: sin conexión»
+}
+```
+
+### 12.5 Encaje en el código de hoy
+
+- **`pauta.ino`.**
+  - El orden de `setup()` cambia como dice [§4](#4-ciclo-de-vida), y `configTzTime()` usa la regla guardada.
+  - La WiFi deja de bloquear el arranque: `connectWifi()` pasa a ser `wifiStart()`, y lo que hoy hace `setup()` tras conectar (hora, Telegram) se hace en caliente al conectar. `portalRetry()` ya no reinicia cuando vuelve la red.
+  - `restartNow()` manda `Event::Restarting` y guarda todo antes de reiniciar, no solo la lista.
+  - En `v1-hid`, `setup()` llama a `hidUsbBegin()` (que pone la identidad USB y llama a `USB.begin()`) antes de `pluginsBegin()`, también en modo seguro ([§7.10](#710-teclado-hid)).
+  - `loop()` llama a `pluginsLoop()` y, como hoy, a `tasksFlushIfDirty()`, ahora como parte del sistema.
+- **`settings.*`.** `ssid`, `pass` y `token` pasan a `secrets.*`. `Settings` se queda con `chatId`, `dark`, `lang` y `apPass`. Las llamadas a `tasksResetLastMsg()` se quedan: son del sistema al sistema.
+- **`model.*`.** Es el almacén de la lista, del sistema ([§10.1](#101-nvs-20-kb-solo-lo-pequeño-y-crítico)). Conserva el cerrojo, la revisión y el formato de `taskdesk`, sin quinto campo, y gana `tasksCommitLastMsg()`. Volver a la 1.1.0 sigue leyendo la lista.
+- **`ui.cpp`** se parte en dos:
+  - `drawHeader()` y `drawFooter()` pasan a ser el marco del sistema, que se rellena con `Header`, `Footer` y `Glance`;
+  - `drawList()`, `drawTaskRow()` y `drawEmptyState()` se mudan a `src/plugins/pauta/`, pasados a roles y a los bloques nuevos de `Canvas` (`checkbox`, `circle`, `ring`, `line`, `fade`, `clip`, `mark`). El revelado y la inercia salen como `ListView` ([§12.2](#122-clases-de-servicio-y-listview)), para que los use cualquiera;
+  - `printable()`, `fit()` y `drawTracked()` pasan al host;
+  - `handleTouch()` gana el deslizamiento horizontal, `Cancel` y la retención de los `Move`;
+  - nacen los avisos, el reposo, el bloqueo, el menú del sistema, la pantalla de confirmación ([§8.2](#82-reglas)) y la pantalla del modo seguro. Un toque en la zona del logotipo abre el menú. La guarda de toque tardío ([§6.1](#61-táctil)) generaliza el `REVEAL_GRACE_MS` de hoy.
+- **`i18n.*`** se parte: las frases de la lista y del bot de la lista (`S_PENDING_*`, `S_BLANK_*`, `S_BOT_ADDED_*`, `S_SCREEN_*`, `S_CMD_*` de la lista, la ayuda…) pasan a `src/plugins/pauta/strings.h`, con el mismo `static_assert`. El sistema se queda la bienvenida, `TAKEN`, `TEXT_ONLY`, `UNKNOWN_CMD`, el portal, los fallos y el reset.
+- **`telegram.cpp`.**
+  - `processUpdate()`: el filtro de dueño y `web_app_data` van antes de `if (!text && !media) return;`; solo se vincula un chat privado; se descarta el texto del botón de ajustes; las fotos y documentos con receptor ya no reciben «solo texto» y se descargan ([§6.2](#62-telegram)); el texto libre va como evento a la app de serie; y se apunta en RTC el `update_id` en curso.
+  - `lastmsg` se guarda con `tasksCommitLastMsg()` antes de entregar a un plugin un comando o un envío de la Mini App.
+  - La rama final de `handleCommand()` pasa por `pluginsHandleCommand()` antes de `S_BOT_UNKNOWN_CMD`. `/list`, `/done`, `/undo`, `/del` y `/clear` se mudan, con el mismo código, a los comandos de Pauta. De paso se simplifica `handlePick()`: como la pantalla y Pauta corren ahora en el mismo núcleo, la lista no puede cambiar entre dos lecturas, y el bucle de reintentos por `tasksRevision()` sobra. `/help` se compone ([§6.2](#62-telegram)).
+  - `allowed_updates` sigue siendo `["message"]` en la v1. `callback_query` llegará en la 1.1.
+  - `sendMessage()` acepta `reply_markup`. Hay gestión del teclado y `deleteMessage`. `MENU` se genera, con el orden del [§6.2](#62-telegram).
+  - La cola `OutMsg` pasa a un anillo de PSRAM con mensajes de hasta 4096 bytes, y la tarea espera hasta 500 ms tras cada lote.
+  - El documento de `pollOnce()` usa `pauta::PsramAllocator`, y `getUpdates` pasa de `limit=5` a `limit=2` ([§7.12](#712-memoria)). La compresión, el cifrado y el ECDH se hacen en esta tarea ([§7.1](#71-tareas-y-núcleos)).
+  - Las descargas con `getFile` se hacen en esta misma tarea (mismo host y misma CA fijada) y se escriben a trozos en la FAT o la microSD.
+- **Archivos nuevos:** `src/pauta/` (`plugin.h`, `host.cpp`, `canvas.cpp`, `listview.cpp` y los servicios `svc_*.cpp`), `src/pauta/recipe/` (el host de recetas y sus motores, [§12.6](#126-el-host-de-recetas)), `src/recipes/<id>/plugin.json`, `secrets.*`, `storage.*`, `safemode.*`, `pairing.*`, `catalog.*` y `ota.*`.
+
+### 12.6 El host de recetas
+
+Una receta no tiene código, pero alguien tiene que ejecutarla: el **host de recetas**, un plugin nativo del sistema que vive en `firmware/pauta/src/pauta/recipe/` y que el lint trata como parte del host (no como un plugin de terceros).
+
+```cpp
+// firmware/pauta/src/pauta/recipe/recipe_host.h (esbozo)
+namespace pauta {
+class RecipeHost : public Plugin {     // uno por receta activa, en el fondo de PSRAM
+ public:
+  explicit RecipeHost(const char *json, size_t n);  // el plugin.json, incrustado o de /plugins/<id>/
+  Err  begin(Context &ctx) override;   // compila la receta (§13.17) y arranca sus motores
+  void end() override;                 // para los motores; el sistema ya cancela lo demás (§4)
+  void onEvent(const Event &e) override;       // reparte a los motores y a los manejadores de "on"
+  void header(Header &h) override;             // rellena "header" de la vista actual
+  void footer(Footer &f) override;
+  bool glance(Glance &g) override;
+  void paintPage(Canvas &c, uint32_t nowMs) override;  // pinta los bloques con las ayudas de Canvas
+  void onTouch(const Touch &t) override;       // localiza el bloque y ejecuta sus órdenes de toque
+  void paintIdle(Canvas &c, uint32_t nowMs) override;  // solo con "idle": delega en SlideshowEngine
+ private:
+  Program        prog;      // la receta compilada: textos troceados, condiciones, bloques colocados
+  TimerEngine   *timer = nullptr;      // cada motor, solo si la receta lo usa
+  MonitorEngine *monitor = nullptr;
+  PhotosEngine  *photos = nullptr;
+  SlideshowEngine *slideshow = nullptr;
+};
+Plugin *recipeHost(void *mem);         // el make() de las entradas de receta del registro
+}  // namespace pauta
+```
+
+- **Registro.** Las recetas de serie entran en el registro de [§12.2](#122-clases-de-servicio-y-listview) con su `plugin.json` incrustado (lo genera `mkmanifests.py`) y `make = recipeHost`. Las instaladas se añaden al arrancar, leyendo `/plugins/*/plugin.json`; si una tiene el mismo `id` que una de serie, gana la instalada.
+- **Una sola API.** El host de recetas solo usa `Context`: los permisos, cupos, tiempos y memoria de la receta se comprueban exactamente igual que en un nativo, y la atribución de fallos ([§4](#4-ciclo-de-vida)) apunta al `id` de la receta.
+- **Órdenes.** Cada orden es una llamada a `Context` o a un motor: `alert` → `ctx.alert()`, `notify` → `ctx.notify()`, `reply` → `ctx.reply()` o `ctx.replyTo()`, `hid.keys` → `ctx.keyboard().combo()` o `macro()`, `list.add` → `ctx.listAdd()`… El host lleva el origen de cada manejador (toque, pie, dueño o automático) y rechaza lo que no toca antes de llamar, aunque el servicio también lo comprobaría.
+- **Motores.** `TimerEngine`, `MonitorEngine`, `PhotosEngine` y `SlideshowEngine` son clases del host que usan los servicios de [§7](#7-servicios-del-sistema) (`after()`, `http()`, `files()`, `images()`…). `TimerEngine` es, casi línea a línea, el Pomodoro de [§12.3](#123-ejemplo-completo-el-pomodoro) con las fases y las rondas sacadas de la receta.
+- **Coste.** El host y los cuatro motores, unos 60-90 KB de flash **(medir)**; la receta compilada y el estado de sus motores, dentro del `psram_kb` de cada receta.
+
+## 13. Recetas declarativas (formato v1)
+
+Una **receta** es un plugin hecho solo de datos. No tiene código: elige y configura **motores** que el firmware ya trae, pinta su página con los **bloques** de libreta del sistema y reacciona a lo que pasa con **órdenes** de una lista cerrada. Así se escriben, sin una línea de C++, el Pomodoro, Atajos, el Semáforo y el Salvapantallas ([Anexo A](#anexo-a-los-seis-encajes-de-referencia)).
+
+El formato está descrito, campo a campo, en [`schemas/recipe.schema.json`](../schemas/recipe.schema.json) (JSON Schema 2020-12). Lo que sigue lo explica y añade las reglas que un esquema no puede expresar.
+
+### 13.1 Por qué así: lo que enseñan TRMNL, AWTRIX, LaMetric y Tidbyt
+
+| Producto | Cómo hace sus «apps» | Qué se copia | Qué no |
+|---|---|---|---|
+| **TRMNL** | Receta = dirección que sondear + campos que rellena el usuario + plantilla Liquid. Se pinta en su servidor | Los campos tipados con su formulario solo (ya son los de [§9.1](#91-tipos-de-campo)); las plantillas con huecos y filtros cerrados; «instalar» frente a «copiar» | El HTML y el servidor que pinta: aquí pinta la placa con bloques fijos |
+| **AWTRIX** | Apps y avisos en JSON: texto, icono, color, barra de progreso, duración y `lifetime`, que marca el dato viejo | La vida útil del dato (`stale`: en `InkMute` con «hace 20 min»); los avisos con prioridad y duración; un juego cerrado de iconos | Escribir en la flash en cada refresco |
+| **LaMetric** | Apps «indicador» que sondean una URL y pintan fotogramas `{text, icon}`; avisos `info`, `warning` y `critical` | Los tres niveles de aviso y que solo el crítico despierta la pantalla | — |
+| **Tidbyt** | Apps en Starlark (un lenguaje) que corrían en su servidor | Nada del lenguaje: cuando Tidbyt cerró, las apps se quedaron sin donde correr. Aquí todo corre en la placa | El código en las apps |
+
+De ahí salen las cuatro ideas del formato:
+
+1. **Motores con estado en vez de lógica en la receta.** Lo que en otros sitios exigiría un lenguaje (contar fases y rondas, decidir cuándo una web está caída, elegir la siguiente foto, soltar las teclas pulsadas) lo hace un motor nativo, probado una vez. La receta solo le da los números y los nombres. Cuando haga falta algo nuevo, se añade un motor en un nivel 1.x de la API, no un lenguaje.
+2. **Bloques cerrados.** La página se compone de bloques de libreta (cifra grande, botones, rejilla, lista, renglones, texto, imagen, barra, minigráfica) con los roles de color del sistema. La estética de papel no depende de quien escribe la receta.
+3. **Plantillas mínimas.** Huecos `{{ruta}}`, unos pocos filtros (`mmss`, `ago`, `num`…) y **casos** («si pasa esto, este texto; si no, este otro»). Nada de bucles, salvo una lista de renglones en los mensajes del bot.
+4. **Todo con límites y validado antes de correr.** Cada lista y cada texto tiene tope; la receta se valida en la CI, otra vez en la placa al instalarla, y cada orden comprueba su permiso al ejecutarse.
+
+### 13.2 Dónde va y qué lleva
+
+Una receta es un `plugin.json` normal ([§3](#3-manifiesto)) con `"kind": "recipe"` y una clave más, `recipe`. Todo va en un solo archivo, así que se firma, se descarga y se instala de una vez. Mide **16 KB como mucho** en JSON compacto (las de referencia, entre 6 y 11 KB).
+
+Del manifiesto, la receta usa lo mismo que un nativo: permisos, ajustes (que pinta la Mini App), comandos del bot, acciones, listas de la placa (`runtime`), memoria y almacenamiento. Tres diferencias:
+
+- `memory.static_kb` vale 0: una receta no tiene variables fijas en la RAM interna;
+- `surfaces.critical` vale `false`: sus avisos críticos los pinta el sistema ([§5.5](#55-avisos-y-capas)), con su cifra grande si la pide;
+- no puede ser `builtin` ni llevar `legacy`.
+
+La clave `recipe` lleva:
+
+| Clave | Oblig. | Qué es |
+|---|---|---|
+| `format` | sí | `1` |
+| `engines` | no | Los motores que usa, cada uno como mucho una vez: `timer`, `monitor`, `photos`, `slideshow` ([§13.10-13.12](#1310-motor-timer-temporizador-por-fases)) |
+| `vars` | no | Hasta 8 variables pequeñas ([§13.9](#139-variables-y-tablas)) |
+| `tables` | no | Hasta 4 tablas de datos fijos ([§13.9](#139-variables-y-tablas)) |
+| `header` | no | Subtítulo y barra de progreso de la cabecera ([§13.6](#136-cabecera-pie-línea-de-estado-y-pantalla-encendida)) |
+| `footer` | no | El botón de acción del pie ([§13.6](#136-cabecera-pie-línea-de-estado-y-pantalla-encendida)) |
+| `glance` | no | La línea de estado, o hasta 3 alternativas ([§13.6](#136-cabecera-pie-línea-de-estado-y-pantalla-encendida)) |
+| `idle` | no | `{"from": "slideshow"}`: es proveedor de reposo ([§13.12](#1312-motores-photos-y-slideshow-fotos-y-reposo)) |
+| `keep_awake` | no | Condición con la que su página no deja entrar el reposo ([§13.6](#136-cabecera-pie-línea-de-estado-y-pantalla-encendida)) |
+| `views` | si tiene página | De 1 a 3 vistas, cada una con sus bloques ([§13.5](#135-la-página-vistas-y-bloques)) |
+| `alarms` | no | Hasta 8 alarmas ([§13.8](#138-alarmas-avisos-con-histéresis)) |
+| `on` | no | Manejadores: qué órdenes se ejecutan con cada evento ([§13.7](#137-eventos-y-órdenes)) |
+
+Las claves que empiezan por `x_` son experimentos y el firmware las ignora, como en el manifiesto.
+
+### 13.3 Valores: rutas, plantillas y filtros
+
+**Rutas.** Una receta lee valores por su ruta, con puntos. No hay ninguna ruta que lleve a un secreto, al token, al WiFi, a la lista de tareas ni a otro plugin.
+
+| Ruta | Qué da | Dónde vale |
+|---|---|---|
+| `cfg.<clave>` | Un ajuste del plugin. Una lista se recorre como colección (`cfg.sites`) | Siempre. Un secreto no se puede leer |
+| `item.<subcampo>` | El elemento que se está pintando o tratando | Dentro de una colección: los renglones de `list`, las casillas de `grid`, las alarmas con `each` y las líneas de un mensaje con `each` |
+| `sel.<subcampo>` | El elemento con que se abrió la vista | En una vista abierta con `{"do": "view", "item": "{{item.id}}"}` |
+| `ev.<dato>` | Los datos del evento | En su manejador (tabla de eventos, [§13.7](#137-eventos-y-órdenes)) |
+| `var.<nombre>` | Una variable de la receta | Siempre |
+| `sys.lang`, `sys.now`, `sys.time_ok`, `sys.online`, `sys.wifi`, `sys.locked`, `sys.idling`, `sys.visible` | Idioma (`es`/`en`), hora Unix, si hay hora de NTP, si hay Internet ([§6.5](#65-eventos-del-sistema)), si hay WiFi, si la pantalla está bloqueada, si está en reposo (no confundir con la clave `idle` del manifiesto del sistema, que son minutos) y si su página se ve | Siempre |
+| `timer.*`, `monitor.*`, `photos.*`, `slideshow.*` | Las salidas de cada motor ([§13.10-13.12](#1310-motor-timer-temporizador-por-fases)) | Si la receta usa ese motor |
+| `hid.link` | `none`, `unplugged`, `suspended` o `ready` ([§7.10](#710-teclado-hid)) | Con el permiso `hid` |
+
+**Plantillas.** Cualquier texto de una receta puede llevar huecos: `"{{timer.label}} · {{timer.round}}/{{timer.rounds}}"`. Cada hueco es una ruta con hasta 3 filtros: `{{timer.left|mmss}}`. Una plantilla mide 200 caracteres como mucho y no puede llevar llaves sueltas. Si un valor es **exactamente un hueco sin filtros** (`"{{cfg.rounds}}"`), conserva su tipo (número, sí/no, lista); en cualquier otro caso el resultado es texto. Un hueco cuyo valor no existe se pinta vacío.
+
+**Texto bilingüe.** Un texto puede ser una cadena (igual en los dos idiomas) o `{"es": …, "en": …}`; cada idioma es su propia plantilla.
+
+**Filtros** (lista cerrada):
+
+| Filtro | Hace | Ejemplo |
+|---|---|---|
+| `mmss` | Segundos a «MM:SS» («H:MM:SS» desde una hora) | 1500 → «25:00» |
+| `time` | Hora Unix a la hora local | «12:03» |
+| `date` | Hora Unix a la fecha corta | «14 oct» |
+| `ago` | Hora Unix a «hace…» | «hace 20 min» / «20 min ago» |
+| `days` | Máscara de días a texto, como `ctx.formatDays()` | 31 → «L-V» |
+| `num:N` | Número con N decimales, con coma en español | 17.5 → «17,5» |
+| `int` | Número entero | 3.0 → «3» |
+| `pct` | De 0 a 1 a porcentaje | 0.75 → «75 %» |
+| `upper` / `lower` | Mayúsculas o minúsculas | |
+| `trunc:N` | Corta a N caracteres con «…» | |
+| `default:texto` | Si está vacío, ese texto | |
+| `map:tabla` | Busca el valor en una tabla de textos de la receta | `{{ev.next\|map:next_title}}` |
+| `status_emoji` | `ok` 🟢, `warn` 🟡, `fail` 🔴, el resto ⚪. **Solo en mensajes del bot** | |
+| `len` | Cuántos elementos tiene una lista | |
+
+**Duraciones.** Un número o un hueco seguido de `s`, `m` o `h`: `"25m"`, `"{{cfg.work}}m"`, `"{{cfg.every_s}}s"`. Así una receta convierte minutos en segundos sin aritmética.
+
+**Valores con forma fija.** Los tonos de texto son `ink`, `dim`, `mute`, `accent` y `clay` (los roles `Ink`, `InkDim`, `InkMute`, `Accent` y `Clay` de [§5.9](#59-guía-visual)); los estados con forma, `ok`, `warn`, `fail`, `unknown`, `stale` y `none`; los iconos, los del juego del sistema. En esos sitios vale el nombre, un hueco que lo dé o unos casos.
+
+### 13.4 Condiciones y casos
+
+**Condición.** Una lista de hasta 4 comparaciones que tienen que cumplirse todas. Cada comparación es `[ruta, operador, valor]`:
+
+| Operador | Se cumple si |
+|---|---|
+| `eq` / `ne` | Es igual / distinto |
+| `lt` `le` `gt` `ge` | Menor, menor o igual, mayor, mayor o igual |
+| `in` / `nin` | Está / no está en una lista: `["item.kind", "in", ["combo", "macro"]]` |
+| `set` / `unset` | Tiene valor / no lo tiene (sin tercer elemento): `["ev.n", "set"]` |
+
+El valor puede ser un literal o un hueco (`["var.pg", "gt", "{{cfg.pages}}"]`). No hay «O»: para eso están `in` y los casos.
+
+**Casos.** Donde va un texto, un tono, un icono, un estado o un valor, puede ir una lista de hasta 6 alternativas. Gana la primera cuya condición se cumple, y la última va sin condición:
+
+```json
+"subtitle": [
+  {"if": [["timer.state", "eq", "stopped"]], "v": ""},
+  {"if": [["timer.state", "eq", "running"]], "v": "{{timer.label}} · {{timer.round}}/{{timer.rounds}}"},
+  {"v": {"es": "EN PAUSA", "en": "PAUSED"}}
+]
+```
+
+### 13.5 La página: vistas y bloques
+
+**Vistas.** La página tiene de 1 a 3 vistas; la primera es la de entrada. La orden `view` cambia de vista y, con `item`, la abre sobre un elemento (el Semáforo abre el detalle de una web). Cada vista puede cambiar la cabecera y el pie. Al ocultarse la página, la vista no cambia; la vuelta al inicio ([§5.2](#52-inicio-y-páginas)) sí vuelve a la primera.
+
+**Bloques.** Cada vista tiene hasta 8 bloques que se apilan de arriba abajo en los 480×208 de la página, con el contenido entre los márgenes de 26 px. Dos bloques seguidos con `"w": "left"` y `"w": "right"` comparten fila (202 px cada uno). Cada bloque admite `h` (alto en píxeles), `w` (`full`, `left` o `right`) y `show` (una condición: si no se cumple, el bloque no se pinta, pero su sitio se reserva igual, para que nada salte).
+
+| Bloque | Qué pinta | Claves | Alto por defecto |
+|---|---|---|---|
+| `big` | Una cifra grande, con un pie en versalitas | `text`, `font` (`digits96`, `clock36` o `title23`), `tone`, `caption`, `tap`, `long` | 104 |
+| `buttons` | De 1 a 3 botones de filete en una fila | `items`: cada uno con `label`, `icon`, `show`, `tap`, `down`, `up`, `long`, `confirm: "twice"`, `confirm_label` | 46 |
+| `grid` | Una rejilla de botones sacada de una lista, por páginas | `items`, `rows`, `cols`, `pages`, `page`, `page_of`, `slot_of`, `label`, `icon`, `dim`, `tap`, `down`, `up`, `long` | 208 |
+| `list` | Renglones de 46 px con la inercia del `ListView` | `items`, `row` (`lead`, `label`, `value`, `tone`), `empty`, `tap`, `long`, `confirm: "twice"` y `confirm_label` (para `long`) | 208 |
+| `rows` | De 1 a 4 renglones fijos «etiqueta · valor» | `items`: cada uno con `label`, `value`, `lead`, `tone`, `show` | 46 por renglón |
+| `text` | Hasta 4 líneas de texto | `text`, `font` (`meta13`, `body19`, `body_medium19`, `title23`), `tone`, `align`, `lines` | 46 |
+| `image` | La miniatura de una foto (hueco `Thumb`, [§7.11](#711-imágenes)) | `src` (`slideshow.current` o `photos.newest`), `fit`, `empty`, `tap`, `long`, `confirm: "twice"` y `confirm_label` (para `long`) | 138 |
+| `progress` | Una barra de filete | `value` (de 0 a 1), `tone` | 24 |
+| `spark` | Una minigráfica de filetes | `values` (una ruta a una lista de números), `tone` | 46 |
+| `gap` | Aire | `h` | — |
+
+**Reglas de la página** (las comprueba `mkmanifests.py`, [§13.14](#1314-validación-en-tres-capas)):
+
+- la suma de altos de cada vista cabe en 208 px, contando todos los bloques aunque tengan `show`;
+- nada que se toque acaba por debajo de y=162, donde aparece la banda de aviso ([§5.5](#55-avisos-y-capas)). `list` y `grid` son la excepción porque se recolocan solos: la lista añade el margen inferior y la rejilla encoge sus filas a 162 px;
+- todo lo que se toca mide al menos 44×44 px: un botón de `buttons` mide 46 de alto y al menos 60 de ancho; una rejilla tiene 3 filas y 5 columnas como mucho (54 px de alto con la banda). La zona de toque de cada casilla es su paso entero, huecos incluidos; con banda, la etiqueta pasa a una línea y, si aun así no cabe, se quita el icono;
+- con `confirm: "twice"` (en `buttons`, `image`, `list` y el pie), la primera vez solo cambia el texto a `confirm_label` durante 3 s y la segunda ejecuta las órdenes; en `image` y `list` vale para `long`;
+- el texto fijo de los bloques está dentro de `CHARS`, y el de `big` con `digits96`, dentro del juego de `Digits96`.
+
+**Qué hace el sistema por cada bloque.** Pinta con los roles del tema, recorta con «…», ilumina en `RowPress` lo pulsado y apaga el resaltado con `Cancel`, tiñe 150 ms la casilla de la rejilla cuando llega el resultado del teclado (`Accent` si la orden salió bien, `Clay` si se descartó o se cortó), desplaza la lista con inercia, pinta los estados con forma ([§5.9](#59-guía-visual)) y, en un dato viejo (`stale`), usa `InkMute`. La receta no decide colores ni coordenadas.
+
+### 13.6 Cabecera, pie, línea de estado y pantalla encendida
+
+- **`header`**: `subtitle` (28 caracteres como mucho) y `progress` (de 0 a 1, o −1 sin barra). El título y el icono son los del manifiesto.
+- **`footer`**: `label` (18 caracteres; vacío = sin botón) y `do` (las órdenes del toque). Con `"confirm": "twice"`, el primer toque cambia la etiqueta a `confirm_label` («¿PARAR?») durante 3 s y solo el segundo ejecuta las órdenes.
+- **`glance`**: la línea de estado ([§5.4](#54-pie-y-línea-de-estado-los-pinta-el-sistema)), con `text` y, si quiere, `value` (22 caracteres entre los dos; el sistema recorta el texto y nunca el valor, que mide 12 como mucho), `icon`, `kind` (`live`, `sticky` o `normal`), `status` y `priv`, y una condición `show`. Puede ser una lista de hasta 3: sale la primera cuyo `show` se cumple; si no se cumple ninguna, no hay línea. Con `live`, el sistema la vuelve a pintar cada segundo mientras se ve.
+- **`keep_awake`**: una condición. Mientras se cumple y su página está a la vista, es `ctx.keepAwake(true)` ([§5.2](#52-inicio-y-páginas)): ni reposo por inactividad ni vuelta al inicio.
+
+### 13.7 Eventos y órdenes
+
+**Manejadores.** En `on`, cada evento tiene una lista de hasta 8 órdenes. Además, los bloques tienen los suyos (`tap`, `down`, `up`, `long`) y el pie, el suyo (`do`). Cada orden puede llevar una condición `if`: si no se cumple, se salta.
+
+| Evento | Cuándo llega | `ev.*` |
+|---|---|---|
+| `start` | Al activarse la receta | — |
+| `settings` | Tras guardar cambios de la Mini App | `ev.keys`: las claves cambiadas, como `Event::Settings` ([§6.3](#63-mini-app)) |
+| `shown` / `hidden` | Su página pasa a verse o deja de verse | — |
+| `uplink` | Cambia la conexión | `ev.online` |
+| `schedule` | Salta un elemento de la programación declarativa del manifiesto ([§6.4](#64-programador-de-eventos)) | `ev.n` (qué programación) y `ev.item.*` |
+| `command.<cmd>` | Un comando del bot declarado en `commands` | `ev.args` (los argumentos en minúsculas), `ev.w1` y `ev.w2` (la primera y la segunda palabra), `ev.n` (el primer número entero, si lo hay) |
+| `action.<id>` | Una acción de la Mini App declarada en `actions` | `ev.args.<clave>` |
+| `timer.started` / `timer.phase_end` / `timer.skipped` / `timer.stopped` | Motor `timer` ([§13.10](#1310-motor-timer-temporizador-por-fases)) | `ev.phase`, `ev.next`, `ev.next_label`, `ev.next_total`, `ev.round` |
+| `monitor.change` | Un objetivo cambia de estado | `ev.item.*`, `ev.from`, `ev.to` |
+| `monitor.round_end` | Termina una vuelta de comprobaciones | `ev.changed`, `ev.down` |
+| `monitor.cert_due` | El aviso diario de certificados, si hay alguno | `ev.count`, `ev.names`, `ev.items` (colección con `name` y `cert_days`) |
+| `photos.added` / `photos.removed` | Llegan o se borran fotos (una vez por álbum) | `ev.count`, `ev.total` |
+| `hid.link` | Cambia el enlace del teclado | `ev.link` |
+
+Cada comando y cada acción del manifiesto tiene su manejador, y no hay manejadores de comandos ni acciones sin declarar.
+
+**De dónde viene cada manejador.** El sistema sabe siempre quién ha disparado unas órdenes, y eso decide qué pueden hacer:
+
+- **un toque** (los manejadores de los bloques de su página): lo único que puede teclear ([§13.13](#1313-teclado-órdenes-hid-y-bloque-grid)) y escribir campos `confirm` sin más pantallas;
+- **el pie**: un toque también, pero sin teclado ([§5.4](#54-pie-y-línea-de-estado-los-pinta-el-sistema));
+- **el dueño** (`command.*` y `action.*`): puede contestar con `reply`; una acción con `confirm: "screen"` ya trae su toque ([§8.2](#82-reglas));
+- **lo automático** (motores, `schedule`, `settings`, `uplink`…): ni teclea ni contesta.
+
+**Órdenes** (lista cerrada):
+
+| Orden | Hace | Parámetros | Necesita |
+|---|---|---|---|
+| `alert` | Un aviso en la pantalla ([§5.5](#55-avisos-y-capas)) | `level` (`info`, `warn`, `critical`), `title` (40), `body` (120), `big` (cifra corta, solo `critical`), `icon`, `key`, `sec`, `priv`, `band_after`, `open`, `flash` | `alert.critical` para `critical` |
+| `alert.clear` | Quita un aviso suyo | `key` | — |
+| `notify` | Un mensaje por Telegram ([§7.8](#78-avisos-y-notificaciones)), con cupo | `text`, o `each` + `line` (+ `head`, `empty`, `max_lines`); `loud`, `ttl_s`, `key` | `notify`; `loud` exige `alert.critical` |
+| `reply` | Contesta al comando o a la acción que se atiende | Como `notify`, sin `loud` | Solo en `command.*`, `action.*` y `monitor.round_end` |
+| `view` | Cambia de vista | `id`, `item` | — |
+| `var.set` / `var.add` / `var.toggle` | Cambia una variable | `name`, `value`; `by`, `min`, `max`, `wrap` | — |
+| `list.add` | Añade elementos de una tabla a una lista de ajustes | `list`, `table`, `row`, `or_row`, `place: "grid"` | Un toque o una acción con `confirm: "screen"` si la lista tiene campos `confirm` |
+| `idle.preview` | Prueba el reposo con esta receta | — | `idle` |
+| `timer.start` / `toggle` / `pause` / `resume` / `skip` / `stop` | Manejan el temporizador | — | Motor `timer` |
+| `hid.keys` / `hid.media` / `hid.text` / `hid.hold` | Teclean en el ordenador ([§13.13](#1313-teclado-órdenes-hid-y-bloque-grid)) | `keys`; `key`; `text`, `enter`; `keys` | `hid`; las tres primeras solo en `tap` y `long`, y `hid.hold` solo en `down` |
+| `monitor.run` | Lanza una vuelta ya. Si ya hay una en marcha, se suma a ella; sin conexión, contesta al momento «Sin conexión: no puedo comprobar ahora» | `reply_after` | Motor `monitor` |
+| `photos.delete` / `photos.send` / `photos.delete_current` | Borran fotos, las reenvían al chat o borran la que se ve | `ids` o `number`; `ids`; — | Motor `photos`; `photos.delete` pide su toque en la pantalla ([P26](#p26-borrar-fotos-siempre-con-un-toque)); `photos.send` solo en un comando o una acción (contesta con las fotos); `photos.delete_current` solo desde un toque |
+
+**Claves de aviso.** `key` es un texto («phase», «cert» o `{{item.id}}`); el sistema lo convierte en la clave de 16 bits de ese plugin ([§5.5](#55-avisos-y-capas)), así que dos recetas no chocan.
+
+**Mensajes con renglones.** `notify` y `reply` aceptan `each` (una colección), `line` (la plantilla de cada renglón, con `item`), `head`, `empty` (si la colección está vacía) y `max_lines` (32 como mucho). Es el único bucle del formato, y solo produce texto para el bot.
+
+**Respuesta diferida.** `monitor.run` con `reply_after` reserva una respuesta ([§7.8](#78-avisos-y-notificaciones), `deferReply`). Las órdenes `reply` del manejador `monitor.round_end` contestan a esa reserva; si no había ninguna, no hacen nada. La reserva dura 300 s; si la vuelta no ha acabado a los 290 s, el sistema contesta con lo que haya («8 de 12 comprobadas; el resto, en la próxima vuelta»). La vuelta que lanza el dueño es suya entera: sus peticiones llevan `owner` aunque entren en la cola más tarde ([§7.4](#74-red-httptls-con-cola-el-recadero)).
+
+**Encadenado.** Una orden puede provocar un evento (`timer.skip` provoca `timer.skipped`). Ese evento se atiende cuando terminan las órdenes en curso, nunca dentro, y una cadena que nace de un mismo estímulo tiene como mucho 4 eslabones; el quinto se descarta y cuenta como fallo leve.
+
+### 13.8 Alarmas: avisos con histéresis
+
+Una **alarma** es un aviso con estado: entra cuando se cumple su condición y sale cuando se cumple otra. Sirve para lo que tiene que avisar una vez al empezar, seguir visible mientras dure y decir cuándo se acaba, sin parpadear.
+
+```json
+{"id": "down", "each": "monitor.targets",
+ "enter": [["item.st", "eq", "fail"]],
+ "exit":  [["item.st", "in", ["ok", "slow", "warn"]]],
+ "level": "warn", "title": {"es": "{{item.name}}: caída", "en": "{{item.name}}: down"}, "body": "{{item.why}}",
+ "on_exit": {"level": "info", "title": {"es": "{{item.name}} de vuelta", "en": "{{item.name}} is back"}},
+ "notify": {"if": [["cfg.tg", "eq", true]], "text": "🔴 {{item.name}} ({{item.why}})",
+            "exit": {"text": "🟢 {{item.name}}"}, "batch": {"head": "{{ev.count}} cambios:"}}}
+```
+
+- **`each`**: con una colección, hay una alarma por elemento (una por web), con su propia clave.
+- **`enter`** y **`exit`**: la histéresis. Entra con `enter` y no sale hasta que se cumple `exit`. Sin `exit`, sale cuando `enter` deja de cumplirse.
+- **`for_n`**: cuántas evaluaciones seguidas tiene que cumplirse `enter` para entrar (de 1 a 10). Se evalúa cada vez que cambia alguno de los valores que mira, nunca a intervalos fijos.
+- **Al entrar** lanza el aviso (`level`, `title`, `body`, `icon`, `open` y `priv`, que con la pantalla bloqueada solo deja ver el título). Un `warn` se queda hasta que la alarma sale, se toca o pasan sus 10 minutos.
+- **Al salir** quita su aviso y, con `on_exit`, lanza otro (`info` o `warn`), como «Tienda de vuelta».
+- **`notify`**: mensaje por Telegram al entrar (`text`) y, si se quiere, al salir (`exit`). El `if` de `notify` vale para los dos, y el de `exit` solo añade su propia condición: así nunca llega un «de vuelta» de algo cuya caída no se avisó. Con `batch`, los mensajes de una misma vuelta del motor (o de 3 s, si no hay motor) salen juntos en uno solo: `head` (con `{{ev.count}}`, el número de renglones) y un renglón por cambio. Con un solo renglón, sale él solo.
+- Las alarmas no cuentan como fallos y respetan los cupos de avisos y mensajes ([§5.5](#55-avisos-y-capas), [§7.8](#78-avisos-y-notificaciones)).
+- **Claves.** Una alarma con `each` usa la clave `keyOf(id de la alarma + "/" + id del elemento)`: la alarma `slow` de una web no sustituye la banda `down` de esa misma web, y el resumen por hora de los mensajes las distingue.
+- **Sobreviven a un reinicio.** El sistema guarda en `/state/<id>.sys.json`, solo cuando cambian, qué alarmas están dentro, así que un reinicio no vuelve a avisar de lo que ya estaba avisado.
+- **Condiciones sobre campos que se ocultan.** Un campo que `visible_if` oculta se borra al guardar y vuelve con su valor por defecto, así que `mkmanifests.py` exige que una condición sobre él mire también el campo que lo controla, contando el `if` heredado de `notify` (`cfg.tg_back` sin `cfg.tg` no vale).
+
+La histéresis «de verdad» de una web (3 fallos seguidos para caída, 2 aciertos para volver) la lleva el motor `monitor` ([§13.11](#1311-motor-monitor-vigilante-de-webs-y-servicios)). La alarma añade la suya encima, para cualquier valor: una receta futura que lea una temperatura puede entrar con `["x", "gt", 30]` y salir con `["x", "lt", 28]`.
+
+### 13.9 Variables y tablas
+
+**Variables** (`vars`, hasta 8). Valores pequeños que la receta recuerda: `{"pg": {"type": "int", "min": 1, "max": 3, "default": 1}}`. Tipos: `int` (con `min` y `max`, de −32768 a 32767), `bool` e `id` (el `id` de un elemento de lista). Con `"keep": true` se guardan en su estado y sobreviven a los reinicios. Se cambian con `var.set`, `var.add` (con `min`, `max` y `wrap` para dar la vuelta) y `var.toggle`. Atajos guarda así la página de botones que se ve.
+
+**Tablas** (`tables`, hasta 4, de 32 entradas cada una). Datos fijos de la receta, de dos clases:
+
+- **de textos**: clave → texto bilingüe sin huecos, para el filtro `map` (el Pomodoro traduce `short` a «A DESCANSAR»);
+- **de filas**: clave → lista de hasta 16 elementos, para `list.add` (los botones de ejemplo de Atajos, por juego y sistema: `teams`, `teams.mac`…). Sus elementos se validan contra los subcampos de la lista de destino, y sus textos `{es, en}` pasan al idioma del sistema al añadirse, como los `default` de una lista ([§9.1](#91-tipos-de-campo)).
+
+### 13.10 Motor `timer` (temporizador por fases)
+
+Lleva la cuenta de un temporizador con fases que se encadenan en rondas. Cubre el Pomodoro, los intervalos de un entrenamiento o un «pasta, 9 minutos».
+
+```json
+"timer": {
+  "phases": [
+    {"id": "work",  "label": {"es": "TRABAJO", "en": "WORK"},         "dur": "{{cfg.work}}m",  "tone": "ink"},
+    {"id": "short", "label": {"es": "DESCANSO", "en": "BREAK"},       "dur": "{{cfg.short}}m", "tone": "accent"},
+    {"id": "long",  "label": {"es": "DESCANSO LARGO", "en": "LONG BREAK"}, "dur": "{{cfg.long}}m", "tone": "accent"}],
+  "round": ["work", "short"], "last_round": ["work", "long"], "rounds": "{{cfg.rounds}}",
+  "repeat": true, "auto_next": "{{cfg.auto_next}}", "resume": true}
+```
+
+- **Fases** (de 1 a 6): `id`, `label` (14 caracteres, en versalitas), `dur` (de 1 s a 24 h) y `tone` (el color de la cifra mientras corre).
+- **Ciclo**: `rounds − 1` veces la secuencia `round` y una vez `last_round` (hasta 4 fases cada una); `rounds` va de 1 a 20. Con `repeat`, al acabar vuelve a la ronda 1; si no, se para: la última fase lanza `timer.phase_end` con `ev.next` vacío y después `timer.stopped`. Con `rounds` = 1 solo hay `last_round`.
+- **`auto_next`**: al acabar una fase sola, la siguiente empieza sola; si no, queda en `ready` (lista, esperando un toque) con la duración entera de la siguiente.
+- **`resume`**: guarda su estado (exige `state_kb` ≥ 1) y lo recupera al arrancar (normativo):
+  - una pausa o una fase «lista» se restauran tal cual;
+  - una fase en marcha se reanuda **en el acto** si ya hay hora válida, también tras un reinicio por software (OTA, pánico o vigilante, cuando el reloj del chip sigue contando, [§7.2](#72-hora-y-zona-horaria)); si no hay hora pero no fue un encendido, se calcula con `monoMs()`;
+  - tras un apagón sin hora (por ejemplo, sin WiFi), el motor espera la hora **2 minutos como mucho** y después queda en pausa con lo que faltaba. Mientras espera, la salida `timer.waiting` es cierta, para que la receta pinte «ESPERANDO LA HORA». Cualquier orden del dueño (`toggle`, `skip`, `stop`…) cancela la espera para siempre: si el dueño toca SEGUIR, la hora que llegue después ya no para la cuenta;
+  - si la fase acabó con la placa apagada, queda parado.
+
+  Al desactivarse el plugin, el motor deja la cuenta en pausa con lo que faltaba (apagado no podría avisar al acabar la fase), y el sistema escribe el estado pendiente ([§4](#4-ciclo-de-vida)).
+- **Cambios de ajustes**: la fase en curso conserva su duración; las nuevas valen desde la siguiente. Parado, la cifra enseña la duración nueva de la primera fase. Si bajan las rondas por debajo de la ronda en curso, `timer.round` pasa a valer `rounds`.
+- **Salidas**: `timer.state` (`stopped`, `running`, `paused` o `ready`), `phase`, `label`, `tone`, `round`, `rounds`, `left` (segundos que quedan), `total` (segundos de la fase), `progress` (de 0 a 1, o −1 parado), `ends` (hora Unix de fin, si corre y hay hora) y `waiting` (sí mientras espera la hora tras un apagón).
+- **Órdenes**: `start` (empieza la ronda 1), `toggle` (empieza, pausa o sigue), `pause`, `resume`, `skip` (pasa a la siguiente fase sin aviso) y `stop`. Qué hace cada una en cada estado (normativo):
+
+| Estado | `start` | `toggle` | `pause` | `resume` | `skip` | `stop` | La fase acaba sola |
+|---|---|---|---|---|---|---|---|
+| `stopped` | Ronda 1, primera fase, `running` · `timer.started` | Igual que `start` | Nada | Nada | Nada | Nada | — |
+| `running` | Vuelve a la ronda 1 · `timer.started` | `paused` | `paused` | Nada | Siguiente fase, `running` · `timer.skipped` | `stopped` · `timer.stopped` | Con `auto_next`, la siguiente `running`; sin él, `ready`. `timer.phase_end` |
+| `paused` | Ronda 1 · `timer.started` | `running` | Nada | `running` | Siguiente fase, `ready` · `timer.skipped` | `stopped` · `timer.stopped` | — |
+| `ready` | Ronda 1 · `timer.started` | `running` (empieza la fase) | Nada | `running` | Siguiente fase, `ready` · `timer.skipped` | `stopped` · `timer.stopped` | — |
+
+- **Eventos**: `timer.phase_end` **solo cuando la fase acaba sola**, con `ev.next`, `ev.next_label`, `ev.next_total` y `ev.round` (con `repeat` falso, la última trae `ev.next` vacío); `timer.skipped`, `timer.started` y `timer.stopped`.
+- **Por dentro**: un solo `after()` que se vuelve a programar para el siguiente cambio de segundo, con `uptimeMs()` restando sin signo; es el código del ejemplo nativo de [§12.3](#123-ejemplo-completo-el-pomodoro). Los temporizadores siguen con la página oculta, en reposo y con la pantalla bloqueada.
+
+### 13.11 Motor `monitor` (vigilante de webs y servicios)
+
+Comprueba una lista de objetivos cada cierto tiempo con el recadero ([§7.4](#74-red-httptls-con-cola-el-recadero)), decide su estado con histéresis y vigila los certificados.
+
+```json
+"monitor": {
+  "targets": "cfg.sites", "name": "name", "url": "url", "mode": "mode", "enabled": "on",
+  "every": "{{cfg.every_min}}m",
+  "down_after": "{{cfg.fails}}", "up_after": "{{cfg.recover}}", "slow_after": "{{cfg.slow_n}}",
+  "modes": {
+    "http":       {"check": "probe", "ok": "{{item.expect}}", "slow_ms": "{{item.slow_ms}}", "cert": "{{item.cert}}"},
+    "statuspage": {"check": "json", "suffix": "/api/v2/status.json", "pick": "status.indicator", "max_bytes": 512,
+                   "map": {"none": "ok", "minor": "warn", "maintenance": "warn", "major": "fail", "critical": "fail"},
+                   "else": "fail"}},
+  "cert": {"warn_days": "{{cfg.cert_days}}", "marks": [14, 7, 3, 1, 0], "at": "{{cfg.cert_at}}"},
+  "history": 24, "publish": "status"}
+```
+
+- **Objetivos**: una lista de ajustes (`"cfg.sites"`, hasta 12 elementos, con el permiso `net.user` y la lista en `net.user_hosts_from`) o una lista fija de hasta 12 `{id, name, url, mode}` en la propia receta (con el permiso `net` y sus hosts en `net.hosts`). `name`, `url`, `mode` y `enabled` dicen qué subcampo hace cada papel.
+- **`every`**: cada cuánto, nunca por debajo de `net.min_interval_s`.
+- **Modos** (hasta 4, uno por opción del campo `mode`):
+  - `probe`: un sondeo del recadero (código, tiempos y certificado). `ok` es `2xx` (2xx o 3xx), `200` o `any` (que conteste); `slow_ms` es el umbral de lentitud, medido como `msConnect + msFirstByte`; `cert` dice si se vigila su certificado. Un 3xx es la respuesta en sí, y el resumen dice adónde lleva («301 → www.ejemplo.es»); con `ok` = `200`, el motor sigue un salto dentro del mismo sitio antes de decidir, para que una web que redirige de `/` a `/es/` no salga caída. Un `http://` a un host público vale aquí sin el permiso `lan` ([§7.4](#74-red-httptls-con-cola-el-recadero));
+  - `json`: un `GET` con un filtro que solo guarda el valor de `pick` (hasta 4 niveles) y `max_bytes` de respuesta (2048 como mucho). **Un `suffix` que empieza por «/» sustituye la ruta y los parámetros** de la dirección: se usa su origen (esquema, host y puerto) más el sufijo, así que `https://discordstatus.com/history` acaba en `https://discordstatus.com/api/v2/status.json`, y la ruta que haya escrito el dueño no se usa. Sigue las redirecciones al mismo sitio (a su variante con o sin `www.`) y, tras cada una, vuelve a poner el sufijo sobre el origen nuevo: `https://githubstatus.com` da un 301 a la portada de `www.githubstatus.com`, y el motor pide `https://www.githubstatus.com/api/v2/status.json` (comprobado: sin esto acabaría leyendo 172 KB de HTML). `map` traduce el valor a `ok`, `warn` o `fail` y `else` dice qué pasa con un valor que no está en `map`. Un código que no es 2xx cuenta como fallo del sitio; si la respuesta no se puede leer como JSON o no trae `pick`, el objetivo queda `unknown` con el motivo «no es una página de estado», no como caída. La página de estado de Statuspage es este modo con `/api/v2/status.json`. Un 304 significa «igual que antes».
+- **Histéresis**: caída tras `down_after` fallos seguidos, de vuelta tras `up_after` aciertos, lenta tras `slow_after` lecturas lentas.
+- **Lo que hace solo**, sin que la receta lo pida:
+  - un error local (sin red, sin memoria, cuota) no toca las cuentas: el objetivo **conserva su estado**, que pasa a dato viejo (`stale`) a las 3 vueltas sin comprobarse. Así la línea fija «1 CAÍDA» no desaparece y vuelve, ni las alarmas salen y entran, por un corte de la WiFi;
+  - **caída local**: si en una vuelta fallan por la red (`Timeout`, `Refused` o el DNS) todos los objetivos comprobados, o todos menos uno cuando son 4 o más, y ninguno contesta, la vuelta no cuenta: se trata como un error local. Así una caída del DNS de la oficina no son 12 caídas falsas ni un mensaje de «12 cambios»;
+  - mientras `sys.online` sea falso, sigue sondeando (así se entera de que vuelve la red, [§6.5](#65-eventos-del-sistema)) pero no da veredictos de caída;
+  - una web que solo habla TLS 1.3 sale como `unsupported` («no compatible»), no como caída;
+  - 3 peticiones en cola como mucho, y la espera creciente por host del recadero;
+  - el aviso diario de certificados a la hora `at`, con los objetivos que han cruzado una de sus marcas (recuerda cuál avisó ya);
+  - publica la lista de la placa `publish` (de tipo `status`) para la Mini App, traduciendo sus estados ([§9.1](#91-tipos-de-campo)).
+- **Estados** (normativo). Cada lectura mueve el estado de un objetivo así:
+
+| Lectura | Efecto |
+|---|---|
+| Acierto rápido | Cuenta para `up_after`: desde `fail`, vuelve a `ok` con `up_after` aciertos seguidos; desde `slow`, con `up_after` lecturas rápidas seguidas |
+| Acierto lento (`msConnect + msFirstByte` ≥ `slow_ms`) | Con `slow_after` seguidas, `slow`. No es un fallo |
+| Fallo del sitio (error remoto, o un código que no vale para `ok`) | Con `down_after` seguidos, `fail`. Con `cert` cierto, un certificado caducado es un fallo |
+| Valor de `map` (modo `json`) | `ok`, `warn` o `fail` al momento: la página ya es el veredicto |
+| JSON ilegible o sin `pick` | `unknown`, con el motivo «no es una página de estado» |
+| Error local o vuelta con caída local | No cambia nada; a las 3 vueltas, `status` = `stale` |
+| `TlsProto` | `unsupported` («no compatible») |
+
+  Con `cert` cierto y menos de `warn_days` días de certificado, una web `ok` sale como `warn` («atención»). Con `cert` falso, la fecha del certificado no cuenta (la cadena se comprueba siempre).
+- **Apagar, borrar o cambiar la dirección** de un objetivo: se cancela su petición pendiente, se ponen a cero sus cuentas, su historial y sus marcas de certificado, y sus alarmas salen **sin aviso** (no llega un «de vuelta» de una web que has apagado).
+- **Lo que sobrevive a un reinicio.** El motor guarda en el estado del plugin, solo cuando cambia (nunca en cada vuelta), el estado de cada objetivo y la última marca de certificado avisada; las alarmas que estaban dentro las recuerda el sistema ([§13.8](#138-alarmas-avisos-con-histéresis)). Tras un reinicio cada objetivo empieza con su estado guardado como dato viejo, y la primera vuelta sale 30 s después de que haya Internet y hora. Así no vuelve a llegar «🔴 Tienda» por una web que ya estaba caída.
+- **Certificados.** Las marcas que valen son `warn_days` y las de `marks` que sean menores (con 30 días: 30, 14, 7, 3, 1 y 0; con 5: 5, 3, 1 y 0). Si los días que quedan suben (el certificado se renovó), las marcas vuelven a cero.
+- **Salidas**: `monitor.total` (objetivos vigilados), `ok`, `down`, `slow`, `warn`, `unknown`, `first_down` (el nombre del primero caído), `ratio` (de 0 a 1, o −1 sin objetivos), `running`, `at` y la colección `monitor.targets`, cuyos elementos tienen `id`, `name`, `host`, `url`, `mode`, `st` (`ok`, `slow`, `warn`, `fail`, `unknown`, `unsupported` u `off`), `status` (el estado con forma de [§5.9](#59-guía-visual), `stale` si el dato tiene más de tres vueltas), `code`, `ms`, `cert_days`, `why` (el motivo del último fallo, con los textos del sistema: «sin respuesta», «certificado de otro nombre»…), `detail` (el resumen ya hecho: «200 · 340 ms · cert 52 d» o el motivo), `at` y `spark` (los últimos `history` tiempos).
+- **Orden**: `monitor.run`. **Eventos**: `monitor.change`, `monitor.round_end` y `monitor.cert_due`.
+- **Coste**: unos 12 KB de PSRAM con 12 objetivos e historial (dentro del `psram_kb` de la receta) y el hueco TLS del recadero mientras comprueba.
+
+### 13.12 Motores `photos` y `slideshow` (fotos y reposo)
+
+**`photos`** es la fototeca: recibe las fotos que se mandan al bot y lee la carpeta compartida de la microSD.
+
+```json
+"photos": {"max_bot": 40, "when_full": "{{cfg.when_full}}", "caption_cmd": "fondo", "shared": true,
+           "reply": "{{cfg.confirm}}", "new_auto": "{{cfg.new_auto}}", "publish": {"photos": "photos", "albums": "albums"}}
+```
+
+- Atiende `FileOffer` y `File` ([§6.2](#62-telegram)): acepta hasta `max_bot` fotos del bot (64 como mucho) y, sin tarjeta, hasta el `data_kb` del plugin en la FAT: al aceptar mira los `bytes` de la oferta (si Telegram los da) y rota también por bytes. Al llenarse, con `when_full` = `oldest` borra la más antigua (saltándose las elegidas si `mode` = `only`) y con `refuse` rechaza la nueva. Descarta las repetidas y guarda en la microSD o, sin tarjeta, en la FAT (con su tope de 8 MB al día). Contesta «10 fotos guardadas (22 de 40 · 3,1 de 4 MB)», y esa respuesta lleva el teclado nuevo ([§9.2](#92-cómo-se-abre-un-solo-botón)).
+- Recibe las fotos que le tocan como receptor (`sys.photos`, [§6.2](#62-telegram)), con su pie, y las que llevan el pie `/<caption_cmd>`.
+- Con `shared`, lee la carpeta `storage.sd_shared` (solo lectura; las subcarpetas son álbumes). Pauta nunca borra nada de ella.
+- Contesta con los textos del sistema si `reply` es cierto. Con `new_auto` falso, una foto nueva no sale en el pase hasta que se ve en la página.
+- **Números e identificadores** (normativo). Cada foto tiene un **número fijo** que nunca se reutiliza: un contador que solo sube, guardado en el estado («foto 57»), así que borrar una foto, o que la rotación borre la más antigua, no cambia los números de las demás, y «/fondo borrar 57» escrito mirando una lista vieja nunca borra otra foto. Y tiene un **id** de 6 caracteres en base32 (`^[a-z2-7]{6}$`): en las del bot, sacado del `file_unique_id`; en las de la tarjeta, del SHA-256 de su ruta relativa (si dos chocan, se vuelve a calcular con una sal). El índice de la tarjeta (número, id, fecha, álbum y ruta) se guarda en la propia tarjeta (`/pauta/<id>/index.bin`, con registros de tamaño fijo y 2000 fotos como mucho), así que los números sobreviven a sacarla y volver a meterla. En PSRAM solo quedan los contadores y el mapa de qué fotos ya salieron en el pase.
+- **Caché.** Cada foto de la tarjeta se reduce una sola vez, de fondo, a la caché del plugin ([§7.11](#711-imágenes)).
+- Publica las listas de la placa `photos` (las 64 fotos más recientes, con las columnas `n`, `at`, `cap` y `src` y la etiqueta «57 · 14 oct · playa») y `albums` (los álbumes de la tarjeta, en pares), por ventanas si hace falta ([§9.1](#91-tipos-de-campo)).
+- **Salidas**: `photos.count`, `bot`, `sd`, `sd_ok` (hay tarjeta), `full`, `newest` (la última foto), `bad` (fotos de la tarjeta que no se pueden leer: progresivas o demasiado grandes), `skipped` (archivos que no son JPEG ni PNG, como los HEIC) y la colección `photos.latest` (las 3 últimas, con `id`, `n`, `label` y `at`).
+- **Órdenes**:
+  - `photos.delete` (por `ids` o por `number`): pide su toque en la pantalla con `ctx.confirmScreen()`, enseñando las fotos («Borrar la 57 · playa»), y contesta en diferido «Confirma en la pantalla» ([P26](#p26-borrar-fotos-siempre-con-un-toque)). Contesta siempre con los textos del sistema: «Foto 57 borrada», «No hay foto 57» o «Esa está en la tarjeta: bórrala desde el PC». Quita de `picked` las fotos que borra (no es un campo `confirm`, así que puede escribirlo);
+  - `photos.send` (reenvía hasta 10 al chat con su `file_id`, sin subirlas);
+  - `photos.delete_current` (la que se ve, desde una pulsación larga en la página con `confirm: "twice"`, que ya es la confirmación). Sobre una foto de la tarjeta, una banda: «Las fotos de la tarjeta se borran desde el PC».
+
+**`slideshow`** es el pase de fotos y hace de proveedor de reposo ([§5.6](#56-reposo)) con `"idle": {"from": "slideshow"}`.
+
+```json
+"slideshow": {"from": "photos", "mode": "{{cfg.mode}}", "picked": "{{cfg.picked}}", "src": "{{cfg.src}}", "albums": "{{cfg.albums}}",
+              "every": "{{cfg.every_s}}s", "order": "{{cfg.order}}", "fit": "{{cfg.fit}}", "transition": "fade",
+              "overlay": "{{cfg.overlay}}", "overlay_pos": "{{cfg.overlay_pos}}", "night": "{{cfg.night}}"}
+```
+
+- Elige la siguiente foto según `mode` (`all`, `only` o `except` con la lista `picked`), `src` (`both`, `bot` o `sd`), `albums` (los álbumes de la tarjeta que salen; vacío = todos) y `order` (`random` sin repetir, `newest` u `oldest`), cada `every` (10 s como mínimo).
+- La descodifica en el hueco `Slot::Full` con `fit` (`fill` o `fit`) y pasa con `transition` (`cut` o `fade`, el fundido de [§5.6](#56-reposo)).
+- Pide la faja del reloj según `overlay` (`none`, `clock` o `clock_weather`) y `overlay_pos` (`bottom` o `top`); las líneas vivas salen igual si `sys.live_idle` lo dice ([§5.6](#56-reposo)). En la franja nocturna, con `night` = `clock`, deja el reloj del sistema, también si la franja empieza con el reposo ya puesto.
+- Llama a `idleReady()` cuando tiene foto; sin fotos, el sistema pinta su reloj. Con la pantalla bloqueada respeta `sys.lock_show` ([P18](#p18-con-la-pantalla-bloqueada-se-ven-las-fotos-o-solo-el-reloj)) y **no enseña las fotos que llegan mientras está bloqueada hasta desbloquear**.
+- **Salidas**: `slideshow.current` (la foto que toca), `label`, `ready` y `count` (cuántas entran en el pase). El bloque `image` con `src: "slideshow.current"` pinta su miniatura en la página.
+
+### 13.13 Teclado: órdenes `hid.*` y bloque `grid`
+
+El teclado no es un motor: son cuatro órdenes que llaman al servicio de [§7.10](#710-teclado-hid), y el bloque `grid` que da a cada botón su elemento de lista.
+
+| Orden | Llama a | Ejemplo |
+|---|---|---|
+| `hid.keys` | `combo()` si es un solo paso de combinación; si no, `macro()` | `"keys": "{{item.keys}}"` con `["gui+r", "wait:300", "text:notepad", "enter"]` |
+| `hid.media` | `media()` | `"key": "{{item.media}}"` |
+| `hid.text` | `type()`; con `enter`, como una sola macro | `"text": "{{item.text}}", "enter": "{{item.enter}}"` |
+| `hid.hold` | `hold()`: mantiene las teclas mientras el dedo siga apoyado | `"keys": "{{item.keys}}"` en `down` |
+
+- **Regla de oro, también para recetas.** `hid.keys`, `hid.media` y `hid.text` solo valen en los manejadores `tap` y `long` de un bloque de su página, porque el servicio las acepta en los 500 ms que siguen a un `Tap` o un `LongPress`; `hid.hold`, solo en `down`, porque vale mientras el dedo siga apoyado. En `up` no vale ninguna: llega antes que el `Tap`. `mkmanifests.py` rechaza la receta que las pone en otro sitio. Nada que llegue de Telegram, de la Mini App, de un motor, del pie o con la pantalla bloqueada teclea.
+- **La gramática de las teclas** es la de [§7.10](#710-teclado-hid), y se comprueba en la CI, en la Mini App y en la placa.
+- **Lo que hace el sistema solo:** sin ordenador, la banda «Conecta el USB nativo (no el del CP2102)» con `unplugged` u «Ordenador dormido o desconectado: despiértalo o revisa el cable» con `suspended`; si una macro se aborta, una banda con el motivo; el color de la casilla según el resultado ([§13.5](#135-la-página-vistas-y-bloques)); «soltar todo» tras cada paso; `hold` se suelta al levantar el dedo, al cambiar de página, al bloquear o a los 120 s.
+- **`grid`** pinta una casilla por elemento de `items` en la página `page` (de `pages`), colocada por sus subcampos `page_of` y `slot_of` (posición 1 = arriba a la izquierda, por filas). Si dos piden la misma casilla (no debería pasar, porque `unique` lo impide), gana el primero. Los botones cuya casilla o página no existe en la rejilla actual (casilla 15 con 3×4, o página 3 con `pages` = 1) no se pintan, y la página lo dice: «2 BOTONES FUERA DE LA REJILLA». `mkmanifests.py` comprueba que los botones por defecto caben en la rejilla por defecto. Con `dim`, las casillas van en `InkMute` (Atajos sin ordenador). La orden `list.add` con `place: "grid"` coloca cada elemento nuevo en la primera casilla libre de esa rejilla.
+- **Pulsación lenta.** Una botonera pide `"touch": {"longpress": true}` y pone en `long` las mismas órdenes que en `tap`: así un botón pulsado despacio (más de 600 ms) también teclea, en vez de no hacer nada.
+
+### 13.14 Validación en tres capas
+
+1. **El esquema** ([`schemas/manifest.schema.json`](../schemas/manifest.schema.json) y [`schemas/recipe.schema.json`](../schemas/recipe.schema.json)): la forma de cada clave, los nombres de motores, bloques, órdenes, eventos y filtros, la sintaxis de las plantillas y las duraciones, los topes de tamaño y las combinaciones de permisos prohibidas.
+2. **Las reglas de `mkmanifests.py`**, en la CI y en el PC:
+   - cada ruta existe en su sitio: el ajuste (que no sea un secreto), el subcampo de la colección, la salida del motor, la variable, el dato del evento;
+   - cada orden tiene su permiso y su motor; `critical` y `loud` exigen `alert.critical`;
+   - `hid.keys`, `hid.media` y `hid.text` solo en `tap` y `long`, y `hid.hold` solo en `down`; `reply` solo donde hay a quién contestar; `list.add` sobre campos `confirm` solo con un toque;
+   - una condición sobre un campo con `visible_if` mira también el campo que lo controla (contando el `if` heredado de `notify`);
+   - cada comando y cada acción tienen su manejador, y no hay manejadores de más;
+   - `surfaces` casa con la receta (`page` con `views`, `glance` con `glance`, `idle` con `idle` y el motor `slideshow`);
+   - la página cabe, nada que se toque queda bajo la banda, la rejilla no pasa de 3×5 y los botones miden lo que tienen que medir;
+   - los textos fijos de pantalla están en `CHARS` y no pasan de su largo; `status_emoji` solo en textos del bot;
+   - los casos acaban en uno sin condición; las fases del `timer` existen; los modos del `monitor` casan con las opciones de su campo; las duraciones ligadas a un ajuste caben en su rango (por ejemplo, `every` × el mínimo del campo ≥ `min_interval_s`);
+   - las filas de las tablas y los `default` de las listas cumplen los subcampos (también la gramática y los topes de teclas, contados en JSON compacto UTF-8, y sin caracteres de control en los textos); los botones por defecto caben en la rejilla por defecto; `order: "manual"` no va con `ui: grid`, y una lista con `ui: grid` cabe sola en la URL de dos pasos;
+   - el valor de la línea de estado mide 12 caracteres como mucho y, con el texto fijo, cabe en 22; las listas de la placa avisan si necesitan ventanas;
+   - las del manifiesto de siempre ([§3](#3-manifiesto), [§15](#15-conformidad)): peor caso de `/cfg`, coherencia de `net`, menú de 100 comandos.
+3. **La placa, al instalar** una receta que no viene de serie: comprueba la firma y la huella ([§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)), el nivel de `api`, el tamaño y la estructura, con las mismas tablas generadas, y rechaza la que no pase («Receta no válida: …»). Al ejecutarse, cada orden vuelve a comprobar su permiso.
+
+### 13.15 Límites
+
+| Qué | Tope |
+|---|---|
+| `plugin.json` de una receta, en JSON compacto | 16 KB |
+| Motores | Uno de cada clase: `timer`, `monitor`, `photos`, `slideshow` |
+| Vistas / bloques por vista | 3 / 8 |
+| Botones por bloque `buttons` / renglones por `rows` | 3 / 4 |
+| Rejilla | 3 filas × 5 columnas, 3 páginas |
+| Órdenes por manejador / manejadores en `on` | 8 / 16 |
+| Eslabones de una cadena de eventos | 4 |
+| Alarmas | 8 |
+| Comparaciones por condición / casos por lista | 4 / 6 |
+| Variables / tablas / entradas por tabla / filas por entrada | 8 / 4 / 32 / 16 |
+| Plantilla | 200 caracteres, 3 filtros por hueco |
+| Renglones de un mensaje con `each` | 32 |
+| Fases del `timer` / fases por ronda / rondas | 6 / 4 / 20 |
+| Objetivos del `monitor` / modos / historial | 12 / 4 / 24 |
+| Fotos del bot (`photos.max_bot`) / fotos de la tarjeta en el índice | 64 / 2000 |
+| Macro: pasos / bytes en JSON compacto / esperas / pulsaciones / red de seguridad | 16 / 128 / 3 s / 160 / 20 s |
+| `hid.hold` | 120 s |
+
+Los topes de memoria, red, avisos, mensajes y escrituras son los de cualquier plugin ([§5.5](#55-avisos-y-capas), [§7](#7-servicios-del-sistema), [§10](#10-almacenamiento)).
+
+### 13.16 Seguridad
+
+- **Sin código, sin sorpresas.** Una receta solo puede hacer lo que dicen sus órdenes, con los permisos de su manifiesto. No tiene bucles (salvo los renglones de un mensaje), ni memoria propia, ni acceso al lienzo.
+- **No puede sacar datos.** En la v1 no hay ninguna orden que mande datos fuera: el recadero solo hace `GET` y `probe`, y las direcciones las pone el dueño o van literales en la receta, sin huecos. Una receta no puede leer la lista, el token, los secretos ni a otros plugins.
+- **El teclado, solo con el dedo** ([§13.13](#1313-teclado-órdenes-hid-y-bloque-grid)), y las combinaciones prohibidas de [§8.2](#82-reglas) valen igual.
+- **Lo que llega de fuera** (receta del catálogo o de la tarjeta) se valida en la placa antes de guardarse, y siempre pide un toque que enseña sus permisos. Una receta sin firmar sale como «no verificada» ([§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)).
+- **Una receta no puede colgar la placa** salvo por un fallo del propio host de recetas, que es código nativo revisado; si pasa, la atribución de fallos culpa a la receta que se estaba atendiendo y el modo seguro funciona igual ([§4](#4-ciclo-de-vida)).
+
+### 13.17 Cómo lo ejecuta el firmware
+
+- **El host de recetas** es un plugin nativo más ([§12.6](#126-el-host-de-recetas)): implementa `Plugin` y traduce la receta a llamadas a `Context`. Por eso una receta pasa por los mismos permisos, cupos, presupuestos de tiempo y memoria que un nativo, y la API sigue siendo una sola.
+- **Al activarse**, lee el `plugin.json` con ArduinoJson, con un filtro que deja fuera los textos de ayuda y en la zona de compilación del sistema (48 KB de PSRAM, una receta cada vez, que no cuenta en su `psram_kb`, [§7.12](#712-memoria)), y lo pasa a una forma compacta en su propia memoria: las plantillas troceadas en texto fijo y huecos ya resueltos a índices, las condiciones como tablas y cada bloque con su sitio calculado. Lo que cuesta se mide con las cuatro recetas de referencia: menos de 50 ms y la memoria de su `psram_kb` **(medir)**.
+- **Al pintar**, solo rellena plantillas y llama a las ayudas de `Canvas`. Guarda los textos ya hechos y los rehace cuando cambia algo que leen (una revisión por motor, por ajustes y por variables), así que una página quieta no cuesta nada.
+- **Los motores** son clases C++ del host (`TimerEngine`, `MonitorEngine`, `PhotosEngine`, `SlideshowEngine`) que usan los servicios de [§7](#7-servicios-del-sistema) como cualquier plugin.
+
+### 13.18 Evolución
+
+- **`"format": 1`** no cambia en toda la v1. Lo nuevo llega con niveles 1.x de la API: un motor nuevo, un bloque nuevo, una orden nueva. Una receta que los use declara ese nivel en `api` («1.1»), y un firmware más viejo la marca «no disponible: actualiza Pauta» en vez de fallar.
+- **Previsto para la 1.x** ([§16](#16-fuera-de-alcance-de-la-v1-y-futuro)): el motor `fetch` (una fuente de datos JSON genérica con filtro, intervalo y vida útil, al estilo de TRMNL y del «My Data» de LaMetric), un motor `mqtt` para recetas que escuchan y publican en la red local, y órdenes para editar listas desde la página.
+- **Lo que no llegará**: un lenguaje dentro del JSON. Si algún día las recetas se quedan cortas, la vía es un motor nuevo o, como último recurso, scripts aislados (Berry, [§2](#2-tipos-de-plugin)).
+
+## 14. Idiomas
+
+- El idioma del sistema (`tdcfg/lang`) vale para la pantalla, el bot y la Mini App, que lo recibe en `l`.
+- **Textos de cada plugin** en su `strings.h`, con el mismo patrón que `i18n.h` e `i18n.cpp`: un `enum`, una tabla por idioma y un `static_assert`. Si falta una frase, no compila. Hay dos tablas:
+  - **las de pantalla**, que tienen que caber en `CHARS` (`mkmanifests.py` lo comprueba);
+  - **las del bot** (`BOT_*`), que nunca se pintan y admiten cualquier UTF-8, emojis incluidos (🟢 🟡 🔴 son el semáforo natural en un chat). El lint comprueba que una frase `BOT_*` no se pasa a una función de `Canvas`.
+
+  La tabla viaja en la `Entry` del plugin y se lee con `ctx.t()` ([§12.1](#121-la-interfaz)). Las frases de la lista salen de `i18n.cpp` y pasan a `src/plugins/pauta/strings.h` ([§12.5](#125-encaje-en-el-código-de-hoy)).
+- En el manifiesto, todo texto lleva `{es, en}`. `mkmanifests.py` comprueba los dos y que sus glifos estén en `CHARS`, salvo `help`, que es texto del bot.
+- **Recetas.** No tienen `strings.h`: sus textos van dentro de la receta, como cadena (igual en los dos idiomas) o como `{es, en}`. Los de pantalla (cabecera, pie, línea de estado, bloques y avisos) tienen que estar en `CHARS`; los del bot (`notify`, `reply`, `help`) admiten cualquier UTF-8, emojis incluidos. Decimales, fechas y días salen de los filtros `num`, `date`, `ago` y `days`, que ya siguen el idioma ([§13.3](#133-valores-rutas-plantillas-y-filtros)).
+- `Event::Lang` hace repintar (y el `ListView` tira sus textos recortados). El sistema vuelve a mandar el menú de comandos, con los de los plugins, y el teclado con «⚙ Ajustes» o «⚙ Settings».
+- Los nombres de los comandos son los mismos en los dos idiomas, como hoy (`/list`). Las descripciones y la ayuda se traducen.
+- Decimales con coma en español y con punto en inglés. Las fechas, con `dayName()` y `monthName()`. Los días de la semana, con `ctx.formatDays()`. «hace 20 min» o «20 min ago», con `ctx.ago()`.
+- Si algún día llega un tercer idioma, el plugin que no lo tenga usa el inglés.
+
+## 15. Conformidad
+
+**Lista de un plugin** (la comprueban la CI y la revisión):
+
+- [ ] Pasa `mkmanifests.py`: esquema; `id` único; sin choques de comandos y el menú entero en 100 comandos; textos es/en completos y dentro de `CHARS`; iconos del juego; permisos conocidos; sin combinaciones prohibidas; el peor caso de sus ajustes cabe en los 6 KB de `/cfg`; `max_per_hour` coherente con sus listas; el peor caso de su estado cabe en el presupuesto de la URL o se abre por trozos.
+- [ ] Si es una receta: pasa [`recipe.schema.json`](../schemas/recipe.schema.json) y las reglas de [§13.14](#1314-validación-en-tres-capas), y no pasa de 16 KB.
+- [ ] Si es nativo, pasa el lint: sin `#include` ni llamadas prohibidas, sin `String`, `std::vector`, `new` ni `malloc`, y 4 KB de variables fijas como mucho (8 la app de serie).
+- [ ] Usa solo los servicios que declara, y la ficha dice la verdad.
+- [ ] En la placa real: `onEvent()` y `onTouch()` tardan 10 ms como mucho, `paintPage()` 25 ms (en el percentil 99, es decir, en 99 de cada 100 veces), `paintIdle()` 40 ms y `begin()` 50 ms.
+- [ ] Si es nativo, pide la memoria con `ctx.alloc()`.
+- [ ] Fuera de `pixels` e `image`, solo usa roles de color. Tiene capturas legibles de día y de noche, con un solo acento y nada cortado sin «…».
+- [ ] Todo lo que se toca mide al menos 44×44 px, y nada imprescindible queda debajo de una banda de aviso (lo comprueba `pauta-sim` con una banda pintada).
+- [ ] Apaga el resaltado con `Cancel` y no se queda con una página que ya no se ve (`PageHidden`).
+- [ ] Tras 100 ciclos de activar y desactivar, ha perdido 1 KB de RAM interna como mucho y nada del fondo de PSRAM.
+- [ ] Si faltan la red, la hora, la microSD o un secreto, lo dice en su página (`sin_configurar`, «sin comprobar» o dato caducado) en vez de colgarse. Distingue un error local de uno remoto.
+- [ ] Valida todo lo que recibe. Se prueba con JSON roto, mensajes MQTT malformados, nombres raros e imágenes rotas.
+- [ ] No escribe en la flash más de una vez por minuto de forma continuada.
+- [ ] Tiene README en los dos idiomas y una captura.
+
+**Herramientas.**
+
+- `mkmanifests.py`, que hace también de lint, funciona igual en el PC que en `check.yml`.
+- **Esquemas:** los de [`schemas/`](../schemas/), con cualquier validador de JSON Schema 2020-12. Los ejemplos de [`examples/`](../examples/) los cumplen. Los vectores de prueba de [`examples/wire/vectors.json`](../examples/wire/vectors.json) dan, con claves fijas, la huella de la placa, el código de emparejar, `Kdev`, la entrada `pk`, la clave de firma y la firma de un envío, el dato asociado y el `s` de una URL, y dos sobres: la Mini App y el firmware tienen que dar exactamente esos resultados.
+- **Host falso para el PC:** compila un plugin contra un `Context` simulado, con eventos, un reloj que se puede adelantar y servicios con respuestas fijadas. Sirve para probar valores límite, datos rotos, fugas, cambios de hora y choques de la Mini App.
+- **`pauta-sim`** (desde F1): el mismo host falso con el panel SDL de LovyanGFX, que permite dibujar en una ventana del PC. Saca capturas de 480×320 de día y de noche en la CI, con y sin banda de aviso, y la hoja de iconos.
+
+**Pruebas del sistema en la placa:**
+
+1. **Prueba de fuego (F0).** Con Pauta como plugin, todo se comporta como en la 1.1.0: añadir tareas, también con el mensaje que vincula la placa; tachar con confirmación por Telegram; `/list`, `/done`, `/undo`, `/del` y `/clear` con respuestas de hasta 4096 bytes; `/help` y el menú del bot idénticos; revelado; inercia; protección de 180 ms entre toques; logotipo de 17 px en la cabecera; reset. Una lista guardada con la 1.1.0 sobrevive al flasheo, y también a volver después a la 1.1.0. Con Pauta desactivada, la lista se sigue guardando y `lastmsg` también.
+2. **Fallos.** Se inyectan un `while(1)` en `paintPage()`, un puntero nulo en `onEvent()` y un desbordamiento de pila. Hay que ver la atribución correcta, el paso a `fallido` al segundo fallo grave y, al tercer arranque anómalo, el modo seguro con **todo apagado, Pauta incluida**, la pantalla mínima y la salida que reactiva todo menos el culpable. Tres desenchufes seguidos **no** llevan al modo seguro. El modo seguro no quita el bloqueo.
+3. **Mensaje envenenado.** Un `web_app_data` que provoca un pánico se descarta tras el reinicio.
+4. **Repeticiones.** Un `/nics AGUA` seguido de un apagón no vuelve a avisar al arrancar. Un envío de la Mini App mandado dos veces se aplica una sola.
+5. **URL y fotos (lo primero de F2).** `curl` con botones de 500 a 8000 caracteres en Android, iOS, Escritorio y Web, más el tamaño total del teclado. El presupuesto queda en el 75 % del máximo más pequeño que funcione. Con otro `curl`, mirar si las tallas de 800, 1280 y 320 px que entrega Telegram son JPEG *baseline* (`FFC0`) o progresivos (`FFC2`); si ninguna fuera *baseline*, se aplica el plan B del [§6.2](#62-telegram) (pedir la foto como archivo). El presupuesto se mide también con un estado realista (uso moderado).
+6. **`sendData`.** 4096 bytes, firma incluida, llegan enteros. Con 4097, la Mini App guarda en dos partes, y la segunda solo sale tras abrirla con la revisión que dejó la primera (`inf.last`).
+7. **Emparejamiento y estado cifrado.**
+   - Se emparejan un móvil y un ordenador; los dos leen el estado.
+   - En los registros de GitHub Pages (o en la URL abierta en un navegador) solo se ve la parte en claro y datos cifrados.
+   - Un envío sin firma se rechaza, salvo `pair`.
+   - Al olvidar uno, ese ya no lee las URL nuevas ni puede firmar, y el otro sí lee, con la clave nueva.
+   - Con tres emparejados, se olvida uno: los otros dos recogen la clave nueva de `pk` (dos entradas) sin volver a emparejarse.
+   - La Mini App y el firmware dan los mismos resultados que [`examples/wire/vectors.json`](../examples/wire/vectors.json).
+   - Una URL con otra `k` hace que la Mini App se niegue a descifrar y a sellar.
+   - Tras un reset de fábrica, los dos piden emparejarse otra vez.
+8. **Secretos.**
+   - La placa descifra el sobre y en el chat no se ve nada legible.
+   - Se rechaza un sobre viejo (`t` de más de 10 minutos) y uno sellado para otro valor de `bound_to`.
+   - El código coincide en la Mini App y en la pantalla.
+   - Cambiar el broker borra la contraseña, salvo si la contraseña nueva llega en el mismo envío.
+9. **OTA firmada.** Se instala una imagen firmada de la misma variante. Se rechazan una sin firmar, una alterada y una de otra variante. Una imagen que se cuelga antes de confirmarse vuelve sola a la anterior. Volver a una versión anterior solo se puede desde la pantalla.
+10. **Sin WiFi.** Con el router apagado, la placa arranca con la interfaz normal y el portal de fondo. Al volver el router, no reinicia: el Pomodoro sigue contando y Telegram arranca.
+11. **Bloqueo.** Con la pantalla bloqueada, el reset del logotipo no hace nada y el portal no se abre. `/unlock` solo funciona si está activado. La guía de instalación explica la recuperación con `esptool erase-flash`.
+12. **72 horas con los seis plugins activos.** La RAM interna libre no baja nunca de 40 KB (el recadero no abre TLS con menos de 90 KB y la fragmentación no lo impide), se escriben menos de 120 sectores por hora (contando los guardados de la lista y de la Mini App) y no hay fugas en el fondo de PSRAM.
+13. **NVS.** Con la lista llena y `psys` escrito, `nvs_get_stats()` da al menos dos páginas libres.
+14. **Teclado** (variante `v1-hid`). Probado en Windows, macOS y Linux, con las distribuciones `us`, `es` y `es-mac` y con el Bloq Mayús puesto. Se flashea por el CP2102. Se rechazan las pulsaciones que llegan de Telegram, del programador, del pie o con la pantalla bloqueada. Al desenchufar el cable a mitad de una macro no queda ninguna tecla pulsada. Con Atajos apagado y en modo seguro, el PC ve un teclado mudo, nunca un puerto serie. Con la placa alimentada por el CP2102, desenchufar el USB nativo da `Suspended`. Una macro de 128 bytes con 3 s de esperas cabe en la red de 20 s a 10 teclas por segundo. Intercambiar dos botones arrastrando en la Mini App funciona, y un intercambio a medias por un choque no deja dos botones en la misma casilla.
+15. **nicscom.** Una ráfaga de 60 retenidos no pierde `/topics`. La lista de temas rechaza `/topics` y `/x/config`. El depósito de 10 publicaciones funciona. Tras reiniciar el broker, las suscripciones vuelven solas. Una IP pública se rechaza. Con la contraseña mal, deja de reintentar y lo dice en la página y en la Mini App.
+16. **Fotos (F5).** Cuánto tarda la descodificación de una foto de 800 px y de una de 4000 px de la tarjeta; un álbum de 10 fotos se guarda entero con una sola respuesta.
+17. **Cambio de hora.** Un `at()` a las 02:30 el día del cambio salta una sola vez, en el primer minuto válido. Rehacer los temporizadores a las 08:30:20 no repite el aviso de las 08:30.
+18. **Recetas.** Las cuatro de referencia en `pauta-sim`, de día y de noche, con y sin banda. Sus tiempos medidos en la placa con el host de recetas: `begin()` por debajo de 50 ms y `paintPage()` de 25 ms. Una cadena de eventos se corta en el cuarto eslabón. Instalar del catálogo rechaza una firma mala, un SHA-256 distinto y un `seq` viejo; una receta de la tarjeta sale «no verificada» y pide su toque.
+19. **Estado comprimido.** El compresor de la ROM (o miniz en la flash), con su memoria en PSRAM, comprime el estado en el núcleo 0 sin que la pantalla se congele. La URL principal lleva los plugins que caben y el resto se abre en dos pasos, también con `pk` de cuatro entradas. La Mini App lo abre con `DecompressionStream`, o con su descompresor propio, en Android, iOS, Escritorio y Web.
+20. **Pantalla de confirmación.** En `pauta-sim` y en la placa: un toque que empezó antes de que apareciera no la aprueba; un toque suelto en [Aceptar] no hace nada, ni mantenerlo durante el primer segundo; mantenerlo 1 s después, sí. Un aviso que llega mientras se ve espera a que se cierre.
+21. **Web caída.** Con una web que no contesta (un cortafuegos que descarta los paquetes) y un DNS que no responde, la placa no se reinicia, el Semáforo pinta la web caída tras `fails` vueltas y, con el DNS caído para todas, «sin comprobar» en vez de 12 caídas. Con Telegram bloqueado y las webs contestando, sigue dando veredictos.
+22. **Reanudar el Pomodoro.** Tras un reinicio por software (una OTA) la cuenta sigue en el acto; tras un apagón sin WiFi, espera 2 minutos y queda en pausa con lo que faltaba; tocar SEGUIR mientras espera no lo para cuando vuelve la WiFi. Un toque que llega justo cuando la capa del fin de fase se cierra sola no pausa el descanso.
+
+Quien pase `mkmanifests.py` y estas pruebas puede poner «Compatible con Pauta Plugin API 1.0».
+
+## 16. Fuera de alcance de la v1 y futuro
+
+- **v2:** catálogos de terceros con su propia clave ([§11.2](#112-el-catálogo-firmado-en-la-v1-para-las-recetas)). Scripts (Berry, licencia MIT) solo si las recetas se quedan cortas.
+- **1.x, sin romper nada:**
+  - teclado por Bluetooth con la misma API, como variante `v1-ble` ([§7.10](#710-teclado-hid));
+  - despertar el PC desde un botón (*remote wakeup*), repetición automática de teclas mientras se mantiene el dedo y `typeSecret()` para textos guardados en el cofre;
+  - selectores del sistema (`pickTime()`, `pickOne()`) para los editores dentro de las páginas;
+  - `POST` en el recadero y sondeos `tcp://` e `icmp://` (ping) para vigilar servicios que no son web;
+  - secretos dentro de los elementos de una lista (por ejemplo, un token por web vigilada);
+  - botones en línea en el bot;
+  - `tasks.read` y `tasks.write`, es decir, plugins que añaden renglones propios, con origen y sin duplicados;
+  - acciones entre plugins;
+  - MQTT genérico para Home Assistant o Node-RED, con el motor `mqtt`;
+  - motores nuevos para recetas: `fetch` (una fuente de datos JSON genérica, nivel 1.1) y `mqtt` (recetas que escuchan y publican en la red local), y órdenes para editar listas desde la página de una receta ([§13.18](#1318-evolución));
+  - una cabecera compacta de 40 px para páginas que necesiten más alto;
+  - copias de seguridad sin secretos en la microSD y fuentes ampliadas desde la tarjeta;
+  - `storage.cfg_kb` por plugin (hasta 12 KB; la FAT sobra y cuenta en su `psram_kb`), para que Atajos admita 32 botones abriéndose en dos pasos;
+  - un evento `hid.done` para recetas, con `ev.ok` y `ev.why`, y más teclas multimedia (brillo, calculadora, navegador);
+  - una orden `cfg.set` para que una receta cambie sus propios ajustes desde su página, con un toque y respetando mínimo, máximo y `confirm`;
+  - que una receta pinte una vista suya como reposo (hoy solo puede con el motor `slideshow`).
+- **Más adelante:** MQTT con TLS, buzón HTTP en la red local, invitados en el bot, sonido, brillo automático y más idiomas.
+- **Fuera de alcance a propósito:** nicscom como administrador (crear o borrar canales, cambiar dibujos) y su editor 8x8.
+- **Nunca:** OAuth con secreto de cliente (exige servidor), ELF de terceros y lienzo sin recortar.
+
+## Anexo A. Los seis encajes de referencia
+
+Los seis `plugin.json` completos, con todos sus textos, están en [`examples/plugins/<id>/plugin.json`](../examples/plugins/) y pasan el esquema y las reglas ([§15](#15-conformidad)). En el repositorio irán en `firmware/pauta/src/plugins/<id>/plugin.json` (los nativos) y `firmware/pauta/src/recipes/<id>/plugin.json` (las recetas de serie). Aquí va lo que explica cada caso: de los nativos, su comportamiento; de las recetas, la clave `recipe` entera. Entre los seis piden 304 KB del fondo de PSRAM (16 + 48 + 16 + 24 + 40 + 160).
+
+| Plugin | Tipo | Fase | Motores y servicios | Tamaño del `plugin.json` (compacto) |
+|---|---|---|---|---|
+| Pauta | nativo, app de serie | F0 | almacén de la lista, `ListView` | 3,1 KB |
+| nicscom | nativo | F3 | MQTT, programador declarativo, capa crítica | 4,3 KB |
+| Pomodoro | receta de serie | F1 | `timer` | 6,2 KB |
+| Atajos | receta de serie | F4 | `hid.*`, `grid` | 10,8 KB |
+| Semáforo | receta de serie | F4 | `monitor`, alarmas | 10,8 KB |
+| Salvapantallas | receta de serie | F5 | `photos`, `slideshow` | 9,6 KB |
+
+### A.1 Pauta, la app de serie (nativo, F0)
+
+Manifiesto: [`examples/plugins/pauta/plugin.json`](../examples/plugins/pauta/plugin.json) (`"kind": "native"`, `"builtin": true`, permisos `freetext` y `notify`, comandos `list`, `done`, `undo`, `del` y `clear`, acción `wipe` con `confirm: "screen"`, `legacy: {"nvs": "taskdesk"}`).
+
+- **Datos.** Siguen en NVS `taskdesk`, con el formato de hoy y sin migrar. Los guarda el almacén de la lista, que es del sistema ([§10.1](#101-nvs-20-kb-solo-lo-pequeño-y-crítico)); Pauta usa su API y no escribe en NVS. Por eso pide `static_kb: 1`, sin exenciones. `legacy` solo lo documenta.
+- **Cabecera.** Su logotipo en dos colores, «Pauta», «3 PENDIENTES» (o «LISTA VACÍA», «TODO HECHO») y, en el filete, la proporción de tareas hechas (−1 sin tareas).
+- **Pie.** «LIMPIAR HECHAS», solo si hay alguna hecha. Con `Event::FooterAction` limpia las hechas y, si `confirm_tick` está activo, lo confirma por Telegram, sin gastar cupo.
+- **Página.** Un `ListView` con la ventana de la lista en (0, 4, 480, 204) de la página y renglones de 46 px, que pinta el `drawTaskRow()` de hoy pasado a roles (`Paper`, `RowPress`, `Accent`, `OnAccent`, `Ink`, `InkMute`, `RuleSoft`) con el bloque `checkbox`, `ctx.printable()` y `fit()`. La lista vacía pinta el logotipo de 44 px en `Rule` y `Accent`, el título de hoy y «Escríbele a @bot» con `ctx.botName()`. Las animaciones (tachado de 260 ms, entrada de 340 ms, revelado de 350 ms, inercia) se calculan con la hora que recibe `paintPage()` y se mantienen vivas con `ctx.animate()`.
+- **Tachar.** En `Down`, si la lista no se movía sola ni paró hace menos de 250 ms, apunta el `id` del renglón bajo el dedo y lo ilumina; un `Move` vertical o un `Cancel` quitan el resaltado. En `Tap`, `tasksToggle()` por `id` (no por posición), con la misma animación. Si `confirm_tick` está activo, lo confirma con `ctx.notify()` (con `ttlS` = 900): el mensaje responde a un toque, así que no gasta cupo, y a la app de serie no se le antepone el nombre. Sale idéntico al de la 1.1.0. No pide `LongPress`, así que un toque de hasta 900 ms sigue tachando, como hoy.
+- **Telegram.** Con `Event::Text`, parte el texto por líneas, apunta cada una y contesta con `ctx.reply()` y las mismas frases de hoy. Si su página se ve, `reveal` está activo y nadie ha tocado en 5 s (`ctx.msSinceTouch()`), revela la tarea nueva. Si su página no se ve y `new_alert` está activo, lanza un aviso `info` con `priv`: «Nueva tarea: …». Los comandos `/list`, `/done`, `/undo`, `/del` y `/clear` se portan con una tabla fija de 40 elementos y un búfer de 4 KB pedido con `ctx.alloc()` en `begin()`, sin `String`; contestan con `ctx.reply()`, de hasta 4096 bytes.
+- **En otras páginas y en reposo.** Su línea de estado dice «3 PENDIENTES», y el reloj de reposo del sistema la enseña debajo de la fecha ([P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso)).
+- **Tema e idioma.** Con `Event::Theme` o `Event::Lang` tira los textos recortados del `ListView` y repinta. El sol y la luna, la hora, la fecha, el menú y el reset del logotipo son del sistema.
+- **Borrar.** `reset` solo borra sus ajustes; la lista se vacía con la acción «Vaciar la lista» (`wipe`), que pide un toque en la pantalla ([§4](#4-ciclo-de-vida)).
+- **Desactivada.** El sistema quita `/list`…`/clear` del menú y contesta al texto libre y a esos comandos «La lista está desactivada. Actívala en ⚙ Ajustes». El inicio pasa al primer plugin activo con página. La lista sigue intacta y se sigue guardando, porque el almacén es del sistema.
+- **Prueba de que la interfaz basta:** nada de lo que hace la checklist queda fuera de la API.
+
+### A.2 nicscom (nativo, F3)
+
+Manifiesto: [`examples/plugins/nicscom/plugin.json`](../examples/plugins/nicscom/plugin.json) (permisos `lan`, `mqtt`, `alert.critical` y `notify`; `mqtt.sub` `/topics`, `/+/config` y `/+/post`; `mqtt.pub` solo `/+/post`; la lista `autos` con su programación declarativa; la lista de la placa `channels`).
+
+- **MQTT.** Usa el servicio MQTT con la contraseña nombrada, nunca vista ([§12.4](#124-fragmento-nicscom-con-un-secreto-que-nunca-ve)). El servicio comprueba que el broker es una IP privada, repite las suscripciones en cada reconexión y da el motivo de cada desconexión, que nicscom enseña en su página y manda a la Mini App con `ctx.setStatus()` («CONTRASEÑA INCORRECTA», «SIN BROKER»). Solo puede publicar `1` en `/<canal>/post`. **No es administrador por regla del sistema**: la lista `pub` no le deja tocar `/topics` ni `/<canal>/config`.
+- **Validación.** Comprueba los nombres de `/topics` con `^[A-Za-z0-9_-]{1,64}$` (60 como mucho) y que cada `/config` traiga exactamente 64 `"#rrggbb"`. El dibujo se pinta en el orden recibido (índice = fila × 8 + columna), sin darle la vuelta, y `#000000` es un LED apagado.
+- **Página.** El botón del pie alterna entre dos vistas:
+  - **CANALES:** un `ListView` de renglones de 46 px con la miniatura 8x8 (puntos de 5 px, redondos), el nombre, «último aviso 12:03» y un botón «AVISAR» de 88×44 px. Caben 4 renglones; los demás, desplazando.
+  - **PROGRAMADOR:** renglones ordenados por hora, como «08:30 · L-V · AGUA», con un punto lleno o hueco según estén activos, y un renglón «+ NUEVO». Tocar uno abre, dentro de la página y con `ctx.holdPage(true)`, un editor: canal (◀ ▶ sobre la lista de `/topics`), hora y minutos con botones de 44×44, 7 días de 52×44, «GUARDAR» y «BORRAR», y «VOLVER» en el pie. Guarda con `listAdd`, `listSet` y `listDel`, y no deja guardar dos automatizaciones iguales (mismo canal y hora); avisa si hay más de 10 en el mismo minuto. La Mini App edita los mismos elementos por su `id`, y los choques se resuelven elemento a elemento ([§9.5](#95-la-vuelta-senddata)).
+- **Programador.** Lo lleva el sistema con `schedule` ([§6.4](#64-programador-de-eventos)): cada automatización activa salta a su hora y llega como `Event::Timer` con su `id`. Al saltar publica el aviso. Si a esa hora el servicio está reconectando o se ha gastado el depósito de publicaciones, nicscom reintenta cada 5 s durante 60 s; si no sale, lo apunta en un anillo de 10 líneas que enseña la página («08:30 AGUA no salió: sin conexión»). Con la placa apagada, el aviso no sale.
+- **Aviso entrante.** Es un `Alert` de nivel `Critical` (o `Warn`, si `wake` está apagado), con el título del canal, `pixels` con su dibujo, `sec` = `alert_s` y la clave del canal. No implementa `paintCritical()`: el sistema pinta el dibujo a 32 px por LED. Después, la línea de estado dice «AGUA 12:03» durante 10 minutos. Si `tg` está activo, lo reenvía por Telegram, con cupo y con la clave del canal.
+- **Su propio eco.** El aviso que manda Pauta le vuelve por el broker, igual que a las demás placas, y lleva el mismo «1». Un aviso en el mismo canal en los 2 s siguientes a publicar se toma como propio: en vez de la capa grande sale una banda corta, «AVISADO AGUA 12:03», que no despierta el reposo ni se reenvía por Telegram.
+- **Telegram.** `/nics AGUA` avisa y contesta con una respuesta diferida cuando vuelve el eco («Avisado AGUA 12:03») o cuando falla («No salió: sin conexión con el broker»). `/nics` lista los canales con la hora del último aviso.
+- **Mini App.** La lista `runtime.channels` llena el desplegable de canales del programador y de «Avisar ahora». El sistema guarda su última copia, así que sigue ahí aunque el broker no conteste, y un canal que ya no está sale como «AGUA (no está ahora)» sin impedir apagar o borrar su automatización.
+- **Red.** El broker va por IP fija (también acepta `.local`, solo en la misma subred) y la WiFi del trabajo llega a la vez al broker y a Internet. El servidor de hora puede ser el que dé el router o el del campo `sys.ntp`.
+- **Coste.** Unos 10 KB de RAM interna y ninguna conexión TLS: MQTT va en claro dentro de la red local.
+- **Por qué no es receta.** Lo explica [§2](#2-tipos-de-plugin); un motor `mqtt` genérico llegaría en la 1.x ([§16](#16-fuera-de-alcance-de-la-v1-y-futuro)).
+
+### A.3 Atajos (receta, F4)
+
+Del manifiesto ([`examples/plugins/atajos/plugin.json`](../examples/plugins/atajos/plugin.json)): `"requires": {"build": ["hid"]}`, permiso `hid` y nada más (las combinaciones prohibidas de [§8.2](#82-reglas) le impiden tener red); `touch.longpress`; la lista `buttons` de 16 elementos con `unique: ["page", "slot"]`, la pista `ui: grid` para la Mini App y `confirm` en la lista entera y en `rows`, `cols` y `pages` (cambiar los botones pide un toque); la acción `preset` con `confirm: "screen"`.
+
+```json
+{"recipe": {
+  "format": 1,
+  "vars": {
+    "pg": {"type": "int", "min": 1, "max": 3, "default": 1}
+  },
+  "tables": {
+    "presets": {
+      "teams": [
+        {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["ctrl+shift+m"]},
+        {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["ctrl+shift+o"]},
+        {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["ctrl+shift+k"]},
+        {"label": {"es": "Colgar", "en": "Hang up"}, "icon": "hangup", "kind": "combo", "keys": ["ctrl+shift+h"]}
+      ],
+      "teams.mac": [
+        {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["gui+shift+m"]},
+        {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["gui+shift+o"]},
+        {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["gui+shift+k"]},
+        {"label": {"es": "Colgar", "en": "Hang up"}, "icon": "hangup", "kind": "combo", "keys": ["gui+shift+h"]}
+      ],
+      "meet": [
+        {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["ctrl+d"]},
+        {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["ctrl+e"]},
+        {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["ctrl+alt+h"]}
+      ],
+      "meet.mac": [
+        {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["gui+d"]},
+        {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["gui+e"]},
+        {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["ctrl+gui+h"]}
+      ],
+      "zoom": [
+        {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["alt+a"]},
+        {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["alt+v"]},
+        {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["alt+y"]},
+        {"label": {"es": "Hablar", "en": "Talk"}, "icon": "mic", "kind": "hold", "keys": ["space"]}
+      ],
+      "zoom.mac": [
+        {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["gui+shift+a"]},
+        {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["gui+shift+v"]},
+        {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["alt+y"]},
+        {"label": {"es": "Hablar", "en": "Talk"}, "icon": "mic", "kind": "hold", "keys": ["space"]}
+      ],
+      "media": [
+        {"label": {"es": "Anterior", "en": "Previous"}, "icon": "prev", "kind": "media", "media": "prev"},
+        {"label": {"es": "Música", "en": "Music"}, "icon": "play", "kind": "media", "media": "play_pause"},
+        {"label": {"es": "Siguiente", "en": "Next"}, "icon": "next", "kind": "media", "media": "next"},
+        {"label": {"es": "Silencio", "en": "Mute"}, "icon": "volume_off", "kind": "media", "media": "mute"}
+      ],
+      "system": [
+        {"label": {"es": "Bloquear", "en": "Lock"}, "icon": "lock", "kind": "combo", "keys": ["gui+l"]},
+        {"label": {"es": "Captura", "en": "Snip"}, "icon": "screenshot", "kind": "combo", "keys": ["gui+shift+s"]}
+      ],
+      "system.mac": [
+        {"label": {"es": "Bloquear", "en": "Lock"}, "icon": "lock", "kind": "combo", "keys": ["ctrl+gui+q"]},
+        {"label": {"es": "Captura", "en": "Snip"}, "icon": "screenshot", "kind": "combo", "keys": ["gui+shift+4"]}
+      ],
+      "system.linux": [
+        {"label": {"es": "Bloquear", "en": "Lock"}, "icon": "lock", "kind": "combo", "keys": ["gui+l"]},
+        {"label": {"es": "Captura", "en": "Snip"}, "icon": "screenshot", "kind": "combo", "keys": ["printscreen"]}
+      ]
+    }
+  },
+  "keep_awake": [["cfg.keep_awake", "eq", true], ["hid.link", "eq", "ready"]],
+  "header": {
+    "subtitle": [
+      {"if": [["hid.link", "eq", "ready"]], "v": {"es": "PC CONECTADO", "en": "PC CONNECTED"}},
+      {"if": [["hid.link", "eq", "suspended"]], "v": {"es": "PC DORMIDO O DESCONECTADO", "en": "PC ASLEEP OR UNPLUGGED"}},
+      {"v": {"es": "SIN ORDENADOR", "en": "NO COMPUTER"}}
+    ]
+  },
+  "footer": {
+    "label": [
+      {"if": [["cfg.pages", "gt", 1]], "v": {"es": "PÁGINA {{var.pg}}/{{cfg.pages}}", "en": "PAGE {{var.pg}}/{{cfg.pages}}"}},
+      {"v": ""}
+    ],
+    "do": [{"do": "var.add", "name": "pg", "by": 1, "min": 1, "max": "{{cfg.pages}}", "wrap": true}]
+  },
+  "views": [
+    {
+      "id": "main",
+      "blocks": [
+        {"type": "grid", "h": 208, "items": "cfg.buttons",
+         "rows": "{{cfg.rows}}", "cols": "{{cfg.cols}}", "pages": "{{cfg.pages}}", "page": "{{var.pg}}",
+         "page_of": "page", "slot_of": "slot",
+         "label": "{{item.label}}", "icon": "{{item.icon}}",
+         "dim": [["hid.link", "ne", "ready"]],
+         "tap": [
+           {"do": "hid.keys", "if": [["item.kind", "in", ["combo", "macro"]]], "keys": "{{item.keys}}"},
+           {"do": "hid.media", "if": [["item.kind", "eq", "media"]], "key": "{{item.media}}"},
+           {"do": "hid.text", "if": [["item.kind", "eq", "text"]], "text": "{{item.text}}", "enter": "{{item.enter}}"}
+         ],
+         "long": [
+           {"do": "hid.keys", "if": [["item.kind", "in", ["combo", "macro"]]], "keys": "{{item.keys}}"},
+           {"do": "hid.media", "if": [["item.kind", "eq", "media"]], "key": "{{item.media}}"},
+           {"do": "hid.text", "if": [["item.kind", "eq", "text"]], "text": "{{item.text}}", "enter": "{{item.enter}}"}
+         ],
+         "down": [
+           {"do": "hid.hold", "if": [["item.kind", "eq", "hold"]], "keys": "{{item.keys}}"}
+         ]}
+      ]
+    }
+  ],
+  "on": {
+    "settings": [
+      {"do": "var.set", "if": [["var.pg", "gt", "{{cfg.pages}}"]], "name": "pg", "value": 1}
+    ],
+    "action.preset": [
+      {"do": "list.add", "list": "buttons", "table": "presets",
+       "row": "{{ev.args.set}}.{{cfg.os}}", "or_row": "{{ev.args.set}}", "place": "grid"},
+      {"do": "reply", "text": {"es": "Botones de ejemplo añadidos en los huecos libres.",
+                               "en": "Example buttons added to the free cells."}}
+    ]
+  }
+}}
+```
+
+- **Página.** Un bloque `grid` con la rejilla de `rows` × `cols` (con 4×3, casillas de 101×58 px), el icono y la etiqueta de cada botón (10 caracteres, partida en dos renglones si hace falta). Con una banda de aviso, la rejilla encoge sus filas a 162 px. Los botones que no caben en la rejilla actual (por ejemplo, tras bajar las columnas) no se pintan, y la página dice «2 BOTONES FUERA DE LA REJILLA»; la Mini App avisa antes de guardar y ofrece recolocarlos. Sin ordenador (`hid.link` distinto de `ready`), las casillas van en `InkMute`.
+- **Teclear.** Cada casilla, en su `tap`, elige la orden por `item.kind`: `hid.keys` para combinaciones y macros (16 pasos, 128 bytes y 3 s de esperas como mucho; así se «abren programas»), `hid.media` para las teclas multimedia y `hid.text` para los textos (64 caracteres, con la distribución `sys.kb`; con «Intro al acabar», una sola macro). Un botón `hold` llama a `hid.hold` en `down` y el sistema suelta las teclas al levantar el dedo (o a los 120 s): el «pulsar para hablar» de Teams o Zoom. `long` repite las órdenes de `tap`, así que un botón pulsado despacio también teclea. Cuando llega el resultado, la casilla se tiñe un instante de acento (salió) o de arcilla (se descartó o se cortó).
+- **Cabecera y pie.** El subtítulo dice «PC CONECTADO», «PC DORMIDO O DESCONECTADO» o «SIN ORDENADOR» según `hid.link` (la placa no distingue un PC dormido de un cable desenchufado, [§7.10](#710-teclado-hid)). Con más de una página de botones, el pie dice «PÁGINA 2/3» y pasa de página con `var.add` (con vuelta). Al guardar menos páginas, el manejador `settings` devuelve la variable a 1.
+- **Sin reposo con el PC.** `keep_awake` con `cfg.keep_awake` y `hid.link` = `ready`.
+- **Cambios desde la Mini App.** Cualquier cambio en los botones, también solo su etiqueta, su icono o su casilla, y en `rows`, `cols` o `pages`, pide un toque en la pantalla, con un resumen («Micro: casilla 1 → 2», «Notas → gui+r, espera 300, notepad, enter»). Como hay una sola pantalla por envío, es un toque cada vez que se edita. Intercambiar dos botones arrastrando son dos `item.set` y funciona, porque `unique` se mide al final del envío ([§9.5](#95-la-vuelta-senddata)). Al guardar se borran los campos ocultos, así que 16 botones caben en los 6 KB de `/cfg` (4,4 KB en el peor caso), y la rejilla entera cabe sola en la URL de dos pasos (unos 1.800 caracteres en el peor caso).
+- **16 botones.** La rejilla admite hasta 3 páginas de 3×5, pero la lista, 16 botones: la Mini App enseña «16 de 16» y la ayuda de `pages` dice que las páginas se reparten esos 16. Subir a 32 choca a la vez con los 6 KB de `/cfg`, con un solo `sendData` y con la URL de dos pasos, así que queda para la 1.x (`storage.cfg_kb`, [§16](#16-fuera-de-alcance-de-la-v1-y-futuro)).
+- **Botones de ejemplo.** La acción `preset` (tras su toque en la pantalla) añade con `list.add` los botones de la tabla `presets` que tocan según `os` (`teams.mac` o, si no hay, `teams`), en las primeras casillas libres de la rejilla (`place: "grid"`). En Windows, bloquear es `gui+l` y silenciar Teams, `ctrl+shift+m`; en Mac, `ctrl+gui+q` y `gui+shift+m`.
+- **Textos sensibles.** Atajos no es sitio para contraseñas: la Mini App avisa si un texto lo parece. Teclear secretos guardados en el cofre queda para la 1.x.
+- **Compilación y montaje.** Necesita la variante `v1-hid`. Sin ella, sale «no disponible», pero sus ajustes viajan igual en la URL para poder prepararlo antes de flashear. En `v1-hid` el USB arranca siempre como un teclado mudo, también con Atajos apagado. El montaje recomendado son dos cables, el USB nativo al PC y un cargador en el del CP2102, para que Pauta no se apague con el PC ([§7.10](#710-teclado-hid)). Con la pantalla bloqueada no teclea.
+
+### A.4 Pomodoro (receta, F1)
+
+Del manifiesto ([`examples/plugins/pomodoro/plugin.json`](../examples/plugins/pomodoro/plugin.json)): permisos `notify` y `alert.critical`; superficies `page` y `glance` (sin `critical`: la capa la pinta el sistema con la cifra de `big`); los ajustes de siempre (`work`, `short`, `long`, `rounds`, `auto_next`, `alert`, `tg`, `tg_sound` y `awake`); `state_kb: 1` para reanudar tras un reinicio.
+
+```json
+{"recipe": {
+  "format": 1,
+  "engines": {
+    "timer": {
+      "phases": [
+        {"id": "work", "label": {"es": "TRABAJO", "en": "WORK"}, "dur": "{{cfg.work}}m", "tone": "ink"},
+        {"id": "short", "label": {"es": "DESCANSO", "en": "BREAK"}, "dur": "{{cfg.short}}m", "tone": "accent"},
+        {"id": "long", "label": {"es": "DESCANSO LARGO", "en": "LONG BREAK"}, "dur": "{{cfg.long}}m", "tone": "accent"}
+      ],
+      "round": ["work", "short"],
+      "last_round": ["work", "long"],
+      "rounds": "{{cfg.rounds}}",
+      "repeat": true,
+      "auto_next": "{{cfg.auto_next}}",
+      "resume": true
+    }
+  },
+  "tables": {
+    "next_title": {
+      "work": {"es": "A TRABAJAR", "en": "BACK TO WORK"},
+      "short": {"es": "A DESCANSAR", "en": "TIME FOR A BREAK"},
+      "long": {"es": "DESCANSO LARGO", "en": "LONG BREAK"}
+    }
+  },
+  "keep_awake": [["timer.state", "eq", "running"], ["cfg.awake", "eq", true]],
+  "header": {
+    "subtitle": [
+      {"if": [["timer.state", "eq", "stopped"]], "v": ""},
+      {"if": [["timer.waiting", "eq", true]], "v": {"es": "ESPERANDO LA HORA", "en": "WAITING FOR THE TIME"}},
+      {"if": [["timer.state", "eq", "running"]], "v": "{{timer.label}} · {{timer.round}}/{{timer.rounds}}"},
+      {"if": [["timer.state", "eq", "ready"]], "v": {"es": "LISTO · {{timer.label}}", "en": "READY · {{timer.label}}"}},
+      {"v": {"es": "EN PAUSA · {{timer.round}}/{{timer.rounds}}", "en": "PAUSED · {{timer.round}}/{{timer.rounds}}"}}
+    ],
+    "progress": "{{timer.progress}}"
+  },
+  "footer": {
+    "label": [
+      {"if": [["timer.state", "eq", "stopped"]], "v": ""},
+      {"v": {"es": "PARAR", "en": "STOP"}}
+    ],
+    "confirm": "twice",
+    "confirm_label": {"es": "¿PARAR?", "en": "STOP?"},
+    "do": [{"do": "alert.clear", "key": "phase"}, {"do": "timer.stop"}]
+  },
+  "glance": {
+    "show": [["timer.state", "ne", "stopped"]],
+    "text": [
+      {"if": [["timer.state", "eq", "running"]], "v": "{{timer.label}}"},
+      {"if": [["timer.state", "eq", "ready"]], "v": {"es": "LISTO", "en": "READY"}},
+      {"v": {"es": "EN PAUSA", "en": "PAUSED"}}
+    ],
+    "value": "{{timer.left|mmss}}",
+    "icon": "timer",
+    "kind": [
+      {"if": [["timer.state", "eq", "running"]], "v": "live"},
+      {"v": "normal"}
+    ]
+  },
+  "views": [
+    {
+      "id": "main",
+      "blocks": [
+        {"type": "big", "h": 104, "font": "digits96", "text": "{{timer.left|mmss}}",
+         "tone": [
+           {"if": [["timer.state", "eq", "running"]], "v": "{{timer.tone}}"},
+           {"v": "dim"}
+         ],
+         "tap": [{"do": "alert.clear", "key": "phase"}, {"do": "timer.toggle"}]},
+        {"type": "gap", "h": 8},
+        {"type": "buttons", "h": 46, "items": [
+          {"label": [
+             {"if": [["timer.state", "in", ["stopped", "ready"]]], "v": {"es": "EMPEZAR", "en": "START"}},
+             {"if": [["timer.state", "eq", "running"]], "v": {"es": "PAUSAR", "en": "PAUSE"}},
+             {"v": {"es": "SEGUIR", "en": "RESUME"}}
+           ],
+           "icon": [
+             {"if": [["timer.state", "eq", "running"]], "v": "pause"},
+             {"v": "play"}
+           ],
+           "tap": [{"do": "alert.clear", "key": "phase"}, {"do": "timer.toggle"}]},
+          {"label": {"es": "SALTAR", "en": "SKIP"}, "icon": "next",
+           "show": [["timer.state", "ne", "stopped"]],
+           "tap": [{"do": "alert.clear", "key": "phase"}, {"do": "timer.skip"}]}
+        ]}
+      ]
+    }
+  ],
+  "on": {
+    "timer.phase_end": [
+      {"do": "alert", "if": [["cfg.alert", "eq", "full"]], "level": "critical", "key": "phase",
+       "title": "{{ev.next|map:next_title}}", "big": "{{ev.next_total|mmss}}", "icon": "timer",
+       "sec": 30, "band_after": true, "flash": true, "open": true},
+      {"do": "alert", "if": [["cfg.alert", "eq", "band"]], "level": "warn", "key": "phase",
+       "title": "{{ev.next|map:next_title}}", "body": "{{ev.next_total|mmss}}", "icon": "timer", "open": true},
+      {"do": "notify", "if": [["cfg.tg", "eq", true]], "key": "phase", "ttl_s": 300, "loud": "{{cfg.tg_sound}}",
+       "text": "{{ev.next|map:next_title}} · {{ev.next_total|mmss}}"}
+    ]
+  }
+}}
+```
+
+- **Página.** El bloque `big` con la cuenta atrás en `Digits96` (cifras tabulares, así que no baila), en el tono de la fase mientras corre y en `InkDim` parado o en pausa; tocar la cifra también empieza, pausa o sigue. Debajo, un bloque `buttons` en y=112-158, por encima de la zona de la banda: «EMPEZAR / PAUSAR / SEGUIR» (EMPEZAR también cuando la fase siguiente está lista) y «SALTAR» (este solo en marcha; en pausa, deja la fase siguiente lista).
+- **Cabecera.** «TRABAJO · 2/4», «LISTO · DESCANSO», «EN PAUSA · 2/4» o, tras un apagón sin WiFi, «ESPERANDO LA HORA», y el progreso de la fase en el filete.
+- **Pie.** «PARAR» con `confirm: "twice"`: el primer toque lo cambia a «¿PARAR?» y el segundo, antes de 3 s, para.
+- **Mientras cuenta.** La línea de estado viva sale en las demás páginas: texto «TRABAJO» y valor «12:34», así que si no cabe se recorta el texto y nunca la cifra; con la fase siguiente lista, «LISTO 05:00». Tocarla abre su página, y sin WiFi se turna con el aviso del portal ([P25](#p25-el-aviso-sin-wifi-y-la-cuenta-del-pomodoro)). Si el dueño lo deja, sale también en el reposo y con la pantalla bloqueada, en una faja aunque el salvapantallas no la pida ([§5.6](#56-reposo)). Con `awake`, `keep_awake` impide el reposo y la vuelta al inicio mientras se ve su página.
+- **Fin de cada fase.** El manejador `timer.phase_end` lanza, con `alert` = `full`, una capa crítica de 30 s con el título de la tabla `next_title` («A DESCANSAR») y la duración de la siguiente fase en grande (`big`), con parpadeo de la retroiluminación y una banda después; con `band`, solo una banda `warn`. Tocar el aviso abre su página. Si se pide, un mensaje por Telegram (con sonido según `tg_sound`). Saltar una fase no avisa, porque `timer.phase_end` solo llega cuando la fase acaba sola. Durante la capa, la cuenta del descanso sigue viva debajo de la cifra ([§5.5](#55-avisos-y-capas)), y un toque que llega justo cuando la capa se cierra sola no pausa nada ([§6.1](#61-táctil)).
+- **Tras un reinicio.** Lo hace el motor (`resume`, [§13.10](#1310-motor-timer-temporizador-por-fases)): la pausa se restaura tal cual; una fase en marcha sigue en el acto tras un reinicio por software (una OTA) y, tras un apagón, en cuanto hay hora; sin WiFi espera la hora 2 minutos y después queda en pausa con lo que faltaba, y tocar SEGUIR mientras espera cancela la espera. Si la fase acabó con la placa apagada, se queda parado. Al desactivar el plugin, la cuenta queda en pausa.
+- **Sin Mini App.** Funciona desde F1 con los valores de fábrica (25, 5 y 15 minutos, 4 rondas) y se activa desde el menú del sistema; los ciclos configurables, el aviso por Telegram y el bloqueo llegan con la Mini App en F2 ([§0](#0-estado-versión-y-glosario)).
+- **Memoria.** 16 KB de PSRAM, provisional hasta medirlo: la receta compilada, los ajustes, el estado y el motor. Leer la receta no cuenta ([§13.17](#1317-cómo-lo-ejecuta-el-firmware)).
+
+### A.5 Salvapantallas (receta, F5)
+
+Del manifiesto ([`examples/plugins/salvapantallas/plugin.json`](../examples/plugins/salvapantallas/plugin.json)): `"requires": {"sd": "optional"}`; permisos `photos`, `sd` e `idle`; superficies `page` e `idle`; `touch.longpress` para borrar la foto que se ve; el comando `/fondo`; las acciones `delete` (con `confirm: "screen"` y solo las fotos del bot), `send` y `preview`; la lista de la placa `photos` con columnas (número, fecha, pie y origen) y `albums` en pares; los campos de fotos con `pattern` y, el de las elegidas, con `keep_hidden`; `storage` con `sd_shared: "fotos"`. El `id`, `salvapantallas`, tiene 14 caracteres y cabe en la regla del `id`.
+
+```json
+{"recipe": {
+  "format": 1,
+  "engines": {
+    "photos": {
+      "max_bot": 40,
+      "when_full": "{{cfg.when_full}}",
+      "caption_cmd": "fondo",
+      "shared": true,
+      "reply": "{{cfg.confirm}}",
+      "new_auto": "{{cfg.new_auto}}",
+      "publish": {"photos": "photos", "albums": "albums"}
+    },
+    "slideshow": {
+      "from": "photos",
+      "mode": "{{cfg.mode}}",
+      "picked": "{{cfg.picked}}",
+      "src": "{{cfg.src}}",
+      "albums": "{{cfg.albums}}",
+      "every": "{{cfg.every_s}}s",
+      "order": "{{cfg.order}}",
+      "fit": "{{cfg.fit}}",
+      "transition": "fade",
+      "overlay": "{{cfg.overlay}}",
+      "overlay_pos": "{{cfg.overlay_pos}}",
+      "night": "{{cfg.night}}"
+    }
+  },
+  "idle": {"from": "slideshow"},
+  "header": {
+    "subtitle": [
+      {"if": [["photos.sd", "gt", 0]], "v": {"es": "{{photos.count}} FOTOS · {{photos.sd}} EN LA TARJETA",
+                                              "en": "{{photos.count}} PHOTOS · {{photos.sd}} ON THE CARD"}},
+      {"v": {"es": "{{photos.count}} FOTOS", "en": "{{photos.count}} PHOTOS"}}
+    ]
+  },
+  "footer": {
+    "label": {"es": "PROBAR REPOSO", "en": "TRY IDLE"},
+    "do": [{"do": "idle.preview"}]
+  },
+  "views": [
+    {
+      "id": "main",
+      "blocks": [
+        {"type": "image", "w": "left", "h": 138, "src": "slideshow.current", "fit": "{{cfg.fit}}",
+         "empty": {"es": "Sin fotos todavía", "en": "No photos yet"},
+         "confirm": "twice", "confirm_label": {"es": "¿BORRARLA? MANTÉN OTRA VEZ", "en": "DELETE IT? HOLD AGAIN"},
+         "long": [{"do": "photos.delete_current"}]},
+        {"type": "list", "w": "right", "h": 138, "items": "photos.latest",
+         "row": {"label": "{{item.label}}", "value": "{{item.at|date}}"},
+         "empty": {"es": "Mándale una foto al bot", "en": "Send the bot a photo"}},
+        {"type": "text", "h": 46, "font": "meta13", "tone": "mute", "align": "left",
+         "text": {"es": "MANTÉN LA FOTO DOS VECES PARA BORRARLA", "en": "HOLD THE PHOTO TWICE TO DELETE IT"}}
+      ]
+    }
+  ],
+  "on": {
+    "command.fondo": [
+      {"do": "photos.delete", "if": [["ev.w1", "in", ["borrar", "delete"]], ["ev.n", "set"]], "number": "{{ev.n}}"},
+      {"do": "reply", "if": [["ev.w1", "unset"]],
+       "text": {"es": "Tengo {{photos.count}} fotos ({{photos.bot}} del bot y {{photos.sd}} de la tarjeta). Mándame una foto con el pie /fondo para añadirla, o escribe /fondo borrar 12 para quitar la 12.",
+                "en": "I have {{photos.count}} photos ({{photos.bot}} from the bot and {{photos.sd}} from the card). Send me a photo captioned /fondo to add it, or type /fondo delete 12 to remove number 12."}},
+      {"do": "reply", "if": [["ev.w1", "set"], ["ev.n", "unset"]],
+       "text": {"es": "Escribe /fondo o /fondo borrar 12.", "en": "Type /fondo or /fondo delete 12."}},
+      {"do": "reply", "if": [["ev.w1", "nin", ["borrar", "delete"]], ["ev.n", "set"]],
+       "text": {"es": "Para quitar la foto {{ev.n}}, escribe /fondo borrar {{ev.n}}.", "en": "To remove photo {{ev.n}}, type /fondo delete {{ev.n}}."}}
+    ],
+    "action.delete": [{"do": "photos.delete", "ids": "{{ev.args.names}}"}],
+    "action.send": [{"do": "photos.send", "ids": "{{ev.args.names}}"}],
+    "action.preview": [{"do": "idle.preview"}]
+  }
+}}
+```
+
+- **Fotos por el bot.** Las recibe el motor `photos`: las que le tocan como receptor de fotos (`sys.photos`, que con `auto` ya es él si es el único activo que recibe fotos, [P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)), con su pie, y las que llevan el pie `/fondo`. Caben 40, y en la FAT también cuenta su tope de 4 MB; con `when_full` = `oldest` se borra la más antigua (salvo las elegidas, si salen solo las elegidas) y con `refuse` se rechaza la nueva. Si Telegram solo da tallas progresivas, el bot pide la foto como archivo ([§6.2](#62-telegram)). El sistema baja la talla de 800 px (300 KB como mucho), descarta las repetidas y la guarda en `/pauta/salvapantallas/` en la microSD o, sin tarjeta, en `/data/salvapantallas/` en la FAT (con el tope de 8 MB al día). De un álbum se guardan todas, con una sola respuesta que lleva el teclado nuevo: «10 fotos guardadas (22 de 40 · 3,1 de 4 MB)».
+- **Fotos de la tarjeta.** Lee también las que el dueño copie a `/pauta/fotos/` (`sd_shared`). Son de solo lectura y Pauta nunca las borra; sus subcarpetas son álbumes. Cada una (hasta 8192 px) se reduce una sola vez a la caché del plugin y sale derecha, con su orientación EXIF. Las que no se pueden leer se cuentan en la página.
+- **Mini App.** Deja elegir cuáles salen (todas, solo las elegidas o todas menos ellas), de dónde, qué álbumes de la tarjeta y cada cuánto, por número, fecha y pie. La lista enseña las 64 fotos más recientes, con la fecha en el idioma de quien la abre, y viaja por ventanas si hace falta; las más viejas entran por su álbum. Las elegidas no se pierden al pasar a «Todas» (`keep_hidden`), y una foto borrada sale sola de la selección. La acción `send` («Verlas en el chat») reenvía hasta 10 fotos del bot con su número en el pie, sin subirlas, para saber cuál es cuál (las de la tarjeta no se pueden mandar en la v1). `delete` solo ofrece las del bot y las borra tras un toque en la pantalla que enseña cuáles ([P26](#p26-borrar-fotos-siempre-con-un-toque)). `preview` prueba el reposo.
+- **Reposo.** Es el proveedor natural (`idle.from: slideshow`): con `sys.idle_by` en `auto`, activarlo basta ([P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)), y el hueco `Slot::Full` es suyo mientras lo sea ([§5.6](#56-reposo)). El motor `slideshow` elige la foto según `mode`, `src`, `albums` y `order`, la cambia cada `every_s` con un fundido, pide la faja del reloj según `overlay` y `overlay_pos` y, en la franja nocturna con `night` = `clock`, deja el reloj del sistema. Con la pantalla bloqueada, enseña lo que diga `sys.lock_show` ([P18](#p18-con-la-pantalla-bloqueada-se-ven-las-fotos-o-solo-el-reloj)) y **las fotos que llegan mientras está bloqueada no salen hasta desbloquear**.
+- **Página.** La miniatura de la foto que toca (`image`, `Slot::Thumb`) a la izquierda, las tres últimas llegadas (`list` sobre `photos.latest`) a la derecha y una línea de ayuda. Una pulsación larga sobre la miniatura enseña «¿BORRARLA? MANTÉN OTRA VEZ» durante 3 s, y una segunda la borra (en la pantalla, eso ya es la confirmación); si es de la tarjeta, una banda dice que se borra desde el PC. El subtítulo dice «40 FOTOS · 12 EN LA TARJETA» y el botón del pie, «PROBAR REPOSO», llama a `idle.preview`.
+- **Telegram.** `/fondo` sin más contesta con el estado y una ayuda; `/fondo borrar 57` pide un toque en la pantalla y borra la foto 57 ([P26](#p26-borrar-fotos-siempre-con-un-toque)), que se llama así para siempre aunque se borren otras; una foto de la tarjeta no se borra («Esa está en la tarjeta: bórrala desde el PC»). Cualquier otra cosa recibe una ayuda.
+- **Memoria.** 160 KB de PSRAM: la miniatura (`Slot::Thumb`, 75 KB), los ajustes, el estado, la receta compilada y los contadores del índice. El índice de la tarjeta vive en la propia tarjeta.
+
+### A.6 Semáforo de webs y servicios (receta, F4)
+
+Del manifiesto ([`examples/plugins/semaforo/plugin.json`](../examples/plugins/semaforo/plugin.json)): permisos `net.user` y `notify`, con `lan` como permiso opcional; `"net": {"user_hosts_from": ["sites.url"], "min_interval_s": 300, "max_per_hour": 300}` (12 webs cada 5 minutos son 144 peticiones por hora); la lista `sites` con `order: "manual"` (nombre, dirección con `scope: "any"`, tipo, cuenta como bien, lenta a partir de, vigilar el certificado y vigilar); el comando `/webs`; la acción `check`; la lista de la placa `status`.
+
+```json
+{"recipe": {
+  "format": 1,
+  "engines": {
+    "monitor": {
+      "targets": "cfg.sites",
+      "name": "name", "url": "url", "mode": "mode", "enabled": "on",
+      "every": "{{cfg.every_min}}m",
+      "down_after": "{{cfg.fails}}",
+      "up_after": "{{cfg.recover}}",
+      "slow_after": "{{cfg.slow_n}}",
+      "modes": {
+        "http": {"check": "probe", "ok": "{{item.expect}}", "slow_ms": "{{item.slow_ms}}", "cert": "{{item.cert}}"},
+        "statuspage": {"check": "json", "suffix": "/api/v2/status.json", "pick": "status.indicator", "max_bytes": 512,
+                       "map": {"none": "ok", "minor": "warn", "maintenance": "warn", "major": "fail", "critical": "fail"},
+                       "else": "fail"}
+      },
+      "cert": {"warn_days": "{{cfg.cert_days}}", "marks": [14, 7, 3, 1, 0], "at": "{{cfg.cert_at}}"},
+      "history": 24,
+      "publish": "status"
+    }
+  },
+  "header": {
+    "subtitle": [
+      {"if": [["monitor.total", "eq", 0]], "v": {"es": "SIN WEBS", "en": "NO SITES"}},
+      {"if": [["monitor.unknown", "eq", "{{monitor.total}}"]], "v": {"es": "COMPROBANDO…", "en": "CHECKING…"}},
+      {"if": [["monitor.down", "eq", 1]], "v": {"es": "1 CAÍDA", "en": "1 DOWN"}},
+      {"if": [["monitor.down", "gt", 1]], "v": {"es": "{{monitor.down}} CAÍDAS", "en": "{{monitor.down}} DOWN"}},
+      {"v": "{{monitor.ok}}/{{monitor.total}} OK"}
+    ],
+    "progress": "{{monitor.ratio}}"
+  },
+  "footer": {
+    "label": {"es": "COMPROBAR", "en": "CHECK"},
+    "do": [{"do": "monitor.run"}]
+  },
+  "glance": [
+    {"show": [["monitor.down", "gt", 0]], "kind": "sticky", "status": "fail", "icon": "lights",
+     "text": [
+       {"if": [["monitor.down", "eq", 1]], "v": {"es": "1 CAÍDA · {{monitor.first_down}}", "en": "1 DOWN · {{monitor.first_down}}"}},
+       {"v": {"es": "{{monitor.down}} CAÍDAS", "en": "{{monitor.down}} DOWN"}}
+     ]},
+    {"show": [["cfg.glance_ok", "eq", true], ["monitor.total", "gt", 0]], "kind": "normal", "status": "ok",
+     "icon": "lights", "text": "{{monitor.ok}}/{{monitor.total}} OK"}
+  ],
+  "views": [
+    {
+      "id": "main",
+      "blocks": [
+        {"type": "list", "h": 208, "items": "monitor.targets",
+         "row": {
+           "lead": "{{item.status}}",
+           "label": "{{item.name}}",
+           "value": "{{item.detail}}",
+           "tone": [
+             {"if": [["item.status", "eq", "stale"]], "v": "mute"},
+             {"if": [["item.st", "eq", "fail"]], "v": "clay"},
+             {"v": "dim"}
+           ]
+         },
+         "empty": {"es": "Sin webs: añádelas en Ajustes", "en": "No sites: add them in Settings"},
+         "tap": [{"do": "view", "id": "detail", "item": "{{item.id}}"}]}
+      ]
+    },
+    {
+      "id": "detail",
+      "header": {"subtitle": "{{sel.name|upper}}", "progress": -1},
+      "footer": {"label": {"es": "VOLVER", "en": "BACK"}, "do": [{"do": "view", "id": "main"}]},
+      "blocks": [
+        {"type": "rows", "items": [
+          {"label": {"es": "Último", "en": "Last"}, "value": "{{sel.detail}}", "lead": "{{sel.status}}"},
+          {"label": {"es": "Comprobada", "en": "Checked"}, "value": "{{sel.at|ago}}"},
+          {"label": {"es": "Dirección", "en": "Address"}, "value": "{{sel.host|trunc:28}}"}
+        ]},
+        {"type": "gap", "h": 8},
+        {"type": "spark", "h": 46, "values": "sel.spark", "tone": "dim"}
+      ]
+    }
+  ],
+  "alarms": [
+    {"id": "down", "each": "monitor.targets",
+     "enter": [["item.st", "eq", "fail"]],
+     "exit": [["item.st", "in", ["ok", "slow", "warn"]]],
+     "level": "warn", "icon": "alert", "open": true,
+     "title": {"es": "{{item.name}}: caída", "en": "{{item.name}}: down"},
+     "body": "{{item.why}}",
+     "on_exit": {"level": "info", "title": {"es": "{{item.name}} de vuelta", "en": "{{item.name}} is back"}},
+     "notify": {
+       "if": [["cfg.tg", "eq", true]],
+       "text": "🔴 {{item.name}} ({{item.why}})",
+       "exit": {"if": [["cfg.tg_back", "eq", true]],
+                "text": {"es": "🟢 {{item.name}} de vuelta", "en": "🟢 {{item.name}} is back"}},
+       "batch": {"head": {"es": "{{ev.count}} cambios:", "en": "{{ev.count}} changes:"}},
+       "ttl_s": 1800
+     }},
+    {"id": "slow", "each": "monitor.targets",
+     "enter": [["item.st", "eq", "slow"]],
+     "exit": [["item.st", "in", ["ok", "warn", "fail"]]],
+     "level": "info", "icon": "clock",
+     "title": {"es": "{{item.name}} va lenta", "en": "{{item.name}} is slow"},
+     "body": "{{item.ms}} ms",
+     "notify": {
+       "if": [["cfg.tg", "eq", true], ["cfg.tg_slow", "eq", true]],
+       "text": "🟡 {{item.name}}: {{item.ms}} ms",
+       "batch": {"head": {"es": "{{ev.count}} cambios:", "en": "{{ev.count}} changes:"}},
+       "ttl_s": 1800
+     }}
+  ],
+  "on": {
+    "command.webs": [
+      {"do": "monitor.run", "if": [["ev.w1", "in", ["ahora", "now"]]], "reply_after": true},
+      {"do": "reply", "if": [["ev.w1", "unset"]], "each": "monitor.targets", "max_lines": 12,
+       "head": {"es": "Tus webs ({{monitor.ok}}/{{monitor.total}} bien):", "en": "Your sites ({{monitor.ok}}/{{monitor.total}} up):"},
+       "line": "{{item.status|status_emoji}} {{item.name}} · {{item.detail}}",
+       "empty": {"es": "No vigilas ninguna web. Añádelas en ⚙ Ajustes.", "en": "You are not watching any site. Add them in ⚙ Settings."}},
+      {"do": "reply", "if": [["ev.w1", "set"], ["ev.w1", "nin", ["ahora", "now"]]],
+       "text": {"es": "Escribe /webs o /webs ahora.", "en": "Type /webs or /webs now."}}
+    ],
+    "action.check": [
+      {"do": "monitor.run", "reply_after": true}
+    ],
+    "monitor.round_end": [
+      {"do": "reply", "each": "monitor.targets", "max_lines": 12,
+       "head": {"es": "Comprobadas ({{monitor.ok}}/{{monitor.total}} bien):", "en": "Checked ({{monitor.ok}}/{{monitor.total}} up):"},
+       "line": "{{item.status|status_emoji}} {{item.name}} · {{item.detail}}",
+       "empty": {"es": "No vigilas ninguna web.", "en": "You are not watching any site."}}
+    ],
+    "monitor.cert_due": [
+      {"do": "alert", "level": "warn", "key": "cert", "icon": "lock", "open": true,
+       "title": [
+         {"if": [["ev.count", "eq", 1]], "v": {"es": "1 certificado caduca pronto", "en": "1 certificate expires soon"}},
+         {"v": {"es": "{{ev.count}} certificados caducan pronto", "en": "{{ev.count}} certificates expire soon"}}
+       ],
+       "body": "{{ev.names}}"},
+      {"do": "notify", "if": [["cfg.tg", "eq", true]], "key": "cert", "each": "ev.items",
+       "head": {"es": "Certificados que caducan pronto:", "en": "Certificates expiring soon:"},
+       "line": {"es": "{{item.name}}: {{item.cert_days}} días", "en": "{{item.name}}: {{item.cert_days}} days"}}
+    ]
+  }
+}}
+```
+
+- **Comprobaciones.** Las hace el motor `monitor` cada `every_min` minutos: un sondeo para las webs (`http`) y la lectura de `/api/v2/status.json` sobre el origen de la dirección para las páginas de estado (`statuspage`; también tras la redirección de `githubstatus.com` a `www.githubstatus.com`), con `none` = bien, `minor` o `maintenance` = atención y `major` o `critical` = caída. Un error local no toca las cuentas: cada web conserva su estado, que pasa a dato viejo a las 3 vueltas. Si en una vuelta fallan todas por la red (una caída del DNS o del router de la oficina), la vuelta no cuenta, y sin Internet no da veredictos: no son 12 caídas falsas. «Internet» quiere decir que algo público contestó en los últimos 3 minutos, no solo Telegram ([§6.5](#65-eventos-del-sistema)). La red nunca deja colgada la placa: el recadero trabaja a trozos de 1 s ([§7.4](#74-red-httptls-con-cola-el-recadero)).
+- **Estados.** Caída tras `fails` fallos seguidos, lenta tras `slow_n` lecturas lentas y de vuelta tras `recover` aciertos. Con «Vigilar el certificado», uno caducado cuenta como fallo y uno al que le quedan menos de `cert_days` días pone la web en «atención». Una web que solo habla TLS 1.3 sale como «no compatible». La tabla completa está en [§13.11](#1311-motor-monitor-vigilante-de-webs-y-servicios).
+- **Página.** Vista `main`: un bloque `list` sobre `monitor.targets`, con el estado con forma delante, el nombre y el resumen del motor («200 · 340 ms · cert 52 d» o el motivo del fallo); un dato viejo, en `InkMute`. Tocar un renglón abre la vista `detail` con esa web: último resultado, cuándo se comprobó, la dirección y una minigráfica con los últimos 24 tiempos; «VOLVER» en el pie.
+- **Cabecera y pie.** «11/12 OK», «1 CAÍDA», «3 CAÍDAS» o «COMPROBANDO…» mientras ninguna se ha comprobado aún, y el progreso = webs bien / webs vigiladas. El botón del pie, «COMPROBAR», lanza una vuelta.
+- **Avisos.**
+  - Línea de estado fija (`sticky`, estado `fail`) «1 CAÍDA · Tienda» mientras alguna falla; con `glance_ok`, «12/12 OK» cuando todo va bien.
+  - La alarma `down`, una por web: banda `warn` al caer, con el motivo, y banda `info` al volver; su «de vuelta» por Telegram solo sale si salió el «caída» (el `if` de `notify` vale para los dos, [§13.8](#138-alarmas-avisos-con-histéresis)). La alarma `slow`, una `info` al ir lenta, que no sale y vuelve a entrar con cada corte de red (su `exit` mira solo estados de verdad). Las dos llevan claves distintas por web, así que no se pisan.
+  - Si `tg` está activo, un solo mensaje por vuelta con todos los cambios («3 cambios: 🔴 Tienda (503) · 🟢 Blog de vuelta…»), con `ttl_s` para que al volver la red no lleguen avisos viejos de golpe.
+  - El aviso diario de certificados (`monitor.cert_due`) a la hora `cert_at`: una banda y, si se quiere, un mensaje con las webs que han cruzado 14, 7, 3, 1 o 0 días.
+- **Red.** `net.user` limita el recadero a los hosts de los campos `url` del dueño, y las redirecciones a esos mismos hosts. `lan` se pide, con su toque, la primera vez que se guarda una dirección de la red local, como el router o un NAS, o la primera vez que un nombre resuelve a una IP de la red local ([§7.4](#74-red-httptls-con-cola-el-recadero)).
+- **Telegram.** `/webs` contesta con la tabla de estados; `/webs ahora` las comprueba y contesta al acabar la vuelta (respuesta diferida con `reply_after`, de hasta 300 s; si no da tiempo, contesta con lo que haya). La vuelta entera cuenta como del dueño, así que no espera los 5 minutos de `min_interval_s`.
+- **Mini App.** La lista de la placa `status` pinta un punto junto a cada web; vive en RAM y no provoca mensajes «Ajustes al día» ([§9.1](#91-tipos-de-campo)). Las webs se ordenan arrastrando, y ese es el orden de la página. «Comprobar ahora» lanza una vuelta y contesta igual que `/webs ahora`.
+- **Memoria.** 40 KB de PSRAM (la receta compilada, los ajustes, la tabla de 12 webs con su historial, el estado y la respuesta en curso).
+
+## Preguntas abiertas
+
+Lo que sigue sin decidir. El texto ya aplica la recomendación de cada pregunta y la marca con su número, así que contestar otra opción solo cambia esos sitios. Las preguntas se numeran de la [P16](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso) a la [P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos) porque es la numeración con la que se han discutido; las anteriores ya tienen respuesta y forman parte del texto.
+
+| Pregunta | Qué se aplica mientras tanto |
+|---|---|
+| [**P16.**](#p16-reposo-por-defecto-en-las-placas-que-ya-están-en-uso) Reposo por defecto en las placas que ya están en uso | `sys.idle` = 0 (nunca) en las placas que vienen de la 1.1.x y 10 minutos en las nuevas, con el reloj de reposo enseñando «3 PENDIENTES» |
+| [**P17.**](#p17-puede-un-pomodoro-en-marcha-retrasar-la-franja-nocturna) ¿Puede un Pomodoro en marcha retrasar la franja nocturna? | No: el reposo entra a su hora y la cuenta sigue en la línea viva del reloj de reposo |
+| [**P18.**](#p18-con-la-pantalla-bloqueada-se-ven-las-fotos-o-solo-el-reloj) Con la pantalla bloqueada, ¿fotos o solo el reloj? | Un ajuste del sistema, `sys.lock_show`, con «reposo» por defecto (o «solo reloj» si la placa vive en la oficina) |
+| [**P19.**](#p19-toque-para-los-destinos-nuevos-de-la-red-local) Toque para cada destino nuevo de la red local | Sí: guardar o cambiar una dirección de la red local pide un toque que enseña la dirección |
+| [**P20.**](#p20-webs-de-tu-red-con-certificado-propio) Webs de tu red con certificado propio | Fijar el certificado: la primera vez la pantalla enseña su huella y, con un toque, se guarda; desde entonces se compara |
+| [**P21.**](#p21-colores-del-semáforo) Colores del Semáforo | Dos colores más la forma: oliva lleno, anillo de arcilla, arcilla llena y anillo gris |
+| [**P22.**](#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1) Recetas del catálogo en la v1 | Sí, en F2, solo del catálogo oficial firmado y con su toque |
+| [**P23.**](#p23-recetas-sin-firmar-en-la-v1) Recetas sin firmar | Solo desde `/pauta/inbox/` de la microSD, marcadas «no verificada», con su toque y en F5 |
+| [**P24.**](#p24-las-claves-del-sistema) Las claves del sistema | Quedan las 23 claves del manifiesto del sistema, más `idle_by` ([P28](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos)), y `theme: auto` |
+| [**P25.**](#p25-el-aviso-sin-wifi-y-la-cuenta-del-pomodoro) El aviso «SIN WIFI» y la cuenta del Pomodoro | El aviso y las líneas de estado vivas o fijas se turnan cada 6 s en el pie |
+| [**P26.**](#p26-borrar-fotos-siempre-con-un-toque) Borrar fotos, siempre con un toque | Toda orden de borrar fotos que llegue por Telegram o por la Mini App pide un toque, esté la foto donde esté |
+| [**P27.**](#p27-encender-desbloquear-desde-telegram-con-un-toque) Encender «Desbloquear desde Telegram» con un toque | Encenderlo pide un toque en la pantalla; apagarlo, no |
+| [**P28.**](#p28-qué-sale-en-reposo-y-quién-recibe-las-fotos) Qué sale en reposo y quién recibe las fotos | Claves `sys.idle_by` y `sys.photos`, las dos con «Automático» por defecto |
+
+### P16. Reposo por defecto en las placas que ya están en uso
+
+Hoy la placa enseña la lista todo el rato. Si `sys.idle` vale 10 por defecto, una placa que se actualice desde la 1.1.x pasará a enseñar un reloj a los 10 minutos sin tocarla, y una tarea que llegue en reposo solo saldrá como banda.
+
+*Opciones:* (a) 0 (nunca) en las placas que vienen de la 1.1.x y 10 en las nuevas, con el reloj de reposo enseñando «3 PENDIENTES» debajo; (b) 10 para todas; (c) 0 para todas.
+
+*Recomendación:* (a). Más adelante, Pauta podría ofrecerse como proveedor de reposo con una lista tranquila (solo pendientes, sin animaciones).
+
+### P17. ¿Puede un Pomodoro en marcha retrasar la franja nocturna?
+
+*Opciones:* (a) no: el reposo entra a su hora y la línea viva sigue la cuenta en el reloj de reposo; (b) sí, mientras su página esté a la vista.
+
+*Recomendación:* (a).
+
+### P18. Con la pantalla bloqueada, ¿se ven las fotos o solo el reloj?
+
+Bloquear enseña el proveedor de reposo. Con el Salvapantallas, una placa bloqueada en la oficina deja tus fotos a la vista.
+
+*Opciones:* (a) un ajuste del sistema, `sys.lock_show`, «Al bloquear, enseñar: reposo | solo reloj», con «reposo» por defecto; (b) el mismo ajuste con «solo reloj» por defecto; (c) siempre el reposo, sin ajuste.
+
+*Recomendación:* (a); si la placa va a vivir en la oficina, (b). El manifiesto del sistema ya lleva el ajuste con la opción (a).
+
+### P19. Toque para los destinos nuevos de la red local
+
+Con `lan`, el Semáforo puede vigilar el router o un NAS. Quien controle un dispositivo emparejado podría añadir «webs» como `http://192.168.1.1/reboot.cgi` (hay aparatos que hacen algo con un simple `GET`) o ir probando direcciones de tu red. Las confirmaciones del [§8.2](#82-reglas) piden un toque al activar `lan`, pero no al añadir cada destino.
+
+*Opciones:* (a) guardar o cambiar una dirección que apunte a la red local (IP privada, `.local` o `http://`) pide un toque que enseña la dirección; (b) basta el toque al conceder `lan`.
+
+*Recomendación:* (a). Pasa pocas veces, y con la firma de los envíos ([§9.4](#94-emparejar-dispositivos)) el riesgo ya es bajo.
+
+### P20. Webs de tu red con certificado propio
+
+Un NAS o un router en `https://192.168.1.10:5001` suele llevar un certificado hecho por el propio aparato, que nunca pasará la comprobación: el Semáforo lo pintaría siempre en rojo. La regla técnica es no desactivar nunca la comprobación.
+
+*Opciones:* (a) solo para hosts de la red local y con `lan`, «fijar» el certificado: la primera vez la pantalla enseña su huella SHA-256 y, con un toque, se guarda; desde entonces se compara la huella antes de enviar nada (`getFingerprintSHA256()` ya existe en el core); (b) un modo que solo mira si el puerto contesta; (c) no vigilar `https` en la red local.
+
+*Recomendación:* (a): sigue siendo una comprobación, solo que contra la huella que tú has aceptado. Encaja en el motor `monitor` como opción de `probe`, sin cambiar el formato de receta.
+
+### P21. Colores del Semáforo
+
+El caso pide verde, ámbar y rojo, y la paleta de libreta solo tiene oliva (`Accent`) y arcilla (`Clay`).
+
+*Opciones:* (a) dos colores más la forma: oliva lleno = bien; anillo de arcilla = lenta o atención; arcilla llena = caída; anillo gris = sin datos; (b) añadir un rol `Ochre` (ocre tierra, por ejemplo B08A3C de día y D9B25F de noche) solo para «atención».
+
+*Recomendación:* (a), que encaja con la libreta y ya distingue los estados por la forma. Es lo que usan las recetas de referencia.
+
+### P22. ¿Se pueden instalar recetas del catálogo ya en la v1?
+
+Las recetas entran en la v1, pero falta decidir si solo las que trae el firmware o también otras. Con las de serie basta para los cuatro casos de referencia; instalar del catálogo es lo que convierte el estándar en algo que otros pueden usar sin compilar.
+
+*Opciones:* (a) sí, en F2: solo recetas del catálogo oficial firmado, instaladas desde la Mini App con su toque en la pantalla (reutiliza la descarga y la comprobación de firmas de la OTA, que entra en la misma fase); (b) sí, pero en una 1.x posterior a F5, cuando las cuatro de serie hayan rodado; (c) no en la v1: solo recetas de serie, que se actualizan con el firmware.
+
+*Recomendación:* (a). Si F2 se alarga, puede pasar a F4 sin tocar nada más; el formato y el índice no cambian.
+
+### P23. ¿Recetas sin firmar en la v1?
+
+Útil para probar una receta propia sin publicarla. El riesgo es que alguien te cuele una receta que pida más de lo que parece.
+
+*Opciones:* (a) solo desde la carpeta `/pauta/inbox/` de la microSD (hay que tener la placa en la mano), marcadas «no verificada», con su toque en la pantalla y en F5; (b) también mandando el archivo al bot; (c) no en la v1.
+
+*Recomendación:* (a). Por el bot bastaría una cuenta de Telegram robada y un dispositivo emparejado para intentarlo, y no aporta nada a quien tiene la placa delante.
+
+### P24. Las claves del sistema
+
+El manifiesto del sistema tiene 17 claves fijas: `lang`, `theme`, `loc`, `tz`, `idle`, `night`, `night_from`, `night_to`, `pin`, `lock_min`, `lock_sched`, `lock_from`, `lock_to`, `home`, `photos`, `kb` y `unlock_tg`. El texto usa además seis con comportamiento normativo: `home_min` (vuelta al inicio, [§5.2](#52-inicio-y-páginas)), `live_idle` y `live_lock` (líneas vivas en reposo y con la pantalla bloqueada, [§5.6](#56-reposo)), `lock_show` ([P18](#p18-con-la-pantalla-bloqueada-se-ven-las-fotos-o-solo-el-reloj)), `ntp` (servidor de hora propio, [§7.2](#72-hora-y-zona-horaria)) y `kb_speed` (velocidad del teclado, [§7.10](#710-teclado-hid)). Además, `theme` admite `auto` («según el sol», con el dato `is_day` que ya da el tiempo de la cabecera).
+
+*Opciones:* (a) quedan las 23 claves y `auto`; (b) se quitan las seis y sus valores quedan fijos (3 min, sí, sí, reposo, ninguno, 20 teclas/s); (c) se quedan las seis, sin `auto`.
+
+*Recomendación:* (a): sin esas claves, cosas como qué se ve con la pantalla bloqueada ([P18](#p18-con-la-pantalla-bloqueada-se-ven-las-fotos-o-solo-el-reloj)) o el servidor de hora del laboratorio para nicscom no se podrían configurar desde la Mini App, que es la única forma de configurar.
+
+### P25. El aviso «SIN WIFI» y la cuenta del Pomodoro
+
+Sin WiFi, el pie dice «SIN WIFI · TOCA PARA CONFIGURAR» ([§4](#4-ciclo-de-vida)). Si ese texto fuera fijo, taparía la línea de estado de los plugins en todas las páginas mientras no haya WiFi, que es justo cuando el Pomodoro sigue contando sin red: la cuenta solo se vería en su propia página.
+
+*Opciones:* (a) el aviso de la WiFi y las líneas de estado vivas o fijas se turnan cada 6 s, y tocar el pie mientras se ve el aviso sigue abriendo el portal; (b) con una línea viva, el aviso se acorta a «SIN WIFI» junto a la cuenta (solo cabe si la página no tiene botón en el pie); (c) el aviso fijo.
+
+*Recomendación:* (a). El aviso sigue saliendo en el pie, solo que a ratos ([§5.4](#54-pie-y-línea-de-estado-los-pinta-el-sistema)).
+
+### P26. Borrar fotos, siempre con un toque
+
+Las confirmaciones del [§8.2](#82-reglas) piden un toque para «borrar datos de la microSD». Pero si una foto del bot se guarda en la tarjeta o en la memoria interna lo decide la placa, y el dueño no lo ve: «/fondo borrar 57» pediría toque o no según algo invisible. Además, cuando se llena, el Salvapantallas borra solo la foto más antigua, también de la tarjeta.
+
+*Opciones:* (a) toda orden de borrar fotos que llegue por Telegram o por la Mini App pide un toque, esté la foto donde esté; la rotación automática que el propio dueño configuró no lo pide, porque las fotos del bot son copias que se pueden volver a mandar; y Pauta nunca borra nada de la carpeta de fotos que el dueño llena desde el PC; (b) solo las fotos que están en la tarjeta, al pie de la letra; (c) como (a), y además la rotación en la tarjeta pide un toque (en la práctica, que al llenarse se rechacen las fotos nuevas).
+
+*Recomendación:* (a) ([§8.2](#82-reglas), [§13.12](#1312-motores-photos-y-slideshow-fotos-y-reposo)).
+
+### P27. Encender «Desbloquear desde Telegram» con un toque
+
+`/unlock` viene apagado ([§5.7](#57-bloqueo-con-pin)), pero sin esta regla se podría encender desde la Mini App sin tocar la placa. Quien tuviera tu cuenta de Telegram y un dispositivo emparejado (o solo la cuenta, si la clave del estado está en la nube de Telegram) podría encenderlo y después mandar `/unlock`.
+
+*Opciones:* (a) encenderlo pide un toque en la pantalla, apagarlo no; con la pantalla bloqueada, ese toque solo llega después de meter el PIN; (b) sin toque.
+
+*Recomendación:* (a). Añade un caso a la lista de confirmaciones ([§5.7](#57-bloqueo-con-pin), [§8.2](#82-reglas), [§9.8](#98-el-manifiesto-del-sistema)).
+
+### P28. Qué sale en reposo y quién recibe las fotos
+
+Hace falta una forma de elegir el proveedor de reposo y el plugin que recibe las fotos. Sin ella, el Salvapantallas solo saldría con «PROBAR REPOSO», y con `sys.photos` en «ninguno», quien lo activara y le mandara una foto recibiría «solo texto».
+
+*Opciones:* (a) una clave nueva del sistema, `idle_by` («Qué sale en reposo»), con «Automático» por defecto (el único plugin activo que puede ser salvapantallas; si no hay exactamente uno, el reloj), y `sys.photos` también con «Automático» por defecto (el único plugin activo que recibe fotos); (b) las mismas claves, pero sin «Automático»: se eligen siempre a mano en la Mini App; (c) sin clave nueva: el proveedor es siempre el último plugin activado que puede serlo.
+
+*Recomendación:* (a). Así activar el Salvapantallas basta para tenerlo en reposo y recibiendo fotos, que es su papel natural. Es una clave más en el manifiesto del sistema, junto a las seis de [P24](#p24-las-claves-del-sistema) ([§5.6](#56-reposo), [§6.2](#62-telegram), [§9.8](#98-el-manifiesto-del-sistema)).
