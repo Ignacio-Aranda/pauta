@@ -24,7 +24,9 @@ int      tasksDoneCount();
 // Devuelve el id asignado, o 0 si la lista esta llena o el texto es vacio.
 // Si cut no es nulo, indica si el texto no cabia y se ha recortado (siempre
 // por una letra entera, nunca a mitad de una secuencia UTF-8).
-uint16_t tasksAdd(const char *text, bool *cut = nullptr);
+// Si noRoom no es nulo, indica que la tarea no ha entrado por el tope de
+// texto guardado y no por MAX_TASKS: el aviso al usuario es distinto.
+uint16_t tasksAdd(const char *text, bool *cut = nullptr, bool *noRoom = nullptr);
 bool     tasksToggle(uint16_t id, bool &newDoneState);
 bool     tasksSetDone(uint16_t id, bool done);
 bool     tasksRemove(uint16_t id);
@@ -36,5 +38,6 @@ void     tasksClearAll();
 uint32_t tasksRevision();
 
 // Guarda en NVS si hay cambios pendientes. Se llama desde el bucle principal
-// para no escribir en flash dentro de cada operacion.
+// para no escribir en flash dentro de cada operacion. Si NVS no acepta la
+// escritura, lo dice por Serial y lo vuelve a intentar mas tarde.
 void     tasksFlushIfDirty();

@@ -33,6 +33,8 @@ enum StrId : uint16_t {
   S_WEB_SAVED, S_WEB_CONNECTING_TO, S_WEB_CLOSE_HINT,
   // Bot: tarea demasiado larga
   S_BOT_ADDED_CUT, S_BOT_ADDED_MANY_CUT,
+  // Bot: lista sin sitio para mas texto, o mensaje que solo entra en parte
+  S_BOT_NO_ROOM, S_BOT_ADDED_PART,
   STR_COUNT
 };
 

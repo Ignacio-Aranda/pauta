@@ -26,8 +26,9 @@ the thing you're meant to follow.
 
 Send the bot a message and it gets jotted down. Send several lines and it adds
 one task per line. A task that's too long gets trimmed, and the bot tells you.
-On the screen you tap a line to cross it off, and the bot confirms it back to
-you.
+The list holds 40 tasks, fewer if they're very long; if a message doesn't fit
+whole, the bot tells you how many it added. On the screen you tap a line to
+cross it off, and the bot confirms it back to you.
 
 | On Telegram | |
 |---|---|

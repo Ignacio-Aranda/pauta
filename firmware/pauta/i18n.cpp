@@ -66,6 +66,9 @@ static const char *const STR_ES[] = {
 
   "Apuntada, pero recortada: era demasiado larga.",
   "Apuntadas %d tareas. Alguna era demasiado larga y la he recortado.",
+
+  "La lista no admite más texto. Borra alguna con /del o quita las hechas con /clear.",
+  "He apuntado %d de %d.",
 };
 
 static const char *const STR_EN[] = {
@@ -102,6 +105,9 @@ static const char *const STR_EN[] = {
 
   "Jotted down, but trimmed: it was too long.",
   "Jotted down %d tasks. One or more were too long and got trimmed.",
+
+  "The list can't hold any more text. Delete some with /del or remove the finished ones with /clear.",
+  "Jotted down %d of %d.",
 };
 
 static_assert(sizeof(STR_ES) / sizeof(STR_ES[0]) == STR_COUNT,

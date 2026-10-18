@@ -170,15 +170,16 @@ static void handleText(int64_t chatId, const String &text) {
 
   // Varias lineas en un mensaje = una tarea por linea.
   int added = 0, rejected = 0, trimmed = 0;
+  bool full = false;                   // alguna ha chocado con MAX_TASKS
   int start = 0;
   while (start <= (int)text.length()) {
     int nl = text.indexOf('\n', start);
     String line = (nl < 0) ? text.substring(start) : text.substring(start, nl);
     line.trim();
     if (line.length()) {
-      bool cut = false;
-      if (tasksAdd(line.c_str(), &cut)) { added++; if (cut) trimmed++; }
-      else rejected++;
+      bool cut = false, noRoom = false;
+      if (tasksAdd(line.c_str(), &cut, &noRoom)) { added++; if (cut) trimmed++; }
+      else { rejected++; if (!noRoom) full = true; }
     }
     if (nl < 0) break;
     start = nl + 1;
@@ -186,9 +187,17 @@ static void handleText(int64_t chatId, const String &text) {
 
   if (added == 0 && rejected == 0) return;
   if (rejected) {
-    char msg[96];
-    snprintf(msg, sizeof(msg), T(S_BOT_FULL), MAX_TASKS);
-    sendMessage(chatId, msg);
+    // Con tareas largas el tope de texto llega antes que MAX_TASKS, y un
+    // "40 maximo" con treinta y tantas en la lista despistaba.
+    char why[160];
+    if (full) snprintf(why, sizeof(why), T(S_BOT_FULL), MAX_TASKS);
+    else      strlcpy(why, T(S_BOT_NO_ROOM), sizeof(why));
+    if (added == 0) { sendMessage(chatId, why); return; }
+    // Si solo entra una parte, se dice cuanta: el aviso de lista llena a
+    // secas hacia pensar que no se habia apuntado ninguna.
+    char head[64];
+    snprintf(head, sizeof(head), T(S_BOT_ADDED_PART), added, added + rejected);
+    sendMessage(chatId, String(head) + " " + why);
   } else if (added == 1) {
     // El aviso de recorte no promete un numero de letras: el limite es en
     // bytes y una tilde o un emoji ocupan mas de uno.
