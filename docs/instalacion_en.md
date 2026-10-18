@@ -121,6 +121,14 @@ python3 -m venv .venv && .venv/bin/pip install Pillow
 
 Edit the `specs` list at the end of the script to change typefaces or sizes.
 
+Whatever the font lacks isn't drawn: `printable()` in `ui.cpp` strips it from
+the line before drawing (the stored text doesn't change). Watch out for
+`✓ ✗ ● ○ → ←`: they are in `CHARS`, but the current TTF doesn't have them and
+in the generated fonts they are the missing-glyph box, so `printable()`
+removes them (or turns the arrows into `->` and `<-`) from a separate list.
+If you regenerate the fonts from a TTF that does have them, take them off
+that list.
+
 One gotcha if you touch this: `LGFXBase::loadFont()` reuses a single internal
 buffer, so having several fonts alive at once means each needs its own
 `VLWfont` + `PointerWrapper` pair. That's what `SmoothFont` in `theme.h` does.

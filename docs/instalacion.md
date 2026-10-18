@@ -121,6 +121,13 @@ python3 -m venv .venv && .venv/bin/pip install Pillow
 
 Edita la lista `specs` al final del script para cambiar tipografías o tamaños.
 
+Lo que la fuente no tiene no se pinta: `printable()`, en `ui.cpp`, lo quita
+del renglón antes de dibujarlo (el texto guardado no cambia). Ojo con
+`✓ ✗ ● ○ → ←`: están en `CHARS`, pero la TTF actual no los trae y en las
+fuentes generadas son el recuadro de glifo ausente, así que `printable()` los
+quita (o cambia las flechas por `->` y `<-`) con una lista aparte. Si
+regeneras las fuentes con una TTF que sí los tenga, sácalos de esa lista.
+
 Un detalle si tocas esto: `LGFXBase::loadFont()` reutiliza un único buffer
 interno, así que para tener varias fuentes vivas a la vez cada una necesita su
 propio par `VLWfont` + `PointerWrapper`. Es lo que hace `SmoothFont` en

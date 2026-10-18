@@ -101,7 +101,9 @@ configuración y vuelve al portal, lista para otro WiFi u otro token.
 - Todo se dibuja en un lienzo completo en PSRAM y se vuelca de una vez: unos
   8 ms por fotograma, sin parpadeo.
 - Las tildes y la eñe salen porque el proyecto **genera sus propias fuentes
-  suavizadas**; las que trae la librería gráfica solo cubren ASCII.
+  suavizadas**; las que trae la librería gráfica solo cubren ASCII. Lo que
+  esas fuentes no tienen, como los emojis, se omite en la pantalla en vez de
+  salir como un recuadro; en Telegram se sigue viendo tal cual.
 - La conexión con Telegram va con la CA raíz fijada en el firmware, no
   aceptando cualquier certificado.
 

@@ -5,6 +5,7 @@
 #include "settings.h"
 #include "telegram.h"
 #include "i18n.h"
+#include "utf8.h"
 #include <WiFi.h>
 #include <time.h>
 
@@ -116,6 +117,46 @@ static int trackedWidth(const String &text, int tracking) {
     n++;
   }
   return cv.textWidth(up) + tracking * (n - 1);
+}
+
+// Lo que de verdad se puede pintar de un texto. Las fuentes solo traen ASCII
+// y unas pocas letras y signos (CHARS en tools/mkfont.py): un emoji o un
+// simbolo que no tienen salia como un rectangulo. Solo cambia lo que se
+// pinta; el texto guardado y lo que ve Telegram siguen intactos.
+static String printable(const char *s, const SmoothFont &f) {
+  size_t n = strlen(s);
+  String out;
+  out.reserve(n);
+  for (size_t i = 0; i < n; ) {
+    uint32_t cp;
+    size_t len = utf8SeqLen(s + i, n - i, &cp);
+    // Una secuencia rota se salta entera: el decodificador de LovyanGFX
+    // guarda estado entre llamadas y se quedaria a medias.
+    if (!len) { i++; continue; }
+    const char *seq = s + i;
+    i += len;
+    // Espacios especiales (el fino de algunos teclados, por ejemplo): la
+    // fuente no los tiene y quitarlos pegaria las palabras.
+    if (cp == 0xA0 || (cp >= 0x2000 && cp <= 0x200A) || cp == 0x202F ||
+        cp == 0x205F || cp == 0x3000) { cp = ' '; seq = " "; len = 1; }
+    // Estas seis estan en CHARS pero la TTF no las trae: el glifo existe y es
+    // el rectangulo de glifo ausente, asi que getUnicodeIndex no las delata.
+    if (cp == 0x2192) { out += "->"; continue; }
+    if (cp == 0x2190) { out += "<-"; continue; }
+    if (cp == 0x25CB || cp == 0x25CF || cp == 0x2713 || cp == 0x2717) continue;
+    // Por encima de 0xFFFF estan todos los emojis y los tonos de piel; el
+    // ZWJ y el keycap solo sirven para componerlos.
+    if (cp > 0xFFFF || cp == 0x200D || cp == 0x20E3) continue;
+    uint16_t idx;
+    if (f.font.gCount && !f.font.getUnicodeIndex((uint16_t)cp, &idx)) continue;
+    // Lo quitado deja a veces dos espacios juntos o uno al principio.
+    if (cp == ' ' && (out.isEmpty() || out[out.length() - 1] == ' ')) continue;
+    out.concat(seq, len);
+  }
+  out.trim();
+  // Una tarea hecha solo de emojis no puede quedarse en un renglon vacio.
+  if (out.isEmpty()) out = "•";
+  return out;
 }
 
 // Recorta el texto al ancho dado, terminando en "…" si no cabe.
@@ -242,7 +283,7 @@ static void drawTaskRow(const Task &t, int y, bool pressed) {
   cv.setFont(&fBody.font);
   cv.setTextColor(t.done ? P.inkMute : P.ink);
   cv.setTextDatum(middle_left);
-  String label = fit(String(t.text), tw);
+  String label = fit(printable(t.text, fBody), tw);
   cv.drawString(label, tx, by);
   if (t.done) {
     // El tachado se traza segun avanza la animacion, de izquierda a derecha.
@@ -481,7 +522,10 @@ static void drawConnecting() {
 
   cv.setFont(&fMeta.font);
   cv.setTextColor(P.inkMute);
-  cv.drawString(s_status, SCR_W / 2, SCR_H / 2 + 52);
+  // Es el nombre de la red, que puede llevar emojis como cualquier texto.
+  if (s_status.length()) {
+    cv.drawString(printable(s_status.c_str(), fMeta), SCR_W / 2, SCR_H / 2 + 52);
+  }
   cv.setTextDatum(top_left);
 
   // Un filete que va y viene, como un renglon escribiendose.

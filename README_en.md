@@ -104,7 +104,8 @@ network or a new token.
   about 8 ms a frame, no flicker.
 - Accented characters render because the project **generates its own
   antialiased fonts**; the ones shipped with the graphics library are ASCII
-  only.
+  only. Anything those fonts lack, such as emoji, is left out on screen
+  instead of showing up as a box; Telegram still shows it as sent.
 - The Telegram connection pins the root CA in the firmware rather than
   accepting any certificate.
 
