@@ -173,9 +173,10 @@ Para añadir un idioma:
 3. Escribe también su ayuda del bot (como `HELP_EN`, que va en el array en el
    sitio de `S_BOT_HELP`) y sus nombres de día y de mes, y haz que
    `dayName()` y `monthName()` los usen.
-4. Haz que `i18nCode()` devuelva su código de dos letras y que
+4. Haz que `i18nCode(Lang)` devuelva su código de dos letras y que
    `i18nSetLang(const String &)` lo reconozca: ese código es lo que se guarda
-   en NVS y lo que manda el portal.
+   en NVS, lo que manda el portal y el idioma del menú de órdenes que el bot
+   le da a Telegram.
 5. Añade la opción al desplegable de `portal.cpp`, con ese mismo código como
    `value`.
 6. Si necesita caracteres que no están en las fuentes, amplía `CHARS` en

@@ -7,7 +7,7 @@ static Lang s_lang = LANG_ES;
 static const char HELP_ES[] =
   "Pauta — la checklist de tu escritorio.\n\n"
   "Escríbeme cualquier cosa y la apunto. Si mandas varias líneas, apunto una "
-  "tarea por línea.\n\n"
+  "tarea por línea. Solo entiendo texto: fotos, notas de voz y pegatinas no.\n\n"
   "/list — ver la lista\n"
   "/done N — tachar la tarea N\n"
   "/undo N — reabrirla\n"
@@ -15,13 +15,15 @@ static const char HELP_ES[] =
   "/clear — quitar todas las tachadas\n"
   "/help — esto\n\n"
   "N es el número que sale en /list. Al borrar, los de debajo se recolocan. "
-  "Para varias a la vez, pon varios números: /del 2 3 o /done 1,4.\n\n"
+  "Para varias a la vez, pon varios números: /del 2 3 o /done 1,4. Al "
+  "escribir / te sale el menú con todas las órdenes.\n\n"
   "Y en la pantalla, toca un renglón para tacharlo.";
 
 static const char HELP_EN[] =
   "Pauta — the checklist on your desk.\n\n"
   "Write me anything and I'll jot it down. Send several lines and I'll add "
-  "one task per line.\n\n"
+  "one task per line. I only understand text: no photos, voice notes or "
+  "stickers.\n\n"
   "/list — see the list\n"
   "/done N — cross off task N\n"
   "/undo N — reopen it\n"
@@ -29,7 +31,8 @@ static const char HELP_EN[] =
   "/clear — remove everything crossed off\n"
   "/help — this\n\n"
   "N is the number shown in /list. Deleting moves the ones below up. For "
-  "several at once, give several numbers: /del 2 3 or /done 1,4.\n\n"
+  "several at once, give several numbers: /del 2 3 or /done 1,4. Type / to "
+  "get the menu with every command.\n\n"
   "And on the screen, tap a line to cross it off.";
 
 // Un array por idioma y sin tamano, para que el compilador cuente las frases:
@@ -84,6 +87,16 @@ static const char *const STR_ES[] = {
 
   "Escríbele a @%s",
   "y lo que le mandes aparecerá aquí, renglón a renglón.",
+
+  "Ver la lista",
+  "Tachar tareas: /done 3 o /done 2 5",
+  "Reabrir tareas tachadas: /undo 3",
+  "Borrar tareas: /del 3 o /del 2 5",
+  "Quitar todas las tachadas",
+  "Ayuda y todas las órdenes",
+
+  "Falta el número de la tarea, por ejemplo %s 3 (o varias: %s 2 5).",
+  "Solo entiendo texto: escríbeme la tarea y la apunto.",
 };
 
 static const char *const STR_EN[] = {
@@ -134,6 +147,16 @@ static const char *const STR_EN[] = {
 
   "Write to @%s",
   "and whatever you send lands here, line by line.",
+
+  "See the list",
+  "Cross off tasks: /done 3 or /done 2 5",
+  "Reopen crossed-off tasks: /undo 3",
+  "Delete tasks: /del 3 or /del 2 5",
+  "Remove everything crossed off",
+  "Help and every command",
+
+  "The task number is missing, e.g. %s 3 (or several: %s 2 5).",
+  "I only understand text: write the task and I'll jot it down.",
 };
 
 static_assert(sizeof(STR_ES) / sizeof(STR_ES[0]) == STR_COUNT,
@@ -163,14 +186,19 @@ void i18nSetLang(const String &code) {
   i18nSetLang(code.startsWith("en") ? LANG_EN : LANG_ES);
 }
 
-Lang        i18nLang() { return s_lang; }
-const char *i18nCode() { return s_lang == LANG_EN ? "en" : "es"; }
+Lang        i18nLang()       { return s_lang; }
+const char *i18nCode()       { return i18nCode(s_lang); }
+const char *i18nCode(Lang l) { return l == LANG_EN ? "en" : "es"; }
 
-const char *T(StrId id) {
-  if (id >= STR_COUNT) return "";
+const char *T(StrId id) { return i18nText(s_lang, id); }
+
+// El menu de ordenes del bot se manda en todos los idiomas a la vez, no solo
+// en el de la pantalla.
+const char *i18nText(Lang l, StrId id) {
+  if (l >= LANG_COUNT || id >= STR_COUNT) return "";
   // Los static_assert ya exigen una frase por StrId; esto cubre un nullptr
   // escrito a mano, que acabaria dentro de un String o de un printf.
-  const char *s = STRINGS[s_lang][id];
+  const char *s = STRINGS[l][id];
   return s ? s : "";
 }
 

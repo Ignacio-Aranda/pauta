@@ -39,9 +39,13 @@ te lo confirma.
 | `/clear` | Quitar todas las tachadas |
 | `/start` | Bienvenida y ayuda |
 | `/help` | Ver todas las órdenes |
+| `/` | Menú de Telegram con las órdenes y lo que hace cada una |
 
 N es el número que sale en `/list`. Al borrar, los de debajo se recolocan:
-para quitar varias, mejor de una vez con varios números.
+para quitar varias, mejor de una vez con varios números. Si te dejas el
+número (un `/done` a secas desde el menú), te recuerda cómo va y te enseña la
+lista. Solo entiende texto: si le mandas una foto, una nota de voz o una
+pegatina, te pide que se lo escribas.
 
 | En la pantalla | |
 |---|---|

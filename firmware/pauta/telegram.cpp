@@ -271,6 +271,17 @@ static void handlePick(int64_t chatId, const String &cmd, const String &arg) {
     }
   }
 
+  // Sin ningun numero, como un "/done" a secas desde el menu, se recuerda
+  // como va y se ensena la lista, que es lo que hace falta para elegir.
+  if (picked.empty() && missing.empty()) {
+    char hint[160];
+    snprintf(hint, sizeof(hint), T(S_BOT_PICK_HINT), cmd.c_str(), cmd.c_str());
+    String out = String(hint) + "\n\n" + renderList();
+    clipText(out, TG_MAX_TEXT);
+    sendMessage(chatId, out);
+    return;
+  }
+
   bool del = (cmd == "/del"), done = (cmd == "/done");
   StrId fmt = del ? S_BOT_DELETED : done ? S_BOT_DONE : S_BOT_REOPENED;
   String out;
@@ -389,6 +400,18 @@ static void handleText(int64_t chatId, const String &text) {
 
 // --- Recepcion --------------------------------------------------------------
 
+// Lo que manda alguien que espera que se apunte y que no lleva texto. Los
+// mensajes de servicio (un temporizador de borrado, por ejemplo) tampoco
+// tienen texto y no deben recibir respuesta.
+static bool isMedia(JsonObjectConst msg) {
+  static const char *const KINDS[] = {
+    "photo", "voice", "sticker", "video", "video_note", "audio", "document",
+    "animation",
+  };
+  for (const char *k : KINDS) if (!msg[k].isNull()) return true;
+  return false;
+}
+
 static void processUpdate(JsonObjectConst update) {
   int64_t updateId = update["update_id"] | 0LL;
   if (updateId >= s_offset) s_offset = updateId + 1;
@@ -396,19 +419,22 @@ static void processUpdate(JsonObjectConst update) {
   JsonObjectConst msg = update["message"];
   if (msg.isNull()) return;
   const char *text = msg["text"];
-  if (!text) return;
+  bool media = !text && isMedia(msg);
+  if (!text && !media) return;
   int64_t chatId = msg["chat"]["id"] | 0LL;
   if (chatId == 0) return;
 
   // El primer chat que escribe se queda con la pantalla. Los demas reciben
-  // un aviso, para que un bot con token filtrado no llene tu lista.
+  // un aviso, para que un bot con token filtrado no llene tu lista. Una foto
+  // o una pegatina no vinculan, ni se contestan a quien no es el dueno.
   int64_t owner = settingsGet().chatId;
   if (owner == 0) {
+    if (!text) return;
     settingsSetChatId(chatId);
     owner = chatId;
   }
   if (chatId != owner) {
-    sendMessage(chatId, T(S_BOT_TAKEN));
+    if (text) sendMessage(chatId, T(S_BOT_TAKEN));
     return;
   }
 
@@ -425,6 +451,8 @@ static void processUpdate(JsonObjectConst update) {
   // repetirlas tras un reinicio no hace dano.
   if (msgId > 0) tasksSetLastMsg(msgId);
 
+  // Antes se descartaba sin decir nada, y una nota de voz parecia perdida.
+  if (!text) { sendMessage(chatId, T(S_BOT_TEXT_ONLY)); return; }
   handleText(chatId, String(text));
 }
 
@@ -496,12 +524,47 @@ static void fetchBotName() {
   }
 }
 
+// Menu que Telegram ensena al escribir "/", en el orden en que sale.
+struct MenuItem { const char *cmd; StrId desc; };
+static const MenuItem MENU[] = {
+  {"list", S_CMD_LIST}, {"done", S_CMD_DONE}, {"undo", S_CMD_UNDO},
+  {"del",  S_CMD_DEL},  {"clear", S_CMD_CLEAR}, {"help", S_CMD_HELP},
+};
+
+// langCode nulo es la lista por defecto, la que ve quien tiene Telegram en
+// un idioma sin lista propia.
+static bool sendMenu(const char *langCode, Lang l) {
+  JsonDocument doc;
+  JsonArray cmds = doc["commands"].to<JsonArray>();
+  for (const MenuItem &m : MENU) {
+    JsonObject c = cmds.add<JsonObject>();
+    c["command"]     = m.cmd;
+    c["description"] = i18nText(l, m.desc);
+  }
+  if (langCode) doc["language_code"] = langCode;
+  String body;
+  serializeJson(doc, body);
+  return apiPost("setMyCommands", body, nullptr);
+}
+
+// Una lista por idioma, y la de por defecto en el de la pantalla. Telegram
+// la guarda, pero se manda en cada arranque para que siga a los cambios de
+// idioma y de firmware; si falla, el bot funciona igual sin menu.
+static void sendMenus() {
+  bool ok = sendMenu(nullptr, i18nLang());
+  for (int l = 0; l < LANG_COUNT; l++) ok = sendMenu(i18nCode((Lang)l), (Lang)l) && ok;
+  if (ok) Serial.println("telegram: menu de ordenes al dia");
+}
+
 // Lo que se pide una vez por arranque, en cuanto un sondeo sale bien: antes
-// no se sabe si hay red ni si el token vale. Si falla, se reintenta tras el
-// siguiente sondeo, con tope para no insistir sin fin.
+// no se sabe si hay red ni si el token vale. El nombre se reintenta tras el
+// siguiente sondeo, con tope para no insistir sin fin; el menu no, porque
+// Telegram guarda el ultimo que recibio y sin el nada deja de funcionar.
 static void afterGoodPoll() {
   static uint8_t meTries = 0;
+  static bool    menuSent = false;
   if (!s_botReady && meTries < 3) { meTries++; fetchBotName(); }
+  if (!menuSent) { menuSent = true; sendMenus(); }
 }
 
 static void drainOutgoing() {

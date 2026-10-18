@@ -40,9 +40,13 @@ cross it off, and the bot confirms it back to you.
 | `/clear` | Remove everything crossed off |
 | `/start` | Welcome and help |
 | `/help` | See every command |
+| `/` | Telegram's menu with the commands and what each one does |
 
 N is the number shown in `/list`. Deleting moves the ones below up, so to
-remove several, do it in one go with several numbers.
+remove several, do it in one go with several numbers. If you leave the number
+out (a bare `/done` from the menu), it reminds you how it goes and shows you
+the list. It only understands text: send it a photo, a voice note or a sticker
+and it asks you to write it instead.
 
 | On the screen | |
 |---|---|

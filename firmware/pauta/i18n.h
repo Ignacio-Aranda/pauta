@@ -45,6 +45,10 @@ enum StrId : uint16_t {
   S_FAULT_CONFLICT, S_FAULT_WAIT, S_FAULT_SERVER,
   // Lista vacia cuando ya se sabe el @usuario del bot
   S_BLANK_BOT_1, S_BLANK_BOT_2,
+  // Bot: menu de ordenes de Telegram, en el orden en que sale
+  S_CMD_LIST, S_CMD_DONE, S_CMD_UNDO, S_CMD_DEL, S_CMD_CLEAR, S_CMD_HELP,
+  // Bot: /done, /undo o /del sin numero, y mensaje sin texto (foto, voz...)
+  S_BOT_PICK_HINT, S_BOT_TEXT_ONLY,
   STR_COUNT
 };
 
@@ -52,7 +56,9 @@ void        i18nSetLang(Lang l);
 void        i18nSetLang(const String &code);   // "es" / "en"
 Lang        i18nLang();
 const char *i18nCode();                        // "es" / "en"
+const char *i18nCode(Lang l);
 
 const char *T(StrId id);
+const char *i18nText(Lang l, StrId id);        // en un idioma concreto
 const char *dayName(int wday);                 // 0 = domingo
 const char *monthName(int mon);                // 0 = enero

@@ -173,9 +173,10 @@ To add a language:
 3. Write its bot help too (like `HELP_EN`, which sits in the array in the
    `S_BOT_HELP` slot) and its day and month names, and make `dayName()` and
    `monthName()` use them.
-4. Make `i18nCode()` return its two-letter code and
+4. Make `i18nCode(Lang)` return its two-letter code and
    `i18nSetLang(const String &)` recognise it: that code is what gets stored
-   in NVS and what the portal sends.
+   in NVS, what the portal sends and the language of the command menu the bot
+   hands to Telegram.
 5. Add the option to the dropdown in `portal.cpp`, with that same code as its
    `value`.
 6. If it needs characters the fonts don't have, extend `CHARS` in
