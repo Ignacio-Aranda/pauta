@@ -392,9 +392,9 @@ Para añadir un idioma:
 
 1. Añade el valor al `enum Lang` de `i18n.h`.
 2. En `i18n.cpp`, copia un array entero (por ejemplo `STR_EN`) con otro
-   nombre, tradúcelo y añádelo a `STRINGS` en el mismo orden que el
-   `enum Lang`. Si te falta o te sobra una frase, el `static_assert` que hay
-   debajo no deja compilar.
+   nombre, tradúcelo y añádelo a `STRINGS` como `checked(STR_XX)`, en el
+   mismo orden que el `enum Lang`. Si te falta o te sobra una frase,
+   `checked()` no deja compilar.
 3. Escribe también su ayuda del bot (como `HELP_EN`, que va en el array en el
    sitio de `S_BOT_HELP`) y sus nombres de día y de mes, y haz que
    `dayName()` y `monthName()` los usen.

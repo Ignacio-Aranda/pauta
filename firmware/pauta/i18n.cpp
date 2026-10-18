@@ -159,13 +159,17 @@ static const char *const STR_EN[] = {
   "I only understand text: write the task and I'll jot it down.",
 };
 
-static_assert(sizeof(STR_ES) / sizeof(STR_ES[0]) == STR_COUNT,
-              "STR_ES no tiene exactamente una frase por cada StrId");
-static_assert(sizeof(STR_EN) / sizeof(STR_EN[0]) == STR_COUNT,
-              "STR_EN no tiene exactamente una frase por cada StrId");
+// Cada idioma entra en STRINGS por aqui: con una frase de mas o de menos no
+// compila. Un static_assert por array nombrado se olvida al copiar uno nuevo.
+template <size_t N>
+static constexpr const char *const *checked(const char *const (&a)[N]) {
+  static_assert(N == STR_COUNT,
+                "Cada idioma necesita exactamente una frase por StrId");
+  return a;
+}
 
 // En el mismo orden que enum Lang.
-static const char *const *const STRINGS[] = { STR_ES, STR_EN };
+static const char *const *const STRINGS[] = { checked(STR_ES), checked(STR_EN) };
 static_assert(sizeof(STRINGS) / sizeof(STRINGS[0]) == LANG_COUNT,
               "STRINGS necesita un array por cada idioma de enum Lang");
 
@@ -196,8 +200,9 @@ const char *T(StrId id) { return i18nText(s_lang, id); }
 // en el de la pantalla.
 const char *i18nText(Lang l, StrId id) {
   if (l >= LANG_COUNT || id >= STR_COUNT) return "";
-  // Los static_assert ya exigen una frase por StrId; esto cubre un nullptr
-  // escrito a mano, que acabaria dentro de un String o de un printf.
+  // checked() ya exige una frase por StrId en cada idioma de STRINGS; esto
+  // cubre un nullptr escrito a mano, que acabaria dentro de un String o de
+  // un printf.
   const char *s = STRINGS[l][id];
   return s ? s : "";
 }

@@ -397,9 +397,9 @@ To add a language:
 
 1. Add the value to `enum Lang` in `i18n.h`.
 2. In `i18n.cpp`, copy a whole array (say `STR_EN`) under a new name,
-   translate it and add it to `STRINGS` in the same order as `enum Lang`. If
-   a string is missing or there's one too many, the `static_assert` below it
-   stops the build.
+   translate it and add it to `STRINGS` as `checked(STR_XX)`, in the same
+   order as `enum Lang`. If a string is missing or there's one too many,
+   `checked()` stops the build.
 3. Write its bot help too (like `HELP_EN`, which sits in the array in the
    `S_BOT_HELP` slot) and its day and month names, and make `dayName()` and
    `monthName()` use them.
