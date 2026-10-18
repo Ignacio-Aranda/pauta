@@ -161,10 +161,10 @@ top, with what you had typed, and saves nothing.
   seen right now, and leaving the password empty keeps the saved one. Same
   with the token: leave it empty and the saved one stays.
 
-Once configured, write to your bot to pair it. Any message will do, though
-`/start` answers with the help. **The first chat to write claims the
-screen**; everyone else gets a notice and is ignored, so a leaked token can't
-fill your list.
+Once configured, write to your bot to pair it. Any text message will do,
+though `/start` answers with the help; a photo or a sticker doesn't pair it.
+**The first chat to write claims the screen**; everyone else gets a notice and
+is ignored, so a leaked token can't fill your list.
 
 ### If it can't reach your WiFi
 
@@ -282,8 +282,8 @@ is in the [changelog](../CHANGELOG_en.md).
 To set it up again, hold the logo on the screen for 8 seconds. It forgets
 WiFi, token, language, theme and the paired chat, but **keeps the list**. It
 reboots into the portal, and once you've set it up you'll need to write to
-your bot again: the screen pairs with the first message it gets, it doesn't
-have to be `/start`.
+your bot again: the screen pairs with the first text message it gets, it
+doesn't have to be `/start`.
 
 The commands in this section are run from the project root, like those in
 step 3. Each block carries what it needs, so they also work in a fresh

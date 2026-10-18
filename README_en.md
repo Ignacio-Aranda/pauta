@@ -101,10 +101,9 @@ The first time you power it on it has no idea which WiFi to join, so it
 phone, it joins the device's network, and the setup page opens by itself: pick
 your WiFi, type the password, paste your bot token, choose a language.
 
-It reboots and that's it; then write to your bot. The first message it gets,
-whatever it is (it doesn't have to be `/start`), pairs the screen with your
-chat. Everything is stored on the board, and survives both reboots and
-reflashing.
+It reboots and that's it; then write to your bot. The first text message it
+gets (it doesn't have to be `/start`) pairs the screen with your chat.
+Everything is stored on the board, and survives both reboots and reflashing.
 
 **The token is only ever typed into that page and only ever lives in the
 board's flash.** It is not in this repository and never leaves the device.

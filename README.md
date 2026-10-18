@@ -100,10 +100,10 @@ propio punto de acceso** y enseña un QR. Lo escaneas con el móvil, te conecta 
 su red y se abre sola la página de configuración: eliges tu WiFi, escribes la
 contraseña, pegas el token del bot y eliges idioma.
 
-Se reinicia y ya está; después escríbele a tu bot. El primer mensaje que le
-llegue, sea cual sea (no hace falta que sea `/start`), vincula la pantalla a
-tu chat. Todo queda guardado en la placa, y sobrevive tanto a reinicios como a
-volver a flashear.
+Se reinicia y ya está; después escríbele a tu bot. El primer mensaje de texto
+que le llegue (no hace falta que sea `/start`) vincula la pantalla a tu chat.
+Todo queda guardado en la placa, y sobrevive tanto a reinicios como a volver a
+flashear.
 
 **El token solo se escribe en esa página y solo vive en la memoria de la
 placa.** No está en este repositorio ni sale del dispositivo.

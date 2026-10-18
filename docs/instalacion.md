@@ -158,9 +158,10 @@ el error arriba, con lo que habías escrito y sin guardar nada.
   mismo: vacío, se queda el guardado.
 
 Después de configurarla, escríbele a tu bot para vincularla. Vale cualquier
-mensaje, aunque `/start` te contesta con la ayuda. **El primer chat que
-escriba se queda con la pantalla**; el resto reciben un aviso y se ignoran,
-para que un token filtrado no llene tu lista.
+mensaje de texto, aunque `/start` te contesta con la ayuda; una foto o una
+pegatina no la vinculan. **El primer chat que escriba se queda con la
+pantalla**; el resto reciben un aviso y se ignoran, para que un token filtrado
+no llene tu lista.
 
 ### Si no conecta con tu WiFi
 
@@ -276,7 +277,7 @@ Para volver a configurarla, mantén pulsado el logo en la pantalla 8 segundos.
 Olvida el WiFi, el token, el idioma, el tema y el chat vinculado, pero
 **conserva la lista**. Se reinicia en el portal, y cuando la configures
 tendrás que escribirle otra vez a tu bot: la pantalla se vincula con el
-primer mensaje que le llegue, no hace falta que sea `/start`.
+primer mensaje de texto que le llegue, no hace falta que sea `/start`.
 
 Las órdenes de esta sección se ejecutan desde la raíz del proyecto, como las
 del paso 3. Cada bloque lleva lo que necesita, así que valen también en una
