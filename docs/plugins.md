@@ -168,20 +168,24 @@ pulsado 1 segundo** el botón de aceptar en la pantalla, en menos de 2 minutos
 - cambiar los botones de Atajos;
 - activar desde la Mini App un plugin que habla con tu red local o teclea en
   tu ordenador;
+- guardar una dirección nueva de tu red local, como el router en el Semáforo;
 - aceptar permisos nuevos, también al actualizar un plugin;
 - borrar fotos o datos de la microSD;
 - instalar una receta o una actualización del firmware;
 - encender «Desbloquear desde Telegram».
 
-Los casos de las fotos y del desbloqueo dependen todavía de dos preguntas
-abiertas ([P26](plugins-referencia.md#p26-borrar-fotos-siempre-con-un-toque) y
+Los casos de la red local, de las fotos y del desbloqueo dependen todavía de
+tres preguntas abiertas
+([P19](plugins-referencia.md#p19-toque-para-los-destinos-nuevos-de-la-red-local),
+[P26](plugins-referencia.md#p26-borrar-fotos-siempre-con-un-toque) y
 [P27](plugins-referencia.md#p27-encender-desbloquear-desde-telegram-con-un-toque)),
 cuya recomendación ya aplica el texto.
 
 **En la pantalla, solo lo imprescindible**: el menú del sistema activa y
 desactiva plugins, bloquea, pone el reposo, sale del modo seguro, actualiza y
-empareja u olvida dispositivos. Su subpágina **Pantalla** deja a mano lo que
-se cambia con la placa delante: el reposo (reloj o foto), cómo salen los
+empareja u olvida dispositivos, y el programador de nicscom se edita en su
+propia página. La subpágina **Pantalla** del menú deja a mano lo que se
+cambia con la placa delante: el reposo (reloj o foto), cómo salen los
 avisos de nicscom (pantalla completa o banda), el tema y el brillo
 ([§5.8](plugins-referencia.md#58-menú-del-sistema)).
 **Telegram** sigue para escribir tareas, los comandos de los plugins
