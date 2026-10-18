@@ -105,8 +105,10 @@ que le llegue (no hace falta que sea `/start`) vincula la pantalla a tu chat.
 Todo queda guardado en la placa, y sobrevive tanto a reinicios como a volver a
 flashear.
 
-**El token solo se escribe en esa página y solo vive en la memoria de la
-placa.** No está en este repositorio ni sale del dispositivo.
+**El token solo se escribe en esa página y se guarda en la memoria de la
+placa.** No está en este repositorio, y el firmware solo se lo manda a
+Telegram. La [copia de seguridad de la NVS](docs/instalacion.md#copia-de-seguridad-antes-de-actualizar)
+que recomienda la guía lo lleva en claro: no la compartas.
 
 ### Si se va la luz
 

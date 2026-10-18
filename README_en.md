@@ -105,8 +105,10 @@ It reboots and that's it; then write to your bot. The first text message it
 gets (it doesn't have to be `/start`) pairs the screen with your chat.
 Everything is stored on the board, and survives both reboots and reflashing.
 
-**The token is only ever typed into that page and only ever lives in the
-board's flash.** It is not in this repository and never leaves the device.
+**The token is only ever typed into that page and is stored in the board's
+flash.** It is not in this repository, and the firmware only ever sends it to
+Telegram. The [NVS backup](docs/instalacion_en.md#backing-up-before-an-update)
+the guide recommends holds it in plain text: don't share it.
 
 ### After a power cut
 
