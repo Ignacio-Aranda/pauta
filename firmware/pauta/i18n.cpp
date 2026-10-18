@@ -14,6 +14,8 @@ static const char HELP_ES[] =
   "/del N — borrarla\n"
   "/clear — quitar todas las tachadas\n"
   "/help — esto\n\n"
+  "N es el número que sale en /list. Al borrar, los de debajo se recolocan. "
+  "Para varias a la vez, pon varios números: /del 2 3 o /done 1,4.\n\n"
   "Y en la pantalla, toca un renglón para tacharlo.";
 
 static const char HELP_EN[] =
@@ -26,6 +28,8 @@ static const char HELP_EN[] =
   "/del N — delete it\n"
   "/clear — remove everything crossed off\n"
   "/help — this\n\n"
+  "N is the number shown in /list. Deleting moves the ones below up. For "
+  "several at once, give several numbers: /del 2 3 or /done 1,4.\n\n"
   "And on the screen, tap a line to cross it off.";
 
 // Un array por idioma y sin tamano, para que el compilador cuente las frases:
@@ -69,6 +73,8 @@ static const char *const STR_ES[] = {
 
   "La lista no admite más texto. Borra alguna con /del o quita las hechas con /clear.",
   "He apuntado %d de %d.",
+
+  "No encuentro: %s. Mira /list.",
 };
 
 static const char *const STR_EN[] = {
@@ -108,6 +114,8 @@ static const char *const STR_EN[] = {
 
   "The list can't hold any more text. Delete some with /del or remove the finished ones with /clear.",
   "Jotted down %d of %d.",
+
+  "Can't find: %s. Check /list.",
 };
 
 static_assert(sizeof(STR_ES) / sizeof(STR_ES[0]) == STR_COUNT,

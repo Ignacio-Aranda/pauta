@@ -35,6 +35,8 @@ enum StrId : uint16_t {
   S_BOT_ADDED_CUT, S_BOT_ADDED_MANY_CUT,
   // Bot: lista sin sitio para mas texto, o mensaje que solo entra en parte
   S_BOT_NO_ROOM, S_BOT_ADDED_PART,
+  // Bot: /done, /undo o /del con algun numero que no esta en la lista
+  S_BOT_NOT_FOUND_SOME,
   STR_COUNT
 };
 

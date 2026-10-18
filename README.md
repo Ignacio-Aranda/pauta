@@ -35,7 +35,11 @@ te lo confirma.
 | `/list` | Ver la lista |
 | `/done N` · `/undo N` | Tachar o reabrir la tarea N |
 | `/del N` | Borrarla |
+| `/del 2 3` · `/done 1,4` | Varias de una vez |
 | `/clear` | Quitar todas las tachadas |
+
+N es el número que sale en `/list`. Al borrar, los de debajo se recolocan:
+para quitar varias, mejor de una vez con varios números.
 
 | En la pantalla | |
 |---|---|

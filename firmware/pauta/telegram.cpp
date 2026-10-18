@@ -10,6 +10,7 @@
 #include <ArduinoJson.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <vector>
 
 static TgState       s_state = TG_OFFLINE;
 static String        s_lastError;
@@ -112,13 +113,114 @@ static String renderList() {
   return out;
 }
 
+// Telegram rechaza los textos de mas de 4096 caracteres. Se mide en bytes,
+// que nunca son menos, y se corta al final de una linea o, si no hay
+// ninguna, de una letra entera.
+static const size_t TG_MAX_TEXT = 4096;
 
-// Devuelve el id de la tarea en la posicion 1..n que indica el usuario.
-static uint16_t idFromPosition(const String &arg, Task &out) {
-  int pos = arg.toInt();
-  if (pos < 1) return 0;
-  if (!tasksGet(pos - 1, out)) return 0;
-  return out.id;
+static void clipText(String &s, size_t max) {
+  static const char MORE[] = "\n…";
+  if (s.length() <= max || max < sizeof(MORE)) return;
+  size_t cut = max - (sizeof(MORE) - 1);
+  int nl = s.lastIndexOf('\n', cut);
+  if (nl > 0) cut = nl;
+  else while (cut > 0 && ((uint8_t)s[cut] & 0xC0) == 0x80) cut--;
+  s.remove(cut);
+  s += MORE;
+}
+
+// --- Ordenes sobre tareas concretas -----------------------------------------
+
+struct Pick { int pos; Task task; };
+
+// Tope de numeros no encontrados que se citan: un argumento con basura no
+// puede inflar la respuesta.
+static const size_t MAX_MISSING = 8;
+
+static bool isSep(char c) { return c == ',' || isspace((uint8_t)c); }
+
+static bool isNumber(const String &s) {
+  if (s.isEmpty()) return false;
+  for (size_t i = 0; i < s.length(); i++) if (!isdigit((uint8_t)s[i])) return false;
+  return true;
+}
+
+static void addMissing(std::vector<String> &list, bool &more, const String &tok) {
+  char buf[9];
+  strlcpy(buf, tok.c_str(), sizeof(buf));
+  utf8Clip(buf);
+  for (const String &m : list) if (m == buf) return;
+  if (list.size() < MAX_MISSING) list.push_back(String(buf));
+  else more = true;
+}
+
+// /done, /undo y /del con uno o varios numeros de /list: "3", "2 5 7" o
+// "2,5,7". Todos se traducen a tareas con la misma numeracion antes de tocar
+// nada: aplicados uno a uno, cada borrado recolocaria los siguientes y
+// "/del 2 3" se llevaria la 2 y la que antes era la 4.
+static void handlePick(int64_t chatId, const String &cmd, const String &arg) {
+  std::vector<Pick>   picked;
+  std::vector<String> missing;
+  bool more = false;
+  size_t i = 0, n = arg.length();
+  while (i < n) {
+    if (isSep(arg[i])) { i++; continue; }
+    size_t j = i;
+    while (j < n && !isSep(arg[j])) j++;
+    String tok = arg.substring(i, j);
+    i = j;
+    // Tres cifras sobran para MAX_TASKS y evitan desbordar toInt().
+    Pick p;
+    p.pos = (isNumber(tok) && tok.length() <= 3) ? tok.toInt() : 0;
+    if (p.pos >= 1 && tasksGet(p.pos - 1, p.task)) {
+      bool dup = false;
+      for (const Pick &q : picked) if (q.task.id == p.task.id) dup = true;
+      if (!dup) picked.push_back(p);
+    } else {
+      addMissing(missing, more, tok);
+    }
+  }
+
+  bool del = (cmd == "/del"), done = (cmd == "/done");
+  StrId fmt = del ? S_BOT_DELETED : done ? S_BOT_DONE : S_BOT_REOPENED;
+  String out;
+  for (const Pick &p : picked) {
+    // La tarea puede haberse quitado desde la pantalla entre la lectura y
+    // el cambio: antes se contestaba "Borrada" sin haber borrado nada.
+    bool ok = del ? tasksRemove(p.task.id) : tasksSetDone(p.task.id, done);
+    if (!ok) { addMissing(missing, more, String(p.pos)); continue; }
+    char line[MAX_TASK_CHARS + 32];
+    snprintf(line, sizeof(line), T(fmt), p.task.text);
+    if (out.length()) out += '\n';
+    out += line;
+  }
+
+  // Un numero suelto que no esta se contesta como siempre.
+  if (out.isEmpty() && missing.size() <= 1) {
+    sendMessage(chatId, T(S_BOT_NOT_FOUND));
+    return;
+  }
+  String tail;
+  if (!missing.empty()) {
+    String nums;
+    for (size_t k = 0; k < missing.size(); k++) {
+      if (k) nums += ", ";
+      nums += missing[k];
+    }
+    if (more) nums += ", …";
+    char buf[160];
+    snprintf(buf, sizeof(buf), T(S_BOT_NOT_FOUND_SOME), nums.c_str());
+    utf8Clip(buf);
+    tail = buf;
+  }
+  // Con muchas tareas largas la respuesta puede pasar del limite; el aviso
+  // de las que no se han encontrado va al final y no se recorta.
+  clipText(out, TG_MAX_TEXT - (tail.length() ? tail.length() + 1 : 0));
+  if (tail.length()) {
+    if (out.length()) out += '\n';
+    out += tail;
+  }
+  sendMessage(chatId, out);
 }
 
 static void handleCommand(int64_t chatId, const String &text) {
@@ -129,28 +231,14 @@ static void handleCommand(int64_t chatId, const String &text) {
   int at = cmd.indexOf('@');           // /done@mibot -> /done
   if (at > 0) cmd = cmd.substring(0, at);
 
-  Task t;
   if (cmd == "/start") {
     sendMessage(chatId, String(T(S_BOT_WELCOME)) + "\n\n" + T(S_BOT_HELP));
   } else if (cmd == "/help") {
     sendMessage(chatId, T(S_BOT_HELP));
   } else if (cmd == "/list") {
     sendMessage(chatId, renderList());
-  } else if (cmd == "/done" || cmd == "/undo") {
-    uint16_t id = idFromPosition(arg, t);
-    if (!id) { sendMessage(chatId, T(S_BOT_NOT_FOUND)); return; }
-    bool done = (cmd == "/done");
-    tasksSetDone(id, done);
-    char msg[MAX_TASK_CHARS + 32];
-    snprintf(msg, sizeof(msg), T(done ? S_BOT_DONE : S_BOT_REOPENED), t.text);
-    sendMessage(chatId, msg);
-  } else if (cmd == "/del") {
-    uint16_t id = idFromPosition(arg, t);
-    if (!id) { sendMessage(chatId, T(S_BOT_NOT_FOUND)); return; }
-    tasksRemove(id);
-    char msg[MAX_TASK_CHARS + 32];
-    snprintf(msg, sizeof(msg), T(S_BOT_DELETED), t.text);
-    sendMessage(chatId, msg);
+  } else if (cmd == "/done" || cmd == "/undo" || cmd == "/del") {
+    handlePick(chatId, cmd, arg);
   } else if (cmd == "/clear") {
     int n = tasksClearDone();
     if (n) {

@@ -36,7 +36,11 @@ cross it off, and the bot confirms it back to you.
 | `/list` | See the list |
 | `/done N` · `/undo N` | Cross off or reopen task N |
 | `/del N` | Delete it |
+| `/del 2 3` · `/done 1,4` | Several at once |
 | `/clear` | Remove everything crossed off |
+
+N is the number shown in `/list`. Deleting moves the ones below up, so to
+remove several, do it in one go with several numbers.
 
 | On the screen | |
 |---|---|
