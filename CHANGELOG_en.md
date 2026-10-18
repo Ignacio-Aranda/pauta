@@ -30,8 +30,9 @@ Security, below).
 - Typing `/` in the chat brings up Telegram's menu with the commands and what
   each one does, in English or Spanish.
 - Send `/done`, `/undo` or `/del` without a number and the bot reminds you how
-  it goes and shows you the list. Send it a photo, a voice note or a sticker
-  and it tells you it only understands text, instead of not answering.
+  it goes and shows you the list. Once the screen is paired, send it a photo,
+  a voice note or a sticker and it tells you it only understands text,
+  instead of not answering; for a photo album, just once.
 - If the connection to Telegram fails for more than a minute, the list footer
   says what's wrong in words: no wifi, no connection, certificate, invalid
   token, bot in use elsewhere, waiting or telegram error. The
@@ -74,6 +75,11 @@ Security, below).
 - After a power cut the board boots before the router, couldn't find it and
   stayed in the setup portal forever. Now it keeps trying your network and
   goes back to the list on its own once the connection holds.
+- With the list on screen, if the WiFi dropped, the board cut the
+  reconnection short every 5 seconds, and with a router slow to hand out an
+  IP it took longer than it should to get back online. Now it doesn't cut off
+  an attempt that's already waiting for its IP, and retries at growing
+  intervals, up to once a minute.
 - If the board restarted right after a command, it got that command again
   when it came back and applied it twice: a duplicated task, or a `/del` that
   deleted a different one.
@@ -90,7 +96,10 @@ Security, below).
   bot tells you it trimmed one, and tasks already saved that way get fixed at
   boot.
 - Emoji and symbols the fonts don't have showed up as little boxes on the
-  screen. Now they're left out; Telegram still shows them as sent.
+  screen. Now they're left out, except dashes, which show as "-" (the one in
+  "2–3 kg" no longer vanishes), and letters the fonts lack, which show as
+  their base letter: "ç" as "c", "è" as "e", "ß" as "ss". Telegram still
+  shows everything as sent.
 - Spanish dates and small-caps labels kept the accent lowercase ("MIé",
   "LISTA VACíA").
 - After 49 days switched on, the screen stopped crossing off tasks for

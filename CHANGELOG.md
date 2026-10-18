@@ -30,8 +30,9 @@ configuración (ver Seguridad, más abajo).
 - Al escribir `/` en el chat sale el menú de Telegram con las órdenes y lo
   que hace cada una, en español o en inglés.
 - Si mandas `/done`, `/undo` o `/del` sin número, el bot te recuerda cómo va
-  y te enseña la lista. Si le mandas una foto, una nota de voz o una
-  pegatina, te dice que solo entiende texto en vez de no contestar.
+  y te enseña la lista. Con la pantalla ya vinculada, si le mandas una foto,
+  una nota de voz o una pegatina, te dice que solo entiende texto en vez de
+  no contestar; a un álbum de fotos, una sola vez.
 - Si la conexión con Telegram falla más de un minuto, el pie de la lista dice
   qué pasa con palabras: sin wifi, sin conexión, certificado, token no
   válido, bot usado en otro sitio, esperando o fallo de Telegram. Qué
@@ -74,6 +75,11 @@ configuración (ver Seguridad, más abajo).
 - Tras un apagón la placa arranca antes que el router, no lo encontraba y se
   quedaba en el portal para siempre. Ahora sigue probando tu red y vuelve
   sola a la lista cuando la conexión aguanta.
+- Con la lista en pantalla, si se iba el WiFi, la placa cortaba cada 5
+  segundos la reconexión a medias, y con un router que tarda en dar la IP
+  tardaba más de la cuenta en volver a la red. Ahora no corta un intento que
+  ya espera la IP y vuelve a probar cada vez más espaciado, hasta una vez por
+  minuto.
 - Si la placa se reiniciaba justo después de una orden, al volver la recibía
   otra vez y la aplicaba dos veces: una tarea duplicada o un `/del` que
   borraba otra.
@@ -91,7 +97,10 @@ configuración (ver Seguridad, más abajo).
   enteras, el bot avisa de que la ha recortado, y las que ya estaban
   guardadas así se arreglan al arrancar.
 - Los emojis y los símbolos que las fuentes no tienen salían como cajitas en
-  la pantalla. Ahora se omiten; en Telegram se siguen viendo tal cual.
+  la pantalla. Ahora se omiten, salvo los guiones, que salen como «-» (el de
+  «2–3 kg» ya no desaparece), y las letras que no traen, que salen como su
+  letra base: «ç» como «c», «è» como «e», «ß» como «ss». En Telegram se
+  sigue viendo todo tal cual.
 - La fecha y las etiquetas en versalitas dejaban la tilde en minúscula
   («MIé», «LISTA VACíA»).
 - A los 49 días encendida, la pantalla dejaba de tachar tareas durante
