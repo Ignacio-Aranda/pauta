@@ -284,12 +284,15 @@ void tasksResetLastMsg() {
   }
 }
 
-void tasksFlushIfDirty() {
+// Con now no hay espera, ni la de agrupar cambios ni la de tras un fallo:
+// detras viene un reinicio y lo que no se escriba ahora se pierde.
+static void flush(bool now) {
   String blob;
   int64_t lastMsg;
   {
     Guard g;
-    if (!s_dirty || millis() - s_dirtySince < s_saveDelay) return;
+    if (!s_dirty) return;
+    if (!now && millis() - s_dirtySince < s_saveDelay) return;
     s_dirty = false;
     // Se copia bajo el mutex y se escribe fuera: la flash tarda y el bot no
     // tiene por que esperarla para leer o cambiar la lista.
@@ -308,3 +311,6 @@ void tasksFlushIfDirty() {
     s_saveDelay = SAVE_RETRY_MS;
   }
 }
+
+void tasksFlushIfDirty() { flush(false); }
+void tasksFlushNow()     { flush(true); }

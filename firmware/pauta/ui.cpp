@@ -13,6 +13,7 @@ static LGFX        tft;
 static LGFX_Sprite cv(&tft);          // lienzo completo, en PSRAM
 static UiScreen    s_screen = UI_BOOT;
 static String      s_status;
+static UiLink      s_link = UI_LINK_TRYING;
 static uint32_t    s_lastRevision = 0;
 static bool        s_needsRedraw = true;
 static uint32_t    s_bootAt = 0;
@@ -194,6 +195,25 @@ static String fit(const String &text, int maxW) {
   }
   out.trim();
   return out + "…";
+}
+
+// Como fit(), pero en versalitas separadas y recortando solo el trozo que va
+// en el %s de fmt. Es para el nombre de una red, que puede tener 32 letras:
+// lo que se pierde tiene que ser el, no la frase que lo explica.
+static String fitName(const char *fmt, const String &name, int maxW, int tracking) {
+  String part = name;
+  bool cut = false;
+  char buf[192];
+  for (;;) {
+    String shown = part;
+    if (cut) { shown.trim(); shown += "…"; }
+    snprintf(buf, sizeof(buf), fmt, shown.c_str());
+    if (part.length() <= 1 || trackedWidth(buf, tracking) <= maxW) return buf;
+    size_t n = part.length();
+    while (n > 1 && ((uint8_t)part[n - 1] & 0xC0) == 0x80) n--;
+    part.remove(n - 1);
+    cut = true;
+  }
 }
 
 static int   rowPitch()  { return ROW_H; }
@@ -496,7 +516,17 @@ static void drawPortal() {
 
   cv.setFont(&fMeta.font);
   cv.setTextColor(P.inkMute);
-  drawTracked(T(S_FIRST_RUN), MARGIN, 56, 2);
+  // Con una red guardada el portal no es la primera puesta en marcha: casi
+  // siempre es que se fue la luz y el router aun no responde. Se dice eso, y
+  // abajo a la izquierda, que hace mientras tanto.
+  bool known = settingsHasWifi();
+  if (known) {
+    String name = printable(settingsGet().ssid.c_str(), fMeta);
+    StrId head = s_link == UI_LINK_UP ? S_PORTAL_LINK_UP : S_PORTAL_NO_LINK;
+    drawTracked(fitName(T(head), name, SCR_W - 2 * MARGIN, 2), MARGIN, 56, 2);
+  } else {
+    drawTracked(T(S_FIRST_RUN), MARGIN, 56, 2);
+  }
 
   cv.setFont(&fBodyM.font);
   cv.setTextColor(P.ink);
@@ -538,6 +568,15 @@ static void drawPortal() {
   int w = trackedWidth(hint, 2);
   drawTracked(hint, qrX + qrSize / 2 - w / 2, 262, 2);
   cv.setTextDatum(top_left);
+
+  // A la altura de la pista del QR y sin pasar de su tarjeta.
+  if (known) {
+    StrId note = s_link == UI_LINK_UP     ? S_PORTAL_BACK
+               : s_link == UI_LINK_PAUSED ? S_PORTAL_PAUSED
+                                          : S_PORTAL_TRYING;
+    cv.setTextColor(s_link == UI_LINK_UP ? P.accent : P.inkMute);
+    drawTracked(fitName("%s", T(note), qrX - 10 - MARGIN - 12, 2), MARGIN, 262, 2);
+  }
 }
 
 static void drawConnecting() {
@@ -817,6 +856,12 @@ void uiSetScreen(UiScreen s) {
 void uiSetStatusLine(const String &line) {
   if (s_status == line) return;
   s_status = line;
+  s_needsRedraw = true;
+}
+
+void uiSetPortalLink(UiLink link) {
+  if (s_link == link) return;
+  s_link = link;
   s_needsRedraw = true;
 }
 

@@ -90,6 +90,16 @@ reinicios como a volver a flashear.
 **El token solo se escribe en esa página y solo vive en la memoria de la
 placa.** No está en este repositorio ni sale del dispositivo.
 
+### Si se va la luz
+
+Si al encender no encuentra tu WiFi (lo normal tras un apagón: el router tarda
+más que ella en arrancar), vuelve a enseñar el portal, ahora con «sin conexión
+con» y el nombre de tu red arriba. No hace falta tocar nada: mientras nadie
+esté conectado a su red, sigue probando la tuya, y cuando la conexión aguanta
+unos segundos se reinicia y vuelve a la lista con todas las tareas. Si lo que
+ha cambiado es la red o su contraseña, el QR sigue ahí para configurarla otra
+vez.
+
 ### Cambiar el WiFi o el token más adelante
 
 <p align="center">

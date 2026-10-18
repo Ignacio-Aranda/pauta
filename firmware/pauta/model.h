@@ -50,3 +50,8 @@ void     tasksResetLastMsg();
 // para no escribir en flash dentro de cada operacion. Si NVS no acepta la
 // escritura, lo dice por Serial y lo vuelve a intentar mas tarde.
 void     tasksFlushIfDirty();
+
+// Lo mismo pero sin esperar: para llamarla justo antes de ESP.restart(). El
+// guardado diferido espera 1,5 s, y lo que hubiera cambiado en ese rato se
+// perdia con el reinicio.
+void     tasksFlushNow();

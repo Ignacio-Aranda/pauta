@@ -2,7 +2,8 @@
 //
 // Si no hay WiFi guardado (o no se puede conectar) la placa levanta su propio
 // punto de acceso y sirve una pagina donde elegir la red, escribir su clave y
-// pegar el token del bot. Al guardar, reinicia y se conecta.
+// pegar el token del bot. Al guardar, reinicia y se conecta. Si ya habia una
+// red guardada, pauta.ino la sigue probando mientras nadie use el portal.
 #pragma once
 #include <Arduino.h>
 

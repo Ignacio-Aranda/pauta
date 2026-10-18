@@ -37,6 +37,9 @@ enum StrId : uint16_t {
   S_BOT_NO_ROOM, S_BOT_ADDED_PART,
   // Bot: /done, /undo o /del con algun numero que no esta en la lista
   S_BOT_NOT_FOUND_SOME,
+  // Portal en pantalla con una red ya guardada que no responde
+  S_PORTAL_NO_LINK, S_PORTAL_LINK_UP,
+  S_PORTAL_TRYING, S_PORTAL_PAUSED, S_PORTAL_BACK,
   STR_COUNT
 };
 

@@ -66,6 +66,26 @@ Después de configurarla, escríbele `/start` a tu bot para vincularla. **El
 primer chat que escriba se queda con la pantalla**; el resto reciben un aviso
 y se ignoran, para que un token filtrado no llene tu lista.
 
+### Si no conecta con tu WiFi
+
+Si ya tiene una red guardada pero no la encuentra al arrancar (lo normal tras
+un apagón, porque el router tarda más que ella), abre el portal para que
+puedas cambiar la red o la contraseña, pero no se queda ahí. Arriba pone «sin
+conexión con» y el nombre de tu red, y abajo a la izquierda, qué está
+haciendo:
+
+- **Sigo probando**: nadie está conectado a su punto de acceso, así que sigue
+  intentando conectar con tu red.
+- **Esperando a que termines**: hay un móvil conectado a su red. Deja de
+  probar para no echarte a mitad del formulario, y vuelve a hacerlo en cuanto
+  te desconectes.
+- **Vuelvo a la lista**: tu red ha vuelto. Si la conexión aguanta 10 segundos
+  seguidos, guarda la lista y se reinicia para volver a ella.
+
+Nunca se reinicia por tiempo, así que un router que va y viene no la mete en
+un bucle de reinicios. En la consola serie (115200 baudios) cuenta lo que hace
+en líneas que empiezan por `portal:`.
+
 ## Actualizar el firmware
 
 Volver a flashear **no borra tu configuración**. `arduino-cli` escribe el

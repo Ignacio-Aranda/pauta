@@ -75,6 +75,9 @@ static const char *const STR_ES[] = {
   "He apuntado %d de %d.",
 
   "No encuentro: %s. Mira /list.",
+
+  "sin conexión con «%s»", "conectado a «%s»",
+  "sigo probando", "esperando a que termines", "vuelvo a la lista",
 };
 
 static const char *const STR_EN[] = {
@@ -116,6 +119,9 @@ static const char *const STR_EN[] = {
   "Jotted down %d of %d.",
 
   "Can't find: %s. Check /list.",
+
+  "can't reach «%s»", "connected to «%s»",
+  "still trying", "waiting for you to finish", "back to the list",
 };
 
 static_assert(sizeof(STR_ES) / sizeof(STR_ES[0]) == STR_COUNT,

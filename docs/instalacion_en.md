@@ -66,6 +66,26 @@ Once configured, send `/start` to your bot to pair it. **The first chat to
 write claims the screen**; everyone else gets a notice and is ignored, so a
 leaked token can't fill your list.
 
+### If it can't reach your WiFi
+
+If it already has a network saved but can't find it at boot (the usual case
+after a power cut, since the router takes longer than the board), it opens the
+portal so you can change the network or the password, but it doesn't stay
+there. The top line says "can't reach" and your network's name, and the bottom
+left says what it's doing:
+
+- **Still trying**: nobody is connected to its access point, so it keeps
+  trying to join your network.
+- **Waiting for you to finish**: a phone is connected to its network. It stops
+  trying so it won't kick you out halfway through the form, and starts again
+  as soon as you disconnect.
+- **Back to the list**: your network is back. If the connection holds for 10
+  seconds straight, it saves the list and reboots to get back to it.
+
+It never reboots on a timer, so a router that keeps dropping out can't trap it
+in a reboot loop. The serial console (115200 baud) logs what it does on lines
+starting with `portal:`.
+
 ## Updating the firmware
 
 Reflashing **does not wipe your settings**. `arduino-cli` writes the

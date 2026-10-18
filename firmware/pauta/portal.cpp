@@ -85,15 +85,36 @@ a.rescan{display:inline-block;margin-top:14px;color:var(--accent);
 // ("es · en") en lugar de pasar por T().
 static void sendPage() {
   String h;
-  h.reserve(4600);
+  h.reserve(5400);
   h += F("<!doctype html><html lang=es><head><meta charset=utf-8>"
          "<meta name=viewport content='width=device-width,initial-scale=1'>"
          "<title>Pauta</title><style>");
   h += FPSTR(PAGE_CSS);
   h += F("</style></head><body>"
          "<div class=mark><i></i><i></i><i></i></div>"
-         "<h1>Pauta</h1><p class=sub>Puesta en marcha · Setup</p>"
-         "<form method=POST action=/save><div class=card>"
+         "<h1>Pauta</h1>");
+  if (settingsHasWifi()) {
+    // Con una red guardada, el portal sale porque esa red no responde (tras
+    // un apagon, el router tarda mas que la placa en arrancar). Hablar de
+    // puesta en marcha a quien ya la hizo despistaba.
+    String name = esc(settingsGet().ssid);
+    h += F("<p class=sub>Sin conexión con «");
+    h += name;
+    h += F("» · Can't reach «");
+    h += name;
+    h += F("»</p>"
+           "<p class=hint>Mientras estés conectado aquí, la placa espera. "
+           "Cuando te desconectes, seguirá probando esa red y volverá sola a "
+           "la lista en cuanto conecte. Si la red o su contraseña han "
+           "cambiado, cámbialas abajo.</p>"
+           "<p class=hint>While you're connected here, the board waits. Once "
+           "you disconnect, it keeps trying that network and goes back to the "
+           "list by itself as soon as it connects. If the network or its "
+           "password changed, update them below.</p>");
+  } else {
+    h += F("<p class=sub>Puesta en marcha · Setup</p>");
+  }
+  h += F("<form method=POST action=/save><div class=card>"
          "<label>Idioma · Language</label>"
          "<select name=lang>"
          "<option value=es>Español</option>"

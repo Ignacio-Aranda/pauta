@@ -1,7 +1,8 @@
 // Pauta — checklist de escritorio sobre Makerfabs ESP32-S3 Parallel TFT 3.5".
 //
 // Arranque: si no hay WiFi guardado (o no conecta) levanta un punto de acceso
-// con portal cautivo para configurarlo desde el movil. Con WiFi, se conecta al
+// con portal cautivo para configurarlo desde el movil; si lo habia, lo sigue
+// probando desde el portal y vuelve solo a la lista. Con WiFi, se conecta al
 // bot de Telegram: lo que le escribes se convierte en tareas, y tocar una en la
 // pantalla la marca como hecha y te lo confirma por Telegram.
 //
@@ -19,11 +20,26 @@
 static bool     s_portalMode = false;
 static uint32_t s_savedAt = 0;
 
+// Portal con una red ya guardada: ver portalRetry().
+static uint32_t s_retryAt = 0;       // proximo intento propio de respaldo
+static uint32_t s_retryGap = 0;
+static bool     s_linked = false;    // el STA tiene IP desde s_linkSince
+static uint32_t s_linkSince = 0;
+
 // Tiempo maximo esperando a la red antes de rendirse y abrir el portal.
 static const uint32_t WIFI_TIMEOUT_MS = 20000;
 
 // Duracion del arranque con el logotipo. Suficiente para que se trace entero.
 static const uint32_t SPLASH_MS = 1500;
+
+// Reintentos de la red guardada desde el portal. El reconectado del core hace
+// casi todo el trabajo; lo propio es un respaldo que va espaciandose.
+static const uint32_t RETRY_FIRST_MS = 60000;
+static const uint32_t RETRY_MAX_MS   = 300000;
+
+// Tiempo que la red guardada tiene que aguantar conectada antes de reiniciar.
+// Un router que acaba de arrancar puede dar IP y caerse otra vez.
+static const uint32_t LINK_STABLE_MS = 10000;
 
 // Huso de España peninsular, con los cambios de hora incluidos en la regla.
 static const char *TZ_SPAIN = "CET-1CEST,M3.5.0,M10.5.0/3";
@@ -48,7 +64,82 @@ static bool connectWifi() {
 static void enterPortal() {
   s_portalMode = true;
   portalBegin();
+  s_retryGap = RETRY_FIRST_MS;
+  s_retryAt = millis() + s_retryGap;
   uiSetScreen(UI_PORTAL);
+}
+
+// La lista se guarda antes: el guardado diferido espera 1,5 s y lo que
+// hubiera cambiado en ese rato se perderia con el reinicio.
+static void restartNow() {
+  tasksFlushNow();
+  ESP.restart();
+}
+
+// Portal abierto con una red ya guardada. Casi siempre es un apagon: la placa
+// arranca antes que el router, no lo encuentra en 20 s y se quedaba en el
+// portal para siempre. Ahora, mientras nadie este conectado al punto de
+// acceso, sigue probando esa red, y cuando la conexion aguanta reinicia para
+// volver a la lista. Nunca por tiempo: con un router que va y viene, eso
+// seria un bucle de reinicios.
+static void portalRetry() {
+  if (!settingsHasWifi() || portalSaved()) return;
+  static uint32_t lastCheck = 0;
+  uint32_t now = millis();
+  if (now - lastCheck < 250) return;
+  lastCheck = now;
+
+  const Settings &cfg = settingsGet();
+  if (WiFi.softAPgetStationNum() > 0) {
+    // Hay alguien en el portal. Si el STA conectara, el punto de acceso
+    // saltaria al canal del router y el movil se caeria a mitad del
+    // formulario. Se para sin apagar la radio, para que el canal no cambie.
+    if (WiFi.getAutoReconnect()) {
+      Serial.println("portal: hay un movil conectado, dejo de probar la red");
+      WiFi.setAutoReconnect(false);
+      WiFi.disconnect();
+    }
+    s_linked = false;
+    uiSetPortalLink(UI_LINK_PAUSED);
+    return;
+  }
+
+  // Sin nadie conectado y con el reconectado parado (lo para el bloque de
+  // arriba, o un escaneo del portal), se vuelve a empezar.
+  if (!WiFi.getAutoReconnect()) {
+    Serial.printf("portal: vuelvo a probar con %s\n", cfg.ssid.c_str());
+    WiFi.setAutoReconnect(true);
+    WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
+    s_retryGap = RETRY_FIRST_MS;
+    s_retryAt = now + s_retryGap;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!s_linked) {
+      s_linked = true;
+      s_linkSince = now;
+      Serial.printf("portal: conectado a %s, espero a ver si aguanta\n", cfg.ssid.c_str());
+    }
+    uiSetPortalLink(UI_LINK_UP);
+    if (now - s_linkSince >= LINK_STABLE_MS) {
+      Serial.println("portal: la red ha vuelto, reinicio");
+      restartNow();
+    }
+    return;
+  }
+  s_linked = false;
+  uiSetPortalLink(UI_LINK_TRYING);
+
+  // El reconectado del core abandona con algunos fallos (una clave rechazada,
+  // por ejemplo): de respaldo, un intento propio cada vez mas espaciado. Sin
+  // disconnect antes, para no cortar uno que este a medias; y no si ya esta
+  // asociado y solo espera la IP, porque begin() lo desconectaria.
+  if ((int32_t)(now - s_retryAt) >= 0 && !WiFi.STA.connected()) {
+    Serial.printf("portal: intento propio con %s\n", cfg.ssid.c_str());
+    WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
+    s_retryGap = s_retryGap * 2 > RETRY_MAX_MS ? RETRY_MAX_MS : s_retryGap * 2;
+    s_retryAt = now + s_retryGap;
+  }
 }
 
 void setup() {
@@ -94,10 +185,11 @@ void loop() {
 
   if (s_portalMode) {
     portalLoop();
+    portalRetry();
     // Margen tras guardar para que el movil llegue a recibir la pagina de
     // confirmacion antes de que se caiga el punto de acceso.
     if (portalSaved() && s_savedAt == 0) s_savedAt = millis();
-    if (s_savedAt && millis() - s_savedAt > 2500) ESP.restart();
+    if (s_savedAt && millis() - s_savedAt > 2500) restartNow();
     return;
   }
 

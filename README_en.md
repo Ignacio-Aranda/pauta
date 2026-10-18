@@ -90,6 +90,16 @@ reboots and reflashing.
 **The token is only ever typed into that page and only ever lives in the
 board's flash.** It is not in this repository and never leaves the device.
 
+### After a power cut
+
+If it can't find your WiFi when it powers on (the usual case after a power
+cut: the router takes longer to boot than the board), it shows the setup
+portal again, now with "can't reach" and your network's name at the top. You
+don't need to do anything: as long as nobody is connected to its network, it
+keeps trying yours, and once the connection holds for a few seconds it reboots
+and goes back to the list with all your tasks. If what changed is the network
+or its password, the QR code is still there to set it up again.
+
 ### Changing WiFi or token later
 
 <p align="center">
