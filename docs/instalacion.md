@@ -104,6 +104,28 @@ Nunca se reinicia por tiempo, así que un router que va y viene no la mete en
 un bucle de reinicios. En la consola serie (115200 baudios) cuenta lo que hace
 en líneas que empiezan por `portal:`.
 
+### Avisos en el pie
+
+Si la conexión con Telegram falla más de un minuto seguido, el pie de la lista
+lo dice en color arcilla, con el punto de estado delante. Antes de ese minuto
+solo cambia el color del punto, para no alarmar por un corte de unos
+segundos, y el aviso se quita solo en cuanto vuelve la conexión. Si no cabe
+junto a «limpiar hechas», ese botón se oculta mientras dure.
+
+| Aviso | Qué pasa | Qué hacer |
+|---|---|---|
+| **SIN WIFI** | La placa ha perdido tu red. | Mira el router; se reconecta sola cuando vuelve. |
+| **SIN CONEXIÓN** | Hay WiFi, pero no llega a Telegram: el router no tiene internet o falla el DNS. | Comprueba si otros aparatos navegan. |
+| **CERTIFICADO** | El certificado de `api.telegram.org` no cuelga de ninguna de las raíces de `telegram_ca.h`, o algo en medio intercepta la conexión. | Actualiza el firmware. Si sigue, Telegram ha cambiado de cadena y hay que añadir su raíz nueva. |
+| **TOKEN NO VÁLIDO** | Telegram no reconoce el token (401 o 404): está mal copiado, o el bot se ha borrado o ha cambiado de token en @BotFather. | Mantén pulsado el logo y vuelve a pegar el token en el portal. |
+| **BOT USADO EN OTRO SITIO** | Otro programa lee los mensajes del mismo bot (409), o el bot tiene un webhook puesto. | Para el otro programa o crea un bot solo para Pauta. Un webhook se quita abriendo `https://api.telegram.org/bot<token>/deleteWebhook`. |
+| **ESPERANDO** | Telegram ha pedido que espere (429, demasiadas peticiones). | Nada: reintenta sola cuando Telegram lo permite. |
+| **FALLO DE TELEGRAM** | Telegram contesta con otro error, por ejemplo un 5xx cuando tiene problemas. | Esperar. Si dura, mira la consola. |
+
+En la consola serie (115200 baudios), cada cambio sale en una línea que
+empieza por `telegram:`, con el código HTTP (o negativo, si ni siquiera llegó
+a hablar con Telegram) y la explicación que da Telegram o la librería.
+
 ## Actualizar el firmware
 
 Volver a flashear **no borra tu configuración**. `arduino-cli` escribe el

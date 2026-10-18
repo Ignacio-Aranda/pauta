@@ -52,6 +52,12 @@ remove several, do it in one go with several numbers.
 | Sun / moon | Switch between day and night paper |
 | Hold the logo | Forget WiFi and token, and go back to the portal (the list stays) |
 
+If the connection to Telegram fails for more than a minute, the footer says
+what's wrong in words (no WiFi, invalid token…); the
+[installation guide](docs/instalacion_en.md#notices-in-the-footer) explains
+each notice. With the list empty, the screen reminds you of your bot's
+@username.
+
 Interface and bot speak **English or Spanish**; you pick during setup.
 
 ## What you need

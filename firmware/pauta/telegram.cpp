@@ -10,12 +10,26 @@
 #include <ArduinoJson.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <mbedtls/x509.h>
+#include <atomic>
 #include <vector>
 
-static TgState       s_state = TG_OFFLINE;
-static String        s_lastError;
-static QueueHandle_t s_outQueue = nullptr;
-static int64_t       s_offset = 0;
+static std::atomic<TgState> s_state{TG_OFFLINE};
+static QueueHandle_t        s_outQueue = nullptr;
+static int64_t              s_offset = 0;
+
+// Que falla, para el pie. Solo lo escribe esta tarea (nucleo 0) y la UI lo
+// lee desde el otro nucleo: por eso son atomicos y no un String. s_faultSince
+// marca el comienzo de la racha de fallos y no del fallo concreto: si pasa de
+// SIN WIFI a SIN CONEXION, el aviso no tiene que esperar otro minuto.
+static std::atomic<uint8_t>  s_fault{TG_FAULT_NONE};
+static std::atomic<uint32_t> s_faultSince{0};
+static int                   s_faultCode = 0;   // solo nucleo 0, para la consola
+
+// @usuario del bot. Se escribe una sola vez y despues se levanta s_botReady;
+// la UI no lo lee hasta verlo levantado, asi que nunca pilla media cadena.
+static char              s_botName[33];
+static std::atomic<bool> s_botReady{false};
 
 // Sondeo largo: el servidor retiene la peticion hasta que hay novedades o
 // hasta agotar este tiempo. Evita machacar la API con peticiones vacias.
@@ -33,28 +47,104 @@ static WiFiClientSecure s_client;
 
 struct OutMsg { char text[320]; };
 
+// --- Fallos -----------------------------------------------------------------
+
+// En el orden de TgFault. Solo para la consola: la pantalla usa i18n.
+static const char *const FAULT_LOG[] = {
+  "conectado", "sin wifi", "sin conexion", "certificado", "token no valido",
+  "bot usado en otro sitio", "esperando", "fallo de telegram",
+};
+static_assert(sizeof(FAULT_LOG) / sizeof(FAULT_LOG[0]) == TG_FAULT_SERVER + 1,
+              "FAULT_LOG necesita una entrada por cada TgFault");
+
+// Cada cambio deja una linea en la consola con el codigo y el motivo: el pie
+// solo dice de que tipo es el fallo, y antes un sondeo fallido no dejaba
+// ningun rastro.
+static void setFault(TgFault f, int code = 0, const String &why = String()) {
+  TgFault prev = (TgFault)s_fault.load();
+  if (f == prev && code == s_faultCode) return;
+  s_faultCode = code;
+  if (f == TG_FAULT_NONE) Serial.println("telegram: conexion recuperada");
+  else Serial.printf("telegram: %s (codigo %d) %s\n", FAULT_LOG[f], code, why.c_str());
+  // El inicio antes que el fallo: telegramFault() los lee al reves.
+  if (prev == TG_FAULT_NONE) s_faultSince = millis();
+  s_fault = f;
+}
+
+// Lo que explica una respuesta que no es 200. Telegram manda un JSON con
+// description y, en un 429, los segundos que hay que esperar.
+static String httpReason(HTTPClient &http, int code, int *retryAfter = nullptr) {
+  if (code <= 0) return HTTPClient::errorToString(code);
+  JsonDocument filter;
+  filter["description"] = true;
+  filter["parameters"]["retry_after"] = true;
+  JsonDocument doc;
+  if (deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter))) return String();
+  if (retryAfter) *retryAfter = doc["parameters"]["retry_after"] | 0;
+  return String(doc["description"] | "");
+}
+
+// mbedTLS suma a veces al codigo del modulo uno de bajo nivel (de ASN.1, por
+// ejemplo): son los 7 bits de abajo y no cuentan para saber de quien es.
+static bool isX509Error(int e) {
+  if (e >= 0) return false;
+  int high = -((-e) & 0x7F80);
+  return high <= MBEDTLS_ERR_X509_FEATURE_UNAVAILABLE && high >= MBEDTLS_ERR_X509_FATAL_ERROR;
+}
+
+// Traduce un sondeo fallido al aviso del pie; why se queda el detalle para la
+// consola y retryAfter, la pausa que pida un 429.
+static TgFault classifyFailure(HTTPClient &http, int code, String &why, int &retryAfter) {
+  if (code > 0) {
+    why = httpReason(http, code, &retryAfter);
+    if (code == 401 || code == 404) return TG_FAULT_TOKEN;
+    if (code == 409) return TG_FAULT_CONFLICT;
+    if (code == 429) return TG_FAULT_WAIT;
+    return TG_FAULT_SERVER;
+  }
+  why = HTTPClient::errorToString(code);
+  // Con la conexion rechazada, el error de mbedTLS dice si fue el
+  // certificado. Pero si lo que falla es el DNS, el cliente no llega a
+  // apuntar nada y lastError() devuelve el del intento anterior: por eso se
+  // comprueba que el nombre resuelve antes de culpar al certificado.
+  if (code == HTTPC_ERROR_CONNECTION_REFUSED) {
+    char buf[100];
+    int e = s_client.lastError(buf, sizeof(buf));
+    IPAddress ip;
+    if (isX509Error(e) && WiFi.hostByName("api.telegram.org", ip)) {
+      why = String(buf) + " (-0x" + String(-e, HEX) + ")";
+      return TG_FAULT_CERT;
+    }
+  }
+  return TG_FAULT_NO_NET;
+}
+
 // --- Envio ------------------------------------------------------------------
 
 static bool apiPost(const String &method, const String &jsonBody, JsonDocument *out) {
   HTTPClient http;
   http.setReuse(true);
   String url = String(API_HOST) + "/bot" + settingsGet().token + "/" + method;
-  if (!http.begin(s_client, url)) { s_lastError = "begin() fallo"; return false; }
+  if (!http.begin(s_client, url)) {
+    Serial.printf("telegram: %s: begin() fallo\n", method.c_str());
+    return false;
+  }
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(20000);
 
   int code = http.POST(jsonBody);
+  String why;
   bool ok = (code == 200);
   if (!ok) {
-    s_lastError = method + " HTTP " + String(code);
+    why = httpReason(http, code);
   } else if (out) {
     DeserializationError err = deserializeJson(*out, http.getStream());
-    if (err) { s_lastError = String("json: ") + err.c_str(); ok = false; }
+    if (err) { why = String("json: ") + err.c_str(); ok = false; }
   }
   http.end();
   // Sin esto, un envio rechazado (un 400 de Telegram, por ejemplo) no
   // dejaba ningun rastro en la consola serie.
-  if (!ok) Serial.printf("telegram: %s\n", s_lastError.c_str());
+  if (!ok) Serial.printf("telegram: %s HTTP %d %s\n", method.c_str(), code, why.c_str());
   return ok;
 }
 
@@ -338,7 +428,7 @@ static void processUpdate(JsonObjectConst update) {
   handleText(chatId, String(text));
 }
 
-static void pollOnce() {
+static bool pollOnce() {
   HTTPClient http;
   http.setReuse(true);
   String url = String(API_HOST) + "/bot" + settingsGet().token +
@@ -347,34 +437,71 @@ static void pollOnce() {
   if (s_offset) url += "&offset=" + String(s_offset);
 
   if (!http.begin(s_client, url)) {
-    s_state = TG_ERROR; s_lastError = "begin() fallo";
+    s_state = TG_ERROR;
+    setFault(TG_FAULT_SERVER, 0, "begin() fallo");
     vTaskDelay(pdMS_TO_TICKS(3000));
-    return;
+    return false;
   }
   http.setTimeout((POLL_TIMEOUT_S + 10) * 1000);
 
   int code = http.GET();
   if (code != 200) {
-    s_state = TG_ERROR;
-    s_lastError = "getUpdates HTTP " + String(code);
+    String why;
+    int retryAfter = 0;
+    TgFault f = classifyFailure(http, code, why, retryAfter);
     http.end();
-    // 401 = token invalido: no tiene sentido reintentar rapido.
-    vTaskDelay(pdMS_TO_TICKS(code == 401 ? 30000 : 4000));
-    return;
+    s_state = TG_ERROR;
+    setFault(f, code, why);
+    // Token invalido: no tiene sentido reintentar rapido. Un 429 dice
+    // cuanto hay que esperar; se respeta, con tope para no quedarse sordo.
+    uint32_t waitMs = (f == TG_FAULT_TOKEN) ? 30000 : 4000;
+    if (retryAfter > 0) waitMs = max(waitMs, (uint32_t)min(retryAfter, 60) * 1000);
+    vTaskDelay(pdMS_TO_TICKS(waitMs));
+    return false;
   }
 
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, http.getStream());
   http.end();
   if (err) {
-    s_state = TG_ERROR; s_lastError = String("json: ") + err.c_str();
+    // Con el certificado ya verificado, un 200 que no se lee entero es casi
+    // siempre una conexion cortada a media respuesta.
+    s_state = TG_ERROR;
+    setFault(TG_FAULT_NO_NET, code, String("json: ") + err.c_str());
     vTaskDelay(pdMS_TO_TICKS(2000));
-    return;
+    return false;
   }
 
   s_state = TG_OK;
-  s_lastError = "";
+  setFault(TG_FAULT_NONE);
   for (JsonObjectConst u : doc["result"].as<JsonArrayConst>()) processUpdate(u);
+  return true;
+}
+
+// El @usuario del bot, para que la pantalla vacia diga a quien escribir. Se
+// copian solo letras, cifras y '_': es lo que admite Telegram en un nombre
+// de usuario y todo ello esta en las fuentes de la pantalla.
+static void fetchBotName() {
+  JsonDocument doc;
+  if (!apiPost("getMe", "{}", &doc)) return;
+  const char *u = doc["result"]["username"] | "";
+  size_t n = 0;
+  for (; *u && n < sizeof(s_botName) - 1; u++) {
+    if (isalnum((uint8_t)*u) || *u == '_') s_botName[n++] = *u;
+  }
+  s_botName[n] = '\0';
+  if (n) {
+    s_botReady = true;
+    Serial.printf("telegram: bot @%s\n", s_botName);
+  }
+}
+
+// Lo que se pide una vez por arranque, en cuanto un sondeo sale bien: antes
+// no se sabe si hay red ni si el token vale. Si falla, se reintenta tras el
+// siguiente sondeo, con tope para no insistir sin fin.
+static void afterGoodPoll() {
+  static uint8_t meTries = 0;
+  if (!s_botReady && meTries < 3) { meTries++; fetchBotName(); }
 }
 
 static void drainOutgoing() {
@@ -387,14 +514,16 @@ static void drainOutgoing() {
 
 static void telegramTask(void *) {
   for (;;) {
-    if (WiFi.status() != WL_CONNECTED || !settingsHasToken()) {
+    bool wifi = (WiFi.status() == WL_CONNECTED);
+    if (!wifi || !settingsHasToken()) {
       s_state = TG_OFFLINE;
+      setFault(wifi ? TG_FAULT_TOKEN : TG_FAULT_NO_WIFI);
       vTaskDelay(pdMS_TO_TICKS(1000));
       continue;
     }
     if (s_state == TG_OFFLINE) s_state = TG_CONNECTING;
     drainOutgoing();
-    pollOnce();
+    if (pollOnce()) afterGoodPoll();
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
@@ -407,5 +536,15 @@ void telegramBegin() {
   xTaskCreatePinnedToCore(telegramTask, "telegram", 12288, nullptr, 3, nullptr, 0);
 }
 
-TgState telegramState()     { return s_state; }
-String  telegramLastError() { return s_lastError; }
+TgState telegramState() { return s_state; }
+
+// Primero el fallo y luego el inicio, al reves de como los escribe
+// setFault(): un fallo recien estrenado nunca se lee con el inicio de una
+// racha anterior.
+TgFault telegramFault(uint32_t minMs) {
+  TgFault f = (TgFault)s_fault.load();
+  if (f == TG_FAULT_NONE) return f;
+  return (millis() - s_faultSince.load() >= minMs) ? f : TG_FAULT_NONE;
+}
+
+const char *telegramBotName() { return s_botReady ? s_botName : ""; }

@@ -78,6 +78,12 @@ static const char *const STR_ES[] = {
 
   "sin conexión con «%s»", "conectado a «%s»",
   "sigo probando", "esperando a que termines", "vuelvo a la lista",
+
+  "sin wifi", "sin conexión", "certificado", "token no válido",
+  "bot usado en otro sitio", "esperando", "fallo de telegram",
+
+  "Escríbele a @%s",
+  "y lo que le mandes aparecerá aquí, renglón a renglón.",
 };
 
 static const char *const STR_EN[] = {
@@ -122,6 +128,12 @@ static const char *const STR_EN[] = {
 
   "can't reach «%s»", "connected to «%s»",
   "still trying", "waiting for you to finish", "back to the list",
+
+  "no wifi", "no connection", "certificate", "invalid token",
+  "bot in use elsewhere", "waiting", "telegram error",
+
+  "Write to @%s",
+  "and whatever you send lands here, line by line.",
 };
 
 static_assert(sizeof(STR_ES) / sizeof(STR_ES[0]) == STR_COUNT,

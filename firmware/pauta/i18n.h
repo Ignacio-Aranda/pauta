@@ -40,6 +40,11 @@ enum StrId : uint16_t {
   // Portal en pantalla con una red ya guardada que no responde
   S_PORTAL_NO_LINK, S_PORTAL_LINK_UP,
   S_PORTAL_TRYING, S_PORTAL_PAUSED, S_PORTAL_BACK,
+  // Pie: que falla, si dura mas de un minuto. En el orden de TgFault
+  S_FAULT_NO_WIFI, S_FAULT_NO_NET, S_FAULT_CERT, S_FAULT_TOKEN,
+  S_FAULT_CONFLICT, S_FAULT_WAIT, S_FAULT_SERVER,
+  // Lista vacia cuando ya se sabe el @usuario del bot
+  S_BLANK_BOT_1, S_BLANK_BOT_2,
   STR_COUNT
 };
 

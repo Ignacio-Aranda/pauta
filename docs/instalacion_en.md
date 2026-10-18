@@ -104,6 +104,28 @@ It never reboots on a timer, so a router that keeps dropping out can't trap it
 in a reboot loop. The serial console (115200 baud) logs what it does on lines
 starting with `portal:`.
 
+### Notices in the footer
+
+If the connection to Telegram fails for more than a minute straight, the list
+footer says so in clay, with the status dot in front. Before that minute only
+the dot changes colour, so a few seconds' outage doesn't raise an alarm, and
+the notice goes away on its own once the connection is back. If it doesn't fit
+next to "clear done", that button is hidden while it lasts.
+
+| Notice | What's going on | What to do |
+|---|---|---|
+| **NO WIFI** | The board has lost your network. | Check the router; it reconnects by itself when it's back. |
+| **NO CONNECTION** | There's WiFi, but it can't reach Telegram: the router has no internet or DNS is failing. | Check whether other devices can get online. |
+| **CERTIFICATE** | The `api.telegram.org` certificate doesn't chain to any of the roots in `telegram_ca.h`, or something in between is intercepting the connection. | Update the firmware. If it persists, Telegram has changed its chain and its new root needs adding. |
+| **INVALID TOKEN** | Telegram doesn't recognise the token (401 or 404): it was copied wrong, or the bot was deleted or got a new token in @BotFather. | Hold the logo and paste the token again in the portal. |
+| **BOT IN USE ELSEWHERE** | Another program is reading the same bot's messages (409), or the bot has a webhook set. | Stop the other program or create a bot just for Pauta. A webhook is removed by opening `https://api.telegram.org/bot<token>/deleteWebhook`. |
+| **WAITING** | Telegram has asked it to wait (429, too many requests). | Nothing: it retries by itself when Telegram allows. |
+| **TELEGRAM ERROR** | Telegram answers with some other error, such as a 5xx when it's having trouble. | Wait. If it lasts, check the console. |
+
+On the serial console (115200 baud), every change shows up on a line starting
+with `telegram:`, with the HTTP code (or a negative one, if it never got to
+talk to Telegram) and the explanation given by Telegram or the library.
+
 ## Updating the firmware
 
 Reflashing **does not wipe your settings**. `arduino-cli` writes the

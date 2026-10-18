@@ -51,6 +51,11 @@ para quitar varias, mejor de una vez con varios números.
 | Sol / luna | Cambiar entre papel de día y de noche |
 | Mantener pulsado el logo | Olvidar WiFi y token, y volver al portal (la lista se queda) |
 
+Si la conexión con Telegram falla durante más de un minuto, el pie dice qué
+pasa con palabras (sin WiFi, token no válido…); qué significa cada aviso está
+en la [guía de instalación](docs/instalacion.md#avisos-en-el-pie). Con la
+lista vacía, la pantalla te recuerda el @usuario de tu bot.
+
 La interfaz y el bot hablan **español o inglés**; se elige en la puesta en
 marcha.
 

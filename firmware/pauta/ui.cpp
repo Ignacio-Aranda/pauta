@@ -351,8 +351,19 @@ static void drawEmptyState() {
 
   cv.setFont(&fMeta.font);
   cv.setTextColor(P.inkMute);
-  cv.drawString(T(S_BLANK_1), SCR_W / 2, cy + 48);
-  cv.drawString(T(S_BLANK_2), SCR_W / 2, cy + 66);
+  // Con el @usuario a la vista no hay que acordarse de como se llamaba el
+  // bot. Va solo en su renglon porque un nombre puede tener 32 letras; aun
+  // asi, uno de letras anchas se saldria del margen, y por eso el fit().
+  const char *bot = telegramBotName();
+  if (*bot) {
+    char line[64];
+    snprintf(line, sizeof(line), T(S_BLANK_BOT_1), bot);
+    cv.drawString(fit(line, SCR_W - 2 * MARGIN), SCR_W / 2, cy + 48);
+    cv.drawString(T(S_BLANK_BOT_2), SCR_W / 2, cy + 66);
+  } else {
+    cv.drawString(T(S_BLANK_1), SCR_W / 2, cy + 48);
+    cv.drawString(T(S_BLANK_2), SCR_W / 2, cy + 66);
+  }
   cv.setTextDatum(top_left);
 }
 
@@ -408,6 +419,50 @@ static void themeBtnRect(int &x, int &y, int &w, int &h) {
   y = SCR_H - FOOTER_H + (FOOTER_H - h) / 2;
 }
 
+// Un fallo de conexion que dura mas de un minuto se dice con palabras: el
+// punto solo no distingue un router apagado de un token mal copiado. Antes
+// no, para no alarmar por un corte de unos segundos.
+static const uint32_t FAULT_SHOW_MS = 60000;
+static const int      FAULT_RIGHT   = 410;   // aire antes del sol y la luna
+static const int      FAULT_MAX_W   = 230;
+static const int      FAULT_DOT_GAP = 14;    // el punto va delante del texto
+
+// En el orden de TgFault, desde TG_FAULT_NO_WIFI.
+static const StrId FAULT_TEXT[] = {
+  S_FAULT_NO_WIFI, S_FAULT_NO_NET, S_FAULT_CERT, S_FAULT_TOKEN,
+  S_FAULT_CONFLICT, S_FAULT_WAIT, S_FAULT_SERVER,
+};
+static_assert(sizeof(FAULT_TEXT) / sizeof(FAULT_TEXT[0]) == TG_FAULT_SERVER,
+              "FAULT_TEXT necesita una frase por cada TgFault salvo NONE");
+
+// Aviso del pie, ya recortado, y si con el cabe "limpiar hechas". Si no
+// caben los dos, se oculta el boton mientras dure el fallo. Lo usan el
+// pintado y el tactil, para que un boton oculto no responda.
+static bool footerFault(String &label, bool &clearShown) {
+  clearShown = tasksDoneCount() > 0;
+  TgFault f = telegramFault(FAULT_SHOW_MS);
+  if (f == TG_FAULT_NONE) return false;
+
+  const lgfx::IFont *prev = cv.getFont();
+  cv.setFont(&fMeta.font);
+  const char *text = T(FAULT_TEXT[f - 1]);
+  int left = MARGIN;
+  if (clearShown) {
+    int x, y, w, h;
+    clearBtnRect(x, y, w, h);
+    left = x + w + 8;
+  }
+  int room = FAULT_RIGHT - FAULT_DOT_GAP - left;
+  if (clearShown && trackedWidth(text, 2) > room) {
+    clearShown = false;
+    room = FAULT_RIGHT - FAULT_DOT_GAP - MARGIN;
+  }
+  if (room > FAULT_MAX_W) room = FAULT_MAX_W;
+  label = fitName("%s", text, room, 2);
+  cv.setFont(prev);
+  return true;
+}
+
 // Sol y luna trazados con primitivas: no hay glifos para esto en la fuente y
 // dibujarlos sale mas nitido que escalar un simbolo.
 static void drawThemeIcon(int cx, int cy, bool dark, uint32_t color, uint32_t bg) {
@@ -429,9 +484,11 @@ static void drawFooter() {
   cv.fillRect(0, fy, SCR_W, FOOTER_H, P.paperSoft);
   cv.drawFastHLine(0, fy, SCR_W, P.rule);
 
-  if (tasksDoneCount() > 0) {
-    int x, y, w, h;
-    clearBtnRect(x, y, w, h);
+  String fault;
+  bool clearShown;
+  bool faulty = footerFault(fault, clearShown);
+
+  if (clearShown) {
     cv.setFont(&fMeta.font);
     cv.setTextColor(P.inkDim);
     cv.setTextDatum(top_left);
@@ -449,7 +506,17 @@ static void drawFooter() {
   else if (telegramState() == TG_OK)      dot = P.accent;
   else if (telegramState() == TG_ERROR)   dot = P.clay;
   else                                    dot = P.inkMute;
-  cv.fillSmoothCircle(SCR_W / 2, fy + FOOTER_H / 2, 3, dot);
+
+  // Con un fallo largo, el punto deja el centro y encabeza el aviso.
+  int dotX = SCR_W / 2;
+  if (faulty) {
+    cv.setFont(&fMeta.font);
+    cv.setTextColor(P.clay);
+    int x = FAULT_RIGHT - trackedWidth(fault, 2);
+    drawTracked(fault, x, fy + 12, 2);
+    dotX = x - FAULT_DOT_GAP + 3;
+  }
+  cv.fillSmoothCircle(dotX, fy + FOOTER_H / 2, 3, dot);
 }
 
 // --- Pantallas --------------------------------------------------------------
@@ -673,7 +740,10 @@ static void onTap(int x, int y, uint16_t pressedId) {
   if (y >= SCR_H - FOOTER_H) {
     int bx, by, bw, bh;
     clearBtnRect(bx, by, bw, bh);
-    if (tasksDoneCount() > 0 && x >= bx && x <= bx + bw) {
+    String fault;
+    bool clearShown;
+    footerFault(fault, clearShown);
+    if (clearShown && x >= bx && x <= bx + bw) {
       int n = tasksClearDone();
       if (n) {
         char msg[96];
