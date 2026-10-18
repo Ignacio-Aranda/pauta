@@ -69,9 +69,10 @@ marcha.
 
 ## Qué necesitas
 
-- Una **Makerfabs ESP32-S3 Parallel TFT with Touch 3.5"**.
-  Sirven tanto la V1.0 como la V2.0, pero **usan pines distintos** y hay que
-  decírselo al firmware. Está explicado en [docs/hardware.md](docs/hardware.md).
+- Una **Makerfabs ESP32-S3 Parallel TFT with Touch 3.5"**, con táctil
+  capacitivo. Sirven la V1.0 y la V2.0 (esta compila, pero está sin probar en
+  hardware real), aunque **usan pines y PSRAM distintos** y hay que decírselo
+  al firmware. Está explicado en [docs/hardware.md](docs/hardware.md).
 - Un cable USB-C.
 - Un bot de Telegram: escríbele `/newbot` a [@BotFather](https://t.me/botfather)
   y te dará un token.

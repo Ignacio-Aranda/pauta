@@ -70,9 +70,10 @@ Interface and bot speak **English or Spanish**; you pick during setup.
 
 ## What you need
 
-- A **Makerfabs ESP32-S3 Parallel TFT with Touch 3.5"**.
-  Both V1.0 and V2.0 work, but **they use different pins** and the firmware
-  has to be told which. See [docs/hardware_en.md](docs/hardware_en.md).
+- A **Makerfabs ESP32-S3 Parallel TFT with Touch 3.5"**, the capacitive
+  touch one. Both V1.0 and V2.0 are supported (V2.0 builds, but is untested
+  on real hardware), but **they use different pins and PSRAM** and the
+  firmware has to be told which. See [docs/hardware_en.md](docs/hardware_en.md).
 - A USB-C cable.
 - A Telegram bot: send `/newbot` to [@BotFather](https://t.me/botfather) and
   he'll hand you a token.

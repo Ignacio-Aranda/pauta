@@ -39,9 +39,12 @@ and test on the board before calling the change good.
 ## 2. Match your board revision
 
 Check **[hardware_en.md](hardware_en.md)** to see whether your board is V1.0 or
-V2.0. The firmware ships configured for V1.0; if yours is V2.0 you need to
-change three constants in `firmware/pauta/board.h`. **Skip this and the screen
-will draw nothing at all.**
+V2.0. The firmware ships configured for V1.0; if yours is V2.0 there are two
+changes: three pins in `firmware/pauta/board.h` (and in its copy,
+`firmware/disptest/board.h`) and building with `PSRAM=opi`, the `v2` profile
+in step 3. **Skip this and get it wrong, and the screen doesn't draw or the
+firmware runs out of memory.** V2.0 builds, but it hasn't been tested on a
+real board.
 
 ## 3. Build and flash
 
@@ -64,9 +67,12 @@ tools/arduino-cli compile --profile v2 firmware/pauta
 tools/arduino-cli upload --profile v2 -p /dev/ttyACM0 firmware/pauta
 ```
 
-The `firmware/disptest` self-test has its own `sketch.yaml` with the same
-profiles: build and flash it the same way, swapping `firmware/pauta` for
-`firmware/disptest`.
+The two profiles only differ in the FQBN's PSRAM option:
+
+| Board | Profile | FQBN |
+|---|---|---|
+| V1.0 | `v1` (default) | `esp32:esp32:esp32s3:CDCOnBoot=cdc,PSRAM=enabled,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB` |
+| V2.0 (untested) | `v2` | `esp32:esp32:esp32s3:CDCOnBoot=cdc,PSRAM=opi,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB` |
 
 On Linux, if the port gives permission denied, your user needs to be in the
 `dialout` group:
@@ -109,6 +115,25 @@ Manager. Then pick the **ESP32S3 Dev Module** board and, under Tools:
 | PSRAM | QSPI PSRAM on V1.0, OPI PSRAM on V2.0 |
 | Flash Size | 16MB (128Mb) |
 | Partition Scheme | 16M Flash (3MB APP/9.9MB FATFS) |
+
+### The self-test
+
+`firmware/disptest` paints colour bars and prints every touch on the console,
+to tell whether the panel and the touch layer respond (see
+[hardware_en.md](hardware_en.md#checking-your-wiring)). It has its own
+`sketch.yaml`, with the same profiles, and **its own copy of `board.h`**: on
+V2.0 change the three pins there too.
+
+```bash
+tools/arduino-cli compile firmware/disptest
+tools/arduino-cli upload -p /dev/ttyACM0 firmware/disptest
+```
+
+(On V2.0, with `--profile v2` on both.)
+
+Flashing it doesn't wipe the list or the settings, which stay in NVS, but
+while the board runs it, it isn't Pauta: when you're done, flash
+`firmware/pauta` again.
 
 ## 4. Set the screen up
 

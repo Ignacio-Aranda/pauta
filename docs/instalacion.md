@@ -39,9 +39,11 @@ compila y prueba en la placa antes de dar el cambio por bueno.
 ## 2. Ajustar la revisión de tu placa
 
 Mira **[hardware.md](hardware.md)** y comprueba si tu placa es V1.0 o V2.0. El
-firmware viene configurado para V1.0; si la tuya es V2.0 hay que cambiar tres
-constantes en `firmware/pauta/board.h`. **Si te saltas este paso y no coincide,
-la pantalla no pintará nada.**
+firmware viene configurado para V1.0; si la tuya es V2.0 son dos cambios: tres
+pines en `firmware/pauta/board.h` (y en su copia, `firmware/disptest/board.h`)
+y compilar con `PSRAM=opi`, el perfil `v2` del paso 3. **Si te saltas este
+paso y no coincide, la pantalla no pinta o el firmware se queda sin
+memoria.** La V2.0 compila, pero no se ha probado en una placa real.
 
 ## 3. Compilar y flashear
 
@@ -63,9 +65,12 @@ tools/arduino-cli compile --profile v2 firmware/pauta
 tools/arduino-cli upload --profile v2 -p /dev/ttyACM0 firmware/pauta
 ```
 
-La autocomprobación de `firmware/disptest` tiene su propio `sketch.yaml` con
-los mismos perfiles: se compila y se flashea igual, cambiando
-`firmware/pauta` por `firmware/disptest`.
+Los dos perfiles solo se diferencian en la opción PSRAM del FQBN:
+
+| Placa | Perfil | FQBN |
+|---|---|---|
+| V1.0 | `v1` (por defecto) | `esp32:esp32:esp32s3:CDCOnBoot=cdc,PSRAM=enabled,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB` |
+| V2.0 (sin probar) | `v2` | `esp32:esp32:esp32s3:CDCOnBoot=cdc,PSRAM=opi,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB` |
 
 En Linux, si el puerto da permiso denegado, tu usuario tiene que estar en el
 grupo `dialout`:
@@ -106,6 +111,25 @@ librerías. Luego elige la placa **ESP32S3 Dev Module** y, en Herramientas:
 | PSRAM | QSPI PSRAM en la V1.0, OPI PSRAM en la V2.0 |
 | Flash Size | 16MB (128Mb) |
 | Partition Scheme | 16M Flash (3MB APP/9.9MB FATFS) |
+
+### La autocomprobación
+
+`firmware/disptest` pinta bandas de color y saca por la consola cada toque,
+para saber si el panel y el táctil responden (lo cuenta
+[hardware.md](hardware.md#comprobar-el-cableado)). Tiene su propio
+`sketch.yaml`, con los mismos perfiles, y **su propia copia de `board.h`**: en
+la V2.0 cambia también ahí los tres pines.
+
+```bash
+tools/arduino-cli compile firmware/disptest
+tools/arduino-cli upload -p /dev/ttyACM0 firmware/disptest
+```
+
+(En la V2.0, con `--profile v2` en las dos.)
+
+Flashearla no borra la lista ni la configuración, que siguen en la NVS, pero
+mientras la lleve la placa no hace de Pauta: cuando termines, vuelve a
+flashear `firmware/pauta`.
 
 ## 4. Configurar la pantalla
 
