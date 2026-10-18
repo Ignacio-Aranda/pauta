@@ -59,6 +59,10 @@ Power it on and follow what's on the screen: it gives you its WiFi network
 name, the password, and a QR code carrying both. Connecting opens the setup
 page, where you pick your WiFi, paste the bot token and choose a language.
 
+The password for its network is picked at random the first time and kept
+across reboots; it only changes when you wipe the settings by holding the
+logo. If your phone had it saved from before, scan the QR code again.
+
 For the token, send `/newbot` to [@BotFather](https://t.me/botfather) on
 Telegram.
 

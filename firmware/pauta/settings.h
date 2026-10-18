@@ -10,6 +10,7 @@ struct Settings {
   int64_t chatId;    // chat autorizado; 0 = aun sin vincular
   bool    dark;      // tema oscuro (por defecto) o claro
   String  lang;      // "es" o "en": interfaz y bot
+  String  apPass;    // clave del punto de acceso; vacia hasta settingsEnsureApPassword()
 };
 
 void  settingsBegin();
@@ -25,7 +26,10 @@ void  settingsClear();
 bool  settingsHasWifi();
 bool  settingsHasToken();
 
-// Nombre y clave del punto de acceso de configuracion. Se derivan de la MAC
-// para que sean estables entre reinicios y se puedan imprimir en un QR.
+// Nombre y clave del punto de acceso de configuracion. El nombre sale de la
+// MAC; la clave es aleatoria y se guarda, para que el QR de la pantalla no
+// cambie entre reinicios. settingsEnsureApPassword() la crea si aun no existe
+// y hay que llamarla antes de apPassword(), con la radio ya encendida.
+void   settingsEnsureApPassword();
 String apName();
 String apPassword();

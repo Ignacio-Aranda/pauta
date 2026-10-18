@@ -187,6 +187,8 @@ static void handleNotFound() { sendPage(); }
 
 void portalBegin() {
   WiFi.mode(WIFI_AP_STA);      // STA activo tambien, para poder escanear
+  // Despues de encender la radio: es lo que da entropia a esp_random().
+  settingsEnsureApPassword();
   WiFi.softAP(apName().c_str(), apPassword().c_str());
   delay(300);
   scanNetworks();

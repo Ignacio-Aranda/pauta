@@ -551,6 +551,8 @@ static void drawPortal() {
   drawTracked(T(S_PASSWORD), MARGIN, 220, 2);
   cv.setFont(&fBodyM.font);
   cv.setTextColor(P.accent);
+  // Son 10 letras al azar: la peor ("mmmmmmmmmm") mide 180 px y hasta la
+  // tarjeta del QR quedan 200.
   cv.drawString(pass, MARGIN + 62, 216);
 
   // El QR va siempre sobre blanco: necesita ese contraste aunque el tema

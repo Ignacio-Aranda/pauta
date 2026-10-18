@@ -3,6 +3,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <esp_mac.h>
+#include <esp_random.h>
 
 static Settings    s_settings;
 static Preferences s_prefs;
@@ -17,6 +18,7 @@ void settingsBegin() {
   s_settings.chatId = s_prefs.getLong64("chat", 0);
   s_settings.dark   = s_prefs.getBool("dark", true);
   s_settings.lang   = s_prefs.getString("lang", "es");
+  s_settings.apPass = s_prefs.getString("appass", "");
   s_prefs.end();
 }
 
@@ -101,14 +103,27 @@ String apName() {
   return String(buf);
 }
 
-// Clave derivada de la MAC: estable entre reinicios (para poder ensenarla en
-// un QR) pero distinta en cada placa.
-String apPassword() {
-  uint8_t mac[6];
-  apMac(mac);
-  uint32_t seed = ((uint32_t)mac[2] << 24) | ((uint32_t)mac[3] << 16) |
-                  ((uint32_t)mac[4] << 8) | mac[5];
-  char buf[16];
-  snprintf(buf, sizeof(buf), "pauta%05u", (unsigned)(seed % 100000u));
-  return String(buf);
+// Antes la clave salia de la MAC, que el punto de acceso anuncia en cada
+// baliza: cualquiera que viera la red podia calcularla. Ahora son 10 letras
+// de esp_random(), que con la radio encendida tira de ruido de verdad. El
+// alfabeto no tiene ; , : \ ni " (asi no hay que escapar nada en el QR
+// WIFI:) ni letras que se confundan al leerlas (i l o 0 1). settingsClear()
+// la borra con todo lo demas, asi que cada reset estrena clave.
+void settingsEnsureApPassword() {
+  if (s_settings.apPass.length()) return;
+  static const char ALPHABET[] = "abcdefghjkmnpqrstuvwxyz23456789";
+  char buf[11];
+  for (int i = 0; i < 10; i++) {
+    buf[i] = ALPHABET[esp_random() % (sizeof(ALPHABET) - 1)];
+  }
+  buf[10] = '\0';
+  s_settings.apPass = buf;
+  s_prefs.begin(NS, false);
+  // Si no se guarda, vale para este arranque y el siguiente estrena otra.
+  if (s_prefs.putString("appass", buf) == 0) {
+    Serial.println("ajustes: no se ha podido guardar la clave del punto de acceso");
+  }
+  s_prefs.end();
 }
+
+String apPassword() { return s_settings.apPass; }

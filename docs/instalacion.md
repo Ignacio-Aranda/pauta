@@ -59,6 +59,10 @@ Enciéndela y sigue lo que pone en la pantalla: te da el nombre de su red WiFi,
 la contraseña y un QR que lleva las dos dentro. Al conectarte se abre sola la
 página donde eliges tu WiFi, pegas el token del bot y eliges idioma.
 
+La contraseña de su red se elige al azar la primera vez y se mantiene entre
+reinicios; solo cambia cuando borras la configuración manteniendo pulsado el
+logo. Si el móvil la tenía guardada de antes, escanea el QR otra vez.
+
 Para el token: escríbele `/newbot` a
 [@BotFather](https://t.me/botfather) en Telegram.
 
