@@ -44,8 +44,8 @@ te lo confirma.
 N es el número que sale en `/list`. Al borrar, los de debajo se recolocan:
 para quitar varias, mejor de una vez con varios números. Si te dejas el
 número (un `/done` a secas desde el menú), te recuerda cómo va y te enseña la
-lista. Solo entiende texto: si le mandas una foto, una nota de voz o una
-pegatina, te pide que se lo escribas.
+lista. Solo entiende texto: con la pantalla ya vinculada, si le mandas una
+foto, una nota de voz o una pegatina, te pide que se lo escribas.
 
 | En la pantalla | |
 |---|---|
