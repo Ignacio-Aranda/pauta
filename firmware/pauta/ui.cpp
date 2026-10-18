@@ -40,6 +40,9 @@ static const int   EDGE_FADE_H  = 18;      // alto del difuminado de los bordes
 // la acaba de arrastrar seria peor que no mostrar la nueva.
 static const uint32_t REVEAL_MS      = 350;
 static const uint32_t TOUCH_QUIET_MS = 5000;
+// Un dedo que ya iba hacia un renglon cuando la lista arranco sola cae sobre
+// otro. Durante el desplazamiento y este rato despues, tocar solo la para.
+static const uint32_t REVEAL_GRACE_MS = 250;
 static bool     s_revealing = false;
 static float    s_scrollFrom = 0, s_scrollTo = 0;
 static uint32_t s_scrollAnimStart = 0;
@@ -851,10 +854,17 @@ static void handleTouch() {
     s_lastY = tp.y;
     s_lastMoveMs = millis();
     s_scrollVel = 0;                     // tocar detiene la inercia en curso
+    // Si la lista se esta moviendo sola, o acaba de pararse, el renglon bajo
+    // el dedo no es el que se veia al apuntar: el toque solo la detiene. Sin
+    // renglon iluminado onTap no tacha nada, y los botones del pie, que no se
+    // mueven, siguen respondiendo.
+    bool justMoved = s_revealing ||
+                     (s_scrollAnimStart &&
+                      millis() - s_scrollAnimStart < REVEAL_MS + REVEAL_GRACE_MS);
     s_revealing = false;                 // y el desplazamiento automatico
     s_holding = inLogoZone(tp.x, tp.y);
     s_holdStart = millis();
-    if (s_screen == UI_LIST) {
+    if (s_screen == UI_LIST && !justMoved) {
       s_pressedId = taskAt(tp.x, tp.y);
       if (s_pressedId) s_needsRedraw = true;
     }
