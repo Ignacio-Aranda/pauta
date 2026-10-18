@@ -275,8 +275,9 @@ bootloader, the partition table and the application; the NVS partition is left
 alone, so WiFi, token, language and list are all still there.
 
 To find out which version the board runs, look at the end of `/help`, the
-bottom-left corner of the setup portal, or the first console line at boot.
-What changes in each version is in the [changelog](../CHANGELOG_en.md).
+bottom-left corner of the setup portal screen, or the `Pauta …` line on the
+[serial console](#the-serial-console) at boot. What changes in each version
+is in the [changelog](../CHANGELOG_en.md).
 
 To set it up again, hold the logo on the screen for 8 seconds. It forgets
 WiFi, token, language, theme and the paired chat, but **keeps the list**. It

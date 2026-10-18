@@ -268,9 +268,9 @@ bootloader, la tabla de particiones y la aplicación; la partición NVS queda
 intacta, así que el WiFi, el token, el idioma y la lista siguen ahí.
 
 Para saber qué versión lleva la placa, mira el final de `/help`, la esquina
-de abajo a la izquierda del portal o la primera línea de la consola al
-arrancar. Lo que cambia en cada versión está en el
-[registro de cambios](../CHANGELOG.md).
+de abajo a la izquierda de la pantalla del portal o la línea `Pauta …` que
+sale en la [consola serie](#la-consola-serie) al arrancar. Lo que cambia en
+cada versión está en el [registro de cambios](../CHANGELOG.md).
 
 Para volver a configurarla, mantén pulsado el logo en la pantalla 8 segundos.
 Olvida el WiFi, el token, el idioma, el tema y el chat vinculado, pero
