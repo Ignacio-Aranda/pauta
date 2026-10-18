@@ -1,0 +1,59 @@
+{
+  "api": "1.0",
+  "id": "pauta",
+  "version": "1.2.0",
+  "kind": "native",
+  "min_firmware": "1.2.0",
+  "builtin": true,
+  "name": {"es": "Pauta", "en": "Pauta"},
+  "summary": {
+    "es": "La checklist de tu escritorio: lo que escribes al bot aparece aquí y tocar un renglón lo tacha.",
+    "en": "The checklist on your desk: whatever you write to the bot lands here, and tapping a line crosses it off."
+  },
+  "author": "Ignacio Aranda",
+  "license": "MIT",
+  "icon": "pauta",
+  "category": "trabajo",
+  "permissions": ["freetext", "notify"],
+  "surfaces": {"page": true, "glance": true},
+  "commands": [
+    {"cmd": "list",
+     "desc": {"es": "Ver la lista", "en": "See the list"}},
+    {"cmd": "done", "args": {"es": "N [N…]", "en": "N [N…]"},
+     "desc": {"es": "Tachar tareas: /done 3 o /done 2 5", "en": "Cross off tasks: /done 3 or /done 2 5"}},
+    {"cmd": "undo", "args": {"es": "N [N…]", "en": "N [N…]"},
+     "desc": {"es": "Reabrir tareas tachadas: /undo 3", "en": "Reopen crossed-off tasks: /undo 3"}},
+    {"cmd": "del", "args": {"es": "N [N…]", "en": "N [N…]"},
+     "desc": {"es": "Borrar tareas: /del 3 o /del 2 5", "en": "Delete tasks: /del 3 or /del 2 5"}},
+    {"cmd": "clear",
+     "desc": {"es": "Quitar todas las tachadas", "en": "Remove everything crossed off"}}
+  ],
+  "help": {
+    "es": "Escríbeme cualquier cosa y la apunto; si mandas varias líneas, apunto una tarea por línea.\n/list — ver la lista\n/done N — tachar la tarea N\n/undo N — reabrirla\n/del N — borrarla\n/clear — quitar todas las tachadas\nN es el número que sale en /list. Para varias a la vez: /del 2 3 o /done 1,4. En la pantalla, toca un renglón para tacharlo.",
+    "en": "Write me anything and I'll jot it down; send several lines and I'll add one task per line.\n/list — see the list\n/done N — cross off task N\n/undo N — reopen it\n/del N — delete it\n/clear — remove everything crossed off\nN is the number shown in /list. For several at once: /del 2 3 or /done 1,4. On the screen, tap a line to cross it off."
+  },
+  "settings": {"version": 1, "fields": [
+    {"key": "confirm_tick", "type": "bool", "default": true,
+     "label": {"es": "Avisarme por Telegram al tachar en la pantalla",
+               "en": "Tell me on Telegram when I cross off on the screen"},
+     "help": {"es": "También al reabrir una tarea y al limpiar las hechas desde la pantalla.",
+              "en": "Also when reopening a task and when clearing finished ones on the screen."}},
+    {"key": "reveal", "type": "bool", "default": true,
+     "label": {"es": "Bajar la lista hasta cada tarea nueva",
+               "en": "Scroll down to each new task"},
+     "help": {"es": "Solo si nadie ha tocado la pantalla en los últimos 5 segundos.",
+              "en": "Only if nobody has touched the screen in the last 5 seconds."}},
+    {"key": "new_alert", "type": "bool", "default": true,
+     "label": {"es": "Avisar en otras páginas cuando llega una tarea",
+               "en": "Show a notice on other pages when a task arrives"},
+     "help": {"es": "Una banda de 4 segundos encima del pie. Con la pantalla bloqueada solo sale el título.",
+              "en": "A 4-second band above the footer. With the screen locked only the title shows."}}
+  ]},
+  "actions": [
+    {"id": "wipe", "label": {"es": "Vaciar la lista", "en": "Empty the list"},
+     "args": [], "confirm": "screen"}
+  ],
+  "memory": {"psram_kb": 16, "static_kb": 1},
+  "storage": {"state_kb": 0},
+  "legacy": {"nvs": "taskdesk"}
+}

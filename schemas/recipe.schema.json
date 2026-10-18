@@ -1,0 +1,986 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Ignacio-Aranda/pauta/main/schemas/recipe.schema.json",
+  "title": "Pauta Plugin API 1.0: receta (clave 'recipe' de plugin.json)",
+  "description": "Formato de receta v1 (docs/plugins-referencia.md, apartado 13). Una receta no tiene código: configura motores del sistema (timer, monitor, photos, slideshow), pinta su página con bloques de libreta y reacciona a eventos con órdenes de una lista cerrada. Las referencias cruzadas (que cfg.x exista, que una orden tenga su permiso, que la página quepa) las comprueba tools/mkmanifests.py (apartado 13.14).",
+  "type": "object",
+  "required": ["format"],
+  "properties": {
+    "format": {"const": 1},
+    "engines": {"$ref": "#/$defs/engines"},
+    "vars": {
+      "type": "object",
+      "maxProperties": 8,
+      "propertyNames": {"$ref": "#/$defs/key"},
+      "additionalProperties": {"$ref": "#/$defs/varDef"}
+    },
+    "tables": {
+      "type": "object",
+      "maxProperties": 4,
+      "propertyNames": {"$ref": "#/$defs/key"},
+      "additionalProperties": {"$ref": "#/$defs/table"}
+    },
+    "header": {"$ref": "#/$defs/header"},
+    "footer": {"$ref": "#/$defs/footer"},
+    "glance": {
+      "anyOf": [
+        {"$ref": "#/$defs/glance"},
+        {"type": "array", "minItems": 1, "maxItems": 3, "items": {"$ref": "#/$defs/glance"}}
+      ]
+    },
+    "idle": {
+      "type": "object",
+      "required": ["from"],
+      "properties": {"from": {"const": "slideshow"}},
+      "additionalProperties": false
+    },
+    "keep_awake": {"$ref": "#/$defs/cond"},
+    "views": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"$ref": "#/$defs/view"}},
+    "alarms": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/alarm"}},
+    "on": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {"$ref": "#/$defs/event"},
+      "additionalProperties": {"$ref": "#/$defs/orders"}
+    }
+  },
+  "patternProperties": {"^x_": {}},
+  "additionalProperties": false,
+  "$defs": {
+    "key": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,15}$"},
+    "itemId": {"type": "string", "pattern": "^[a-z2-7]{6}$"},
+    "path": {
+      "description": "Ruta a un valor: cfg (ajustes), item (elemento de una colección), sel (elemento abierto en una vista), ev (datos del evento), var (variables), sys (valores públicos del sistema), timer, monitor, photos, slideshow y hid (salidas de los motores y del teclado).",
+      "type": "string",
+      "pattern": "^(cfg|item|sel|ev|var|sys|timer|monitor|photos|slideshow|hid)(\\.[a-z0-9_]{1,24}){1,3}$"
+    },
+    "collection": {
+      "description": "Una colección que se recorre: una lista de ajustes o una colección de un motor.",
+      "type": "string",
+      "pattern": "^(cfg\\.[a-z][a-z0-9_]{0,15}|monitor\\.targets|photos\\.latest|ev\\.items)$"
+    },
+    "tpl": {
+      "description": "Plantilla: texto con huecos {{ruta | filtro:arg}}. Un valor que es exactamente un hueco sin filtros conserva su tipo (número, sí/no, lista).",
+      "type": "string",
+      "maxLength": 200,
+      "pattern": "^(?:[^{}]|\\{\\{ ?(?:cfg|item|sel|ev|var|sys|timer|monitor|photos|slideshow|hid)(?:\\.[a-z0-9_]{1,24}){1,3} ?(?:\\| ?(?:mmss|time|date|ago|days|num|int|pct|upper|lower|trunc|default|map|status_emoji|len)(?::[^{}|]{1,24})? ?){0,3}\\}\\})*$"
+    },
+    "ref": {
+      "description": "Un hueco solo, sin filtros: el valor pasa con su tipo.",
+      "type": "string",
+      "pattern": "^\\{\\{ ?(?:cfg|item|sel|ev|var|sys|timer|monitor|photos|slideshow|hid)(?:\\.[a-z0-9_]{1,24}){1,3} ?\\}\\}$"
+    },
+    "plain": {"type": "string", "maxLength": 200, "pattern": "^[^{}]*$"},
+    "biTpl": {
+      "type": "object",
+      "required": ["es", "en"],
+      "properties": {"es": {"$ref": "#/$defs/tpl"}, "en": {"$ref": "#/$defs/tpl"}},
+      "additionalProperties": false
+    },
+    "biPlain": {
+      "type": "object",
+      "required": ["es", "en"],
+      "properties": {"es": {"$ref": "#/$defs/plain"}, "en": {"$ref": "#/$defs/plain"}},
+      "additionalProperties": false
+    },
+    "txt": {"anyOf": [{"$ref": "#/$defs/tpl"}, {"$ref": "#/$defs/biTpl"}]},
+    "txtv": {
+      "description": "Texto, o casos: la primera alternativa cuya condición se cumple; la última va sin condición.",
+      "anyOf": [
+        {"$ref": "#/$defs/txt"},
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["v"],
+            "properties": {"if": {"$ref": "#/$defs/cond"}, "v": {"$ref": "#/$defs/txt"}},
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "scalar": {"anyOf": [{"type": ["number", "boolean"]}, {"$ref": "#/$defs/tpl"}]},
+    "val": {
+      "description": "Valor: literal, hueco con su tipo o casos.",
+      "anyOf": [
+        {"$ref": "#/$defs/scalar"},
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["v"],
+            "properties": {"if": {"$ref": "#/$defs/cond"}, "v": {"$ref": "#/$defs/scalar"}},
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "toneName": {"enum": ["ink", "dim", "mute", "accent", "clay"]},
+    "statusName": {"enum": ["ok", "warn", "fail", "unknown", "stale", "none"]},
+    "iconName": {
+      "enum": [
+        "none",
+        "pauta",
+        "check",
+        "cross",
+        "plus",
+        "minus",
+        "play",
+        "pause",
+        "next",
+        "prev",
+        "stop",
+        "reset",
+        "timer",
+        "bell",
+        "alert",
+        "lock",
+        "gear",
+        "clock",
+        "search",
+        "photo",
+        "lights",
+        "antenna",
+        "keyboard",
+        "mic",
+        "mic_off",
+        "volume",
+        "volume_off",
+        "camera",
+        "camera_off",
+        "hangup",
+        "hand",
+        "monitor",
+        "window",
+        "globe",
+        "mail",
+        "terminal",
+        "folder",
+        "copy",
+        "paste",
+        "screenshot",
+        "sun",
+        "moon",
+        "cloud",
+        "sun_cloud",
+        "rain",
+        "snow",
+        "storm",
+        "fog"
+      ]
+    },
+    "toneV": {
+      "anyOf": [
+        {"$ref": "#/$defs/toneName"},
+        {"$ref": "#/$defs/ref"},
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["v"],
+            "properties": {
+              "if": {"$ref": "#/$defs/cond"},
+              "v": {"anyOf": [{"$ref": "#/$defs/toneName"}, {"$ref": "#/$defs/ref"}]}
+            },
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "statusV": {
+      "anyOf": [
+        {"$ref": "#/$defs/statusName"},
+        {"$ref": "#/$defs/ref"},
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["v"],
+            "properties": {
+              "if": {"$ref": "#/$defs/cond"},
+              "v": {"anyOf": [{"$ref": "#/$defs/statusName"}, {"$ref": "#/$defs/ref"}]}
+            },
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "iconV": {
+      "anyOf": [
+        {"$ref": "#/$defs/iconName"},
+        {"$ref": "#/$defs/ref"},
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["v"],
+            "properties": {
+              "if": {"$ref": "#/$defs/cond"},
+              "v": {"anyOf": [{"$ref": "#/$defs/iconName"}, {"$ref": "#/$defs/ref"}]}
+            },
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "kindV": {
+      "anyOf": [
+        {"enum": ["live", "sticky", "normal"]},
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["v"],
+            "properties": {"if": {"$ref": "#/$defs/cond"}, "v": {"enum": ["live", "sticky", "normal"]}},
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "cmp": {
+      "description": "Comparación [ruta, operador, valor]; con set o unset no hay valor.",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "prefixItems": [
+        {"$ref": "#/$defs/path"},
+        {"enum": ["eq", "ne", "lt", "le", "gt", "ge", "in", "nin", "set", "unset"]},
+        {
+          "anyOf": [
+            {"type": ["string", "number", "boolean"]},
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {"type": ["string", "number", "boolean"]}
+            }
+          ]
+        }
+      ],
+      "items": false,
+      "allOf": [
+        {
+          "if": {"prefixItems": [true, {"enum": ["set", "unset"]}]},
+          "then": {"maxItems": 2},
+          "else": {"minItems": 3}
+        },
+        {
+          "if": {"prefixItems": [true, {"enum": ["in", "nin"]}]},
+          "then": {"prefixItems": [true, true, {"type": "array"}]},
+          "else": {"prefixItems": [true, true, {"not": {"type": "array"}}]}
+        }
+      ]
+    },
+    "cond": {
+      "description": "Condición: todas las comparaciones tienen que cumplirse (Y). Para un O se usan casos o 'in'.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/cmp"}
+    },
+    "dur": {
+      "description": "Duración: número o hueco seguido de s, m o h ('25m', '{{cfg.work}}m').",
+      "type": "string",
+      "pattern": "^(?:[0-9]{1,5}|\\{\\{ ?(?:cfg|item|sel|ev|var|sys|timer|monitor|photos|slideshow|hid)(?:\\.[a-z0-9_]{1,24}){1,3} ?\\}\\})[smh]$"
+    },
+    "timeTpl": {
+      "type": "string",
+      "pattern": "^(?:(?:[01][0-9]|2[0-3]):[0-5][0-9]|\\{\\{ ?(?:cfg|item|sel|ev|var|sys|timer|monitor|photos|slideshow|hid)(?:\\.[a-z0-9_]{1,24}){1,3} ?\\}\\})$"
+    },
+    "event": {
+      "description": "Nombre de evento al que reacciona un manejador de 'on'.",
+      "type": "string",
+      "pattern": "^(start|settings|shown|hidden|uplink|schedule|command\\.[a-z0-9_]{1,32}|action\\.[a-z][a-z0-9_]{0,15}|timer\\.(started|phase_end|skipped|stopped)|monitor\\.(change|round_end|cert_due)|photos\\.(added|removed)|hid\\.link)$"
+    },
+    "varDef": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "min", "max"],
+          "properties": {
+            "type": {"const": "int"},
+            "min": {"type": "integer", "minimum": -32768, "maximum": 32767},
+            "max": {"type": "integer", "minimum": -32768, "maximum": 32767},
+            "default": {"type": "integer"},
+            "keep": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {"type": {"const": "bool"}, "default": {"type": "boolean"}, "keep": {"type": "boolean"}},
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {"type": {"const": "id"}, "keep": {"type": "boolean"}},
+          "additionalProperties": false
+        }
+      ]
+    },
+    "table": {
+      "description": "Datos fijos. Una tabla de textos (clave -> texto bilingüe, para el filtro map) o de filas (clave -> lista de elementos, para list.add).",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 32,
+      "propertyNames": {"type": "string", "pattern": "^[a-z0-9_.-]{1,32}$"},
+      "anyOf": [
+        {"additionalProperties": {"anyOf": [{"$ref": "#/$defs/plain"}, {"$ref": "#/$defs/biPlain"}]}},
+        {
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {"type": "object", "minProperties": 1, "maxProperties": 12}
+          }
+        }
+      ]
+    },
+    "orders": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/$defs/order"}},
+    "order": {
+      "description": "Una orden: algo que hace la receta. 'if' la hace condicional.",
+      "type": "object",
+      "required": ["do"],
+      "properties": {
+        "do": {
+          "enum": [
+            "alert",
+            "alert.clear",
+            "notify",
+            "reply",
+            "view",
+            "var.set",
+            "var.add",
+            "var.toggle",
+            "idle.preview",
+            "list.add",
+            "timer.start",
+            "timer.toggle",
+            "timer.pause",
+            "timer.resume",
+            "timer.skip",
+            "timer.stop",
+            "hid.keys",
+            "hid.media",
+            "hid.text",
+            "hid.hold",
+            "monitor.run",
+            "photos.delete",
+            "photos.send",
+            "photos.delete_current"
+          ]
+        },
+        "if": {"$ref": "#/$defs/cond"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"do": {"const": "alert"}}},
+          "then": {
+            "required": ["level", "title", "key"],
+            "properties": {
+              "level": {"enum": ["info", "warn", "critical"]},
+              "title": {"$ref": "#/$defs/txtv"},
+              "body": {"$ref": "#/$defs/txtv"},
+              "big": {"$ref": "#/$defs/txtv"},
+              "icon": {"$ref": "#/$defs/iconV"},
+              "key": {"$ref": "#/$defs/tpl"},
+              "sec": {"$ref": "#/$defs/val"},
+              "priv": {"type": "boolean"},
+              "band_after": {"type": "boolean"},
+              "open": {"type": "boolean"},
+              "flash": {"type": "boolean"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"do": {"const": "alert.clear"}}},
+          "then": {"required": ["key"], "properties": {"key": {"$ref": "#/$defs/tpl"}}}
+        },
+        {
+          "if": {"properties": {"do": {"enum": ["notify", "reply"]}}},
+          "then": {
+            "properties": {
+              "text": {"$ref": "#/$defs/txtv"},
+              "each": {"$ref": "#/$defs/collection"},
+              "head": {"$ref": "#/$defs/txtv"},
+              "line": {"$ref": "#/$defs/txtv"},
+              "empty": {"$ref": "#/$defs/txtv"},
+              "max_lines": {"type": "integer", "minimum": 1, "maximum": 32}
+            },
+            "oneOf": [
+              {"required": ["text"], "not": {"anyOf": [{"required": ["each"]}, {"required": ["line"]}]}},
+              {"required": ["each", "line"], "not": {"required": ["text"]}}
+            ]
+          }
+        },
+        {
+          "if": {"properties": {"do": {"const": "notify"}}},
+          "then": {
+            "properties": {
+              "loud": {"$ref": "#/$defs/val"},
+              "ttl_s": {"type": "integer", "minimum": 0, "maximum": 86400},
+              "key": {"$ref": "#/$defs/tpl"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"do": {"const": "view"}}},
+          "then": {"required": ["id"], "properties": {"id": {"$ref": "#/$defs/key"}, "item": {"$ref": "#/$defs/ref"}}}
+        },
+        {
+          "if": {"properties": {"do": {"const": "var.set"}}},
+          "then": {
+            "required": ["name", "value"],
+            "properties": {"name": {"$ref": "#/$defs/key"}, "value": {"$ref": "#/$defs/val"}}
+          }
+        },
+        {
+          "if": {"properties": {"do": {"const": "var.add"}}},
+          "then": {
+            "required": ["name", "by"],
+            "properties": {
+              "name": {"$ref": "#/$defs/key"},
+              "by": {"type": "integer", "minimum": -100, "maximum": 100},
+              "min": {"$ref": "#/$defs/val"},
+              "max": {"$ref": "#/$defs/val"},
+              "wrap": {"type": "boolean"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"do": {"const": "var.toggle"}}},
+          "then": {"required": ["name"], "properties": {"name": {"$ref": "#/$defs/key"}}}
+        },
+        {
+          "if": {"properties": {"do": {"const": "list.add"}}},
+          "then": {
+            "required": ["list", "table", "row"],
+            "properties": {
+              "list": {"$ref": "#/$defs/key"},
+              "table": {"$ref": "#/$defs/key"},
+              "row": {"$ref": "#/$defs/tpl"},
+              "or_row": {"$ref": "#/$defs/tpl"},
+              "place": {"const": "grid"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"do": {"enum": ["hid.keys", "hid.hold"]}}},
+          "then": {
+            "required": ["keys"],
+            "properties": {
+              "keys": {
+                "anyOf": [
+                  {"$ref": "#/$defs/ref"},
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "items": {"$ref": "manifest.schema.json#/$defs/keyStep"}
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"do": {"const": "hid.media"}}},
+          "then": {
+            "required": ["key"],
+            "properties": {
+              "key": {
+                "anyOf": [
+                  {"$ref": "#/$defs/ref"},
+                  {"enum": ["mute", "vol_up", "vol_down", "play_pause", "next", "prev", "stop", "sleep"]}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"do": {"const": "hid.text"}}},
+          "then": {
+            "required": ["text"],
+            "properties": {"text": {"$ref": "#/$defs/tpl"}, "enter": {"$ref": "#/$defs/val"}}
+          }
+        },
+        {
+          "if": {"properties": {"do": {"const": "monitor.run"}}},
+          "then": {"properties": {"reply_after": {"type": "boolean"}}}
+        },
+        {
+          "if": {"properties": {"do": {"const": "photos.delete"}}},
+          "then": {
+            "properties": {"ids": {"$ref": "#/$defs/ref"}, "number": {"$ref": "#/$defs/ref"}},
+            "oneOf": [{"required": ["ids"]}, {"required": ["number"]}]
+          }
+        },
+        {
+          "if": {"properties": {"do": {"const": "photos.send"}}},
+          "then": {"required": ["ids"], "properties": {"ids": {"$ref": "#/$defs/ref"}}}
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "header": {
+      "type": "object",
+      "properties": {"subtitle": {"$ref": "#/$defs/txtv"}, "progress": {"$ref": "#/$defs/val"}},
+      "additionalProperties": false
+    },
+    "footer": {
+      "type": "object",
+      "properties": {
+        "label": {"$ref": "#/$defs/txtv"},
+        "do": {"$ref": "#/$defs/orders"},
+        "confirm": {"const": "twice"},
+        "confirm_label": {"$ref": "#/$defs/txtv"}
+      },
+      "additionalProperties": false
+    },
+    "glance": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "show": {"$ref": "#/$defs/cond"},
+        "text": {"$ref": "#/$defs/txtv"},
+        "value": {"$ref": "#/$defs/txtv", "description": "La cifra que acompaña al texto ('12:34'): el sistema recorta el texto, nunca el valor. Texto y valor suman 22 caracteres como mucho."},
+        "icon": {"$ref": "#/$defs/iconV"},
+        "kind": {"$ref": "#/$defs/kindV"},
+        "status": {"$ref": "#/$defs/statusV"},
+        "priv": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "view": {
+      "type": "object",
+      "required": ["id", "blocks"],
+      "properties": {
+        "id": {"$ref": "#/$defs/key"},
+        "header": {"$ref": "#/$defs/header"},
+        "footer": {"$ref": "#/$defs/footer"},
+        "blocks": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/$defs/block"}}
+      },
+      "additionalProperties": false
+    },
+    "button": {
+      "type": "object",
+      "required": ["label"],
+      "properties": {
+        "label": {"$ref": "#/$defs/txtv"},
+        "icon": {"$ref": "#/$defs/iconV"},
+        "show": {"$ref": "#/$defs/cond"},
+        "tap": {"$ref": "#/$defs/orders"},
+        "down": {"$ref": "#/$defs/orders"},
+        "up": {"$ref": "#/$defs/orders"},
+        "long": {"$ref": "#/$defs/orders"},
+        "confirm": {"const": "twice"},
+        "confirm_label": {"$ref": "#/$defs/txtv"}
+      },
+      "additionalProperties": false
+    },
+    "block": {
+      "description": "Un bloque de la página (480x208). Se apilan de arriba abajo; dos seguidos con w=left y w=right comparten fila.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["big", "buttons", "grid", "list", "rows", "text", "image", "progress", "spark", "gap"]},
+        "id": {"$ref": "#/$defs/key"},
+        "h": {"type": "integer", "minimum": 4, "maximum": 208},
+        "w": {"enum": ["full", "left", "right"]},
+        "show": {"$ref": "#/$defs/cond"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "big"}}},
+          "then": {
+            "required": ["text"],
+            "properties": {
+              "text": {"$ref": "#/$defs/txtv"},
+              "font": {"enum": ["digits96", "clock36", "title23"]},
+              "tone": {"$ref": "#/$defs/toneV"},
+              "caption": {"$ref": "#/$defs/txtv"},
+              "tap": {"$ref": "#/$defs/orders"},
+              "long": {"$ref": "#/$defs/orders"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "buttons"}}},
+          "then": {
+            "required": ["items"],
+            "properties": {"items": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"$ref": "#/$defs/button"}}}
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "grid"}}},
+          "then": {
+            "required": ["items", "rows", "cols", "label"],
+            "properties": {
+              "items": {"$ref": "#/$defs/collection"},
+              "rows": {"$ref": "#/$defs/val"},
+              "cols": {"$ref": "#/$defs/val"},
+              "pages": {"$ref": "#/$defs/val"},
+              "page": {"$ref": "#/$defs/val"},
+              "page_of": {"$ref": "#/$defs/key"},
+              "slot_of": {"$ref": "#/$defs/key"},
+              "label": {"$ref": "#/$defs/txtv"},
+              "icon": {"$ref": "#/$defs/iconV"},
+              "dim": {"$ref": "#/$defs/cond"},
+              "tap": {"$ref": "#/$defs/orders"},
+              "down": {"$ref": "#/$defs/orders"},
+              "up": {"$ref": "#/$defs/orders"},
+              "long": {"$ref": "#/$defs/orders"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "list"}}},
+          "then": {
+            "required": ["items", "row"],
+            "properties": {
+              "items": {"$ref": "#/$defs/collection"},
+              "row": {
+                "type": "object",
+                "required": ["label"],
+                "properties": {
+                  "lead": {"$ref": "#/$defs/statusV"},
+                  "label": {"$ref": "#/$defs/txtv"},
+                  "value": {"$ref": "#/$defs/txtv"},
+                  "tone": {"$ref": "#/$defs/toneV"}
+                },
+                "additionalProperties": false
+              },
+              "empty": {"$ref": "#/$defs/txtv"},
+              "tap": {"$ref": "#/$defs/orders"},
+              "long": {"$ref": "#/$defs/orders"},
+              "confirm": {"const": "twice", "description": "La primera pulsación larga cambia el texto a confirm_label durante 3 s; solo la segunda ejecuta las órdenes de long."},
+              "confirm_label": {"$ref": "#/$defs/txtv"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "rows"}}},
+          "then": {
+            "required": ["items"],
+            "properties": {
+              "items": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4,
+                "items": {
+                  "type": "object",
+                  "required": ["label"],
+                  "properties": {
+                    "label": {"$ref": "#/$defs/txtv"},
+                    "value": {"$ref": "#/$defs/txtv"},
+                    "lead": {"$ref": "#/$defs/statusV"},
+                    "tone": {"$ref": "#/$defs/toneV"},
+                    "show": {"$ref": "#/$defs/cond"}
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "text"}}},
+          "then": {
+            "required": ["text"],
+            "properties": {
+              "text": {"$ref": "#/$defs/txtv"},
+              "font": {"enum": ["meta13", "body19", "body_medium19", "title23"]},
+              "tone": {"$ref": "#/$defs/toneV"},
+              "align": {"enum": ["left", "center", "right"]},
+              "lines": {"type": "integer", "minimum": 1, "maximum": 4}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "image"}}},
+          "then": {
+            "required": ["src"],
+            "properties": {
+              "src": {"enum": ["slideshow.current", "photos.newest"]},
+              "fit": {"$ref": "#/$defs/val"},
+              "empty": {"$ref": "#/$defs/txtv"},
+              "tap": {"$ref": "#/$defs/orders"},
+              "long": {"$ref": "#/$defs/orders"},
+              "confirm": {"const": "twice", "description": "La primera pulsación larga enseña confirm_label durante 3 s; solo la segunda ejecuta las órdenes de long."},
+              "confirm_label": {"$ref": "#/$defs/txtv"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "progress"}}},
+          "then": {
+            "required": ["value"],
+            "properties": {"value": {"$ref": "#/$defs/val"}, "tone": {"$ref": "#/$defs/toneV"}}
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "spark"}}},
+          "then": {
+            "required": ["values"],
+            "properties": {"values": {"$ref": "#/$defs/path"}, "tone": {"$ref": "#/$defs/toneV"}}
+          }
+        },
+        {"if": {"properties": {"type": {"const": "gap"}}}, "then": {"required": ["h"]}}
+      ],
+      "unevaluatedProperties": false
+    },
+    "alarm": {
+      "description": "Alarma: un aviso con estado. Entra cuando se cumple 'enter' durante 'for_n' evaluaciones seguidas y sale con 'exit' (o cuando 'enter' deja de cumplirse). Así no parpadea (histéresis).",
+      "type": "object",
+      "required": ["id", "enter", "level", "title"],
+      "properties": {
+        "id": {"$ref": "#/$defs/key"},
+        "each": {"$ref": "#/$defs/collection"},
+        "enter": {"$ref": "#/$defs/cond"},
+        "exit": {"$ref": "#/$defs/cond"},
+        "for_n": {"type": "integer", "minimum": 1, "maximum": 10},
+        "level": {"enum": ["info", "warn", "critical"]},
+        "title": {"$ref": "#/$defs/txtv"},
+        "body": {"$ref": "#/$defs/txtv"},
+        "icon": {"$ref": "#/$defs/iconV"},
+        "open": {"type": "boolean"},
+        "priv": {"type": "boolean", "description": "Con la pantalla bloqueada solo se ve el título."},
+        "on_exit": {
+          "type": "object",
+          "required": ["level", "title"],
+          "properties": {
+            "level": {"enum": ["info", "warn"]},
+            "title": {"$ref": "#/$defs/txtv"},
+            "body": {"$ref": "#/$defs/txtv"},
+            "priv": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        },
+        "notify": {
+          "type": "object",
+          "required": ["text"],
+          "properties": {
+            "if": {"$ref": "#/$defs/cond", "description": "Vale para la entrada y para la salida: exit.if solo añade su propia condición."},
+            "text": {"$ref": "#/$defs/txtv"},
+            "exit": {
+              "type": "object",
+              "required": ["text"],
+              "properties": {"if": {"$ref": "#/$defs/cond"}, "text": {"$ref": "#/$defs/txtv"}},
+              "additionalProperties": false
+            },
+            "batch": {
+              "type": "object",
+              "required": ["head"],
+              "properties": {"head": {"$ref": "#/$defs/txtv"}},
+              "additionalProperties": false
+            },
+            "loud": {"$ref": "#/$defs/val"},
+            "ttl_s": {"type": "integer", "minimum": 0, "maximum": 86400}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "engines": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "timer": {"$ref": "#/$defs/timer"},
+        "monitor": {"$ref": "#/$defs/monitor"},
+        "photos": {"$ref": "#/$defs/photos"},
+        "slideshow": {"$ref": "#/$defs/slideshow"}
+      },
+      "additionalProperties": false
+    },
+    "timer": {
+      "description": "Temporizador por fases con rondas (apartado 13.10).",
+      "type": "object",
+      "required": ["phases", "last_round"],
+      "properties": {
+        "phases": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["id", "label", "dur"],
+            "properties": {
+              "id": {"$ref": "#/$defs/key"},
+              "label": {"$ref": "#/$defs/txt"},
+              "dur": {"$ref": "#/$defs/dur"},
+              "tone": {"$ref": "#/$defs/toneName"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "round": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"$ref": "#/$defs/key"}},
+        "last_round": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"$ref": "#/$defs/key"}},
+        "rounds": {"$ref": "#/$defs/val"},
+        "repeat": {"$ref": "#/$defs/val"},
+        "auto_next": {"$ref": "#/$defs/val"},
+        "resume": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "monitor": {
+      "description": "Vigilante de webs y servicios (apartado 13.11).",
+      "type": "object",
+      "required": ["targets", "every", "modes"],
+      "properties": {
+        "targets": {
+          "anyOf": [
+            {"type": "string", "pattern": "^cfg\\.[a-z][a-z0-9_]{0,15}$"},
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "required": ["id", "name", "url", "mode"],
+                "properties": {
+                  "id": {"$ref": "#/$defs/itemId"},
+                  "name": {"type": "string", "minLength": 1, "maxLength": 16},
+                  "url": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "pattern": "^https://[a-z0-9.-]+(:[0-9]{1,5})?(/[^\\s]*)?$"
+                  },
+                  "mode": {"$ref": "#/$defs/key"}
+                },
+                "additionalProperties": false
+              }
+            }
+          ]
+        },
+        "name": {"$ref": "#/$defs/key"},
+        "url": {"$ref": "#/$defs/key"},
+        "mode": {"$ref": "#/$defs/key"},
+        "enabled": {"$ref": "#/$defs/key"},
+        "every": {"$ref": "#/$defs/dur"},
+        "down_after": {"$ref": "#/$defs/val"},
+        "up_after": {"$ref": "#/$defs/val"},
+        "slow_after": {"$ref": "#/$defs/val"},
+        "modes": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 4,
+          "propertyNames": {"$ref": "#/$defs/key"},
+          "additionalProperties": {"$ref": "#/$defs/check"}
+        },
+        "cert": {
+          "type": "object",
+          "properties": {
+            "warn_days": {"$ref": "#/$defs/val"},
+            "marks": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 6,
+              "uniqueItems": true,
+              "items": {"type": "integer", "minimum": 0, "maximum": 60}
+            },
+            "at": {"$ref": "#/$defs/timeTpl"}
+          },
+          "additionalProperties": false
+        },
+        "history": {"type": "integer", "minimum": 0, "maximum": 24},
+        "publish": {"$ref": "#/$defs/key"}
+      },
+      "additionalProperties": false
+    },
+    "check": {
+      "description": "Cómo se comprueba cada objetivo según su modo: 'probe' (código, tiempos y certificado) o 'json' (lee un valor de una respuesta JSON, como la página de estado de Statuspage).",
+      "type": "object",
+      "required": ["check"],
+      "properties": {"check": {"enum": ["probe", "json"]}},
+      "allOf": [
+        {
+          "if": {"properties": {"check": {"const": "probe"}}},
+          "then": {
+            "properties": {
+              "ok": {"$ref": "#/$defs/val"},
+              "slow_ms": {"$ref": "#/$defs/val"},
+              "cert": {"$ref": "#/$defs/val"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"check": {"const": "json"}}},
+          "then": {
+            "required": ["pick", "map"],
+            "properties": {
+              "suffix": {"type": "string", "maxLength": 64, "pattern": "^/[A-Za-z0-9._~/-]*$"},
+              "pick": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,31}(\\.[A-Za-z_][A-Za-z0-9_]{0,31}){0,3}$"
+              },
+              "max_bytes": {"type": "integer", "minimum": 64, "maximum": 2048},
+              "map": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 12,
+                "propertyNames": {"type": "string", "maxLength": 32},
+                "additionalProperties": {"enum": ["ok", "warn", "fail"]}
+              },
+              "else": {"enum": ["ok", "warn", "fail", "unknown"]}
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "photos": {
+      "description": "Fototeca: recibe fotos del bot, lee la carpeta compartida de la microSD y publica la lista para la Mini App (apartado 13.12).",
+      "type": "object",
+      "required": ["max_bot"],
+      "properties": {
+        "max_bot": {"type": "integer", "minimum": 1, "maximum": 64},
+        "when_full": {"$ref": "#/$defs/val"},
+        "caption_cmd": {"type": "string", "pattern": "^[a-z0-9_]{1,32}$"},
+        "shared": {"type": "boolean"},
+        "reply": {"$ref": "#/$defs/val"},
+        "new_auto": {"$ref": "#/$defs/val"},
+        "publish": {
+          "type": "object",
+          "properties": {"photos": {"$ref": "#/$defs/key"}, "albums": {"$ref": "#/$defs/key"}},
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "slideshow": {
+      "description": "Pase de fotos como proveedor del reposo (apartado 13.12).",
+      "type": "object",
+      "required": ["from", "every"],
+      "properties": {
+        "from": {"const": "photos"},
+        "mode": {"$ref": "#/$defs/val"},
+        "picked": {"$ref": "#/$defs/val"},
+        "src": {"$ref": "#/$defs/val"},
+        "albums": {"$ref": "#/$defs/val"},
+        "every": {"$ref": "#/$defs/dur"},
+        "order": {"$ref": "#/$defs/val"},
+        "fit": {"$ref": "#/$defs/val"},
+        "transition": {"enum": ["cut", "fade"]},
+        "overlay": {"$ref": "#/$defs/val"},
+        "overlay_pos": {"$ref": "#/$defs/val"},
+        "night": {"$ref": "#/$defs/val"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

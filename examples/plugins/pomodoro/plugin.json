@@ -1,0 +1,159 @@
+{
+  "api": "1.0",
+  "id": "pomodoro",
+  "version": "1.0.0",
+  "kind": "recipe",
+  "min_firmware": "1.3.0",
+  "name": {"es": "Pomodoro", "en": "Pomodoro"},
+  "summary": {
+    "es": "Temporizador grande de trabajo y descanso. Sigue contando en otras páginas, en reposo y con la pantalla bloqueada.",
+    "en": "Big work and break timer. It keeps counting on other pages, while idle and with the screen locked."
+  },
+  "author": "Ignacio Aranda",
+  "license": "MIT",
+  "icon": "timer",
+  "category": "trabajo",
+  "permissions": ["notify", "alert.critical"],
+  "surfaces": {"page": true, "glance": true},
+  "settings": {"version": 1, "fields": [
+    {"key": "work", "type": "number", "min": 1, "max": 90, "step": 1, "default": 25, "unit": "min",
+     "group": {"es": "Duraciones", "en": "Durations"},
+     "label": {"es": "Trabajo", "en": "Work"}},
+    {"key": "short", "type": "number", "min": 1, "max": 30, "step": 1, "default": 5, "unit": "min",
+     "group": {"es": "Duraciones", "en": "Durations"},
+     "label": {"es": "Descanso corto", "en": "Short break"}},
+    {"key": "long", "type": "number", "min": 5, "max": 60, "step": 1, "default": 15, "unit": "min",
+     "group": {"es": "Duraciones", "en": "Durations"},
+     "label": {"es": "Descanso largo", "en": "Long break"}},
+    {"key": "rounds", "type": "number", "min": 2, "max": 8, "step": 1, "default": 4,
+     "group": {"es": "Duraciones", "en": "Durations"},
+     "label": {"es": "Rondas antes del descanso largo", "en": "Rounds before the long break"}},
+    {"key": "auto_next", "type": "bool", "default": true,
+     "group": {"es": "Al acabar una fase", "en": "When a phase ends"},
+     "label": {"es": "Empezar la siguiente sola", "en": "Start the next one by itself"},
+     "help": {"es": "Si lo apagas, espera a que toques SEGUIR.",
+              "en": "If off, it waits until you tap RESUME."}},
+    {"key": "alert", "type": "select", "default": "full",
+     "group": {"es": "Al acabar una fase", "en": "When a phase ends"},
+     "label": {"es": "Aviso en la pantalla", "en": "On-screen alert"},
+     "help": {"es": "Pauta no tiene sonido: el aviso a pantalla completa es el que más se nota.",
+              "en": "Pauta has no sound: the full-screen alert is the easiest to notice."},
+     "options": [
+       {"v": "full", "es": "A pantalla completa", "en": "Full screen"},
+       {"v": "band", "es": "Banda abajo", "en": "Band at the bottom"}]},
+    {"key": "tg", "type": "bool", "default": false,
+     "group": {"es": "Al acabar una fase", "en": "When a phase ends"},
+     "label": {"es": "Avisarme también por Telegram", "en": "Also tell me on Telegram"}},
+    {"key": "tg_sound", "type": "bool", "default": true, "visible_if": {"tg": true},
+     "group": {"es": "Al acabar una fase", "en": "When a phase ends"},
+     "label": {"es": "Mensaje con sonido", "en": "Message with sound"},
+     "help": {"es": "Si lo apagas, el mensaje llega en silencio.",
+              "en": "If off, the message arrives silently."}},
+    {"key": "awake", "type": "bool", "default": true,
+     "group": {"es": "Pantalla", "en": "Screen"},
+     "label": {"es": "Mantener su página a la vista mientras cuenta", "en": "Keep its page on screen while counting"},
+     "help": {"es": "No deja entrar el reposo mientras ves el Pomodoro. El bloqueo con PIN sí entra.",
+              "en": "Idle mode stays away while you are looking at the Pomodoro. The PIN lock still kicks in."}}
+  ]},
+  "memory": {"psram_kb": 16, "static_kb": 0},
+  "storage": {"state_kb": 1},
+  "recipe": {
+    "format": 1,
+    "engines": {
+      "timer": {
+        "phases": [
+          {"id": "work", "label": {"es": "TRABAJO", "en": "WORK"}, "dur": "{{cfg.work}}m", "tone": "ink"},
+          {"id": "short", "label": {"es": "DESCANSO", "en": "BREAK"}, "dur": "{{cfg.short}}m", "tone": "accent"},
+          {"id": "long", "label": {"es": "DESCANSO LARGO", "en": "LONG BREAK"}, "dur": "{{cfg.long}}m", "tone": "accent"}
+        ],
+        "round": ["work", "short"],
+        "last_round": ["work", "long"],
+        "rounds": "{{cfg.rounds}}",
+        "repeat": true,
+        "auto_next": "{{cfg.auto_next}}",
+        "resume": true
+      }
+    },
+    "tables": {
+      "next_title": {
+        "work": {"es": "A TRABAJAR", "en": "BACK TO WORK"},
+        "short": {"es": "A DESCANSAR", "en": "TIME FOR A BREAK"},
+        "long": {"es": "DESCANSO LARGO", "en": "LONG BREAK"}
+      }
+    },
+    "keep_awake": [["timer.state", "eq", "running"], ["cfg.awake", "eq", true]],
+    "header": {
+      "subtitle": [
+        {"if": [["timer.state", "eq", "stopped"]], "v": ""},
+        {"if": [["timer.waiting", "eq", true]], "v": {"es": "ESPERANDO LA HORA", "en": "WAITING FOR THE TIME"}},
+        {"if": [["timer.state", "eq", "running"]], "v": "{{timer.label}} · {{timer.round}}/{{timer.rounds}}"},
+        {"if": [["timer.state", "eq", "ready"]], "v": {"es": "LISTO · {{timer.label}}", "en": "READY · {{timer.label}}"}},
+        {"v": {"es": "EN PAUSA · {{timer.round}}/{{timer.rounds}}", "en": "PAUSED · {{timer.round}}/{{timer.rounds}}"}}
+      ],
+      "progress": "{{timer.progress}}"
+    },
+    "footer": {
+      "label": [
+        {"if": [["timer.state", "eq", "stopped"]], "v": ""},
+        {"v": {"es": "PARAR", "en": "STOP"}}
+      ],
+      "confirm": "twice",
+      "confirm_label": {"es": "¿PARAR?", "en": "STOP?"},
+      "do": [{"do": "alert.clear", "key": "phase"}, {"do": "timer.stop"}]
+    },
+    "glance": {
+      "show": [["timer.state", "ne", "stopped"]],
+      "text": [
+        {"if": [["timer.state", "eq", "running"]], "v": "{{timer.label}}"},
+        {"if": [["timer.state", "eq", "ready"]], "v": {"es": "LISTO", "en": "READY"}},
+        {"v": {"es": "EN PAUSA", "en": "PAUSED"}}
+      ],
+      "value": "{{timer.left|mmss}}",
+      "icon": "timer",
+      "kind": [
+        {"if": [["timer.state", "eq", "running"]], "v": "live"},
+        {"v": "normal"}
+      ]
+    },
+    "views": [
+      {
+        "id": "main",
+        "blocks": [
+          {"type": "big", "h": 104, "font": "digits96", "text": "{{timer.left|mmss}}",
+           "tone": [
+             {"if": [["timer.state", "eq", "running"]], "v": "{{timer.tone}}"},
+             {"v": "dim"}
+           ],
+           "tap": [{"do": "alert.clear", "key": "phase"}, {"do": "timer.toggle"}]},
+          {"type": "gap", "h": 8},
+          {"type": "buttons", "h": 46, "items": [
+            {"label": [
+               {"if": [["timer.state", "in", ["stopped", "ready"]]], "v": {"es": "EMPEZAR", "en": "START"}},
+               {"if": [["timer.state", "eq", "running"]], "v": {"es": "PAUSAR", "en": "PAUSE"}},
+               {"v": {"es": "SEGUIR", "en": "RESUME"}}
+             ],
+             "icon": [
+               {"if": [["timer.state", "eq", "running"]], "v": "pause"},
+               {"v": "play"}
+             ],
+             "tap": [{"do": "alert.clear", "key": "phase"}, {"do": "timer.toggle"}]},
+            {"label": {"es": "SALTAR", "en": "SKIP"}, "icon": "next",
+             "show": [["timer.state", "ne", "stopped"]],
+             "tap": [{"do": "alert.clear", "key": "phase"}, {"do": "timer.skip"}]}
+          ]}
+        ]
+      }
+    ],
+    "on": {
+      "timer.phase_end": [
+        {"do": "alert", "if": [["cfg.alert", "eq", "full"]], "level": "critical", "key": "phase",
+         "title": "{{ev.next|map:next_title}}", "big": "{{ev.next_total|mmss}}", "icon": "timer",
+         "sec": 30, "band_after": true, "flash": true, "open": true},
+        {"do": "alert", "if": [["cfg.alert", "eq", "band"]], "level": "warn", "key": "phase",
+         "title": "{{ev.next|map:next_title}}", "body": "{{ev.next_total|mmss}}", "icon": "timer", "open": true},
+        {"do": "notify", "if": [["cfg.tg", "eq", true]], "key": "phase", "ttl_s": 300, "loud": "{{cfg.tg_sound}}",
+         "text": "{{ev.next|map:next_title}} · {{ev.next_total|mmss}}"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "api": "1.0",
+  "id": "nicscom",
+  "version": "1.0.0",
+  "kind": "native",
+  "min_firmware": "1.5.0",
+  "name": {"es": "nicscom", "en": "nicscom"},
+  "summary": {
+    "es": "Pauta como un nodo más de nicscom: ve los avisos en grande, avisa con un toque y programa avisos por hora y día.",
+    "en": "Pauta as one more nicscom node: big alerts on screen, one-tap alerts and alerts scheduled by time and day."
+  },
+  "author": "Ignacio Aranda",
+  "license": "MIT",
+  "icon": "antenna",
+  "category": "comunicacion",
+  "permissions": ["lan", "mqtt", "alert.critical", "notify"],
+  "mqtt": {
+    "sub": ["/topics", "/+/config", "/+/post"],
+    "pub": ["/+/post"],
+    "pub_retain": false
+  },
+  "surfaces": {"page": true, "glance": true},
+  "commands": [
+    {"cmd": "nics",
+     "args": {"es": "[canal]", "en": "[channel]"},
+     "desc": {"es": "Canales y estado; con un canal, avisa en él",
+              "en": "Channels and status; with a channel, sends an alert"}}
+  ],
+  "help": {
+    "es": "/nics — canales, último aviso de cada uno y estado del broker.\n/nics AGUA — avisa en el canal AGUA, como el botón de una placa.\nLos avisos programados se editan en ⚙ Ajustes o en la página de nicscom.",
+    "en": "/nics — channels, last alert of each one and broker status.\n/nics AGUA — sends an alert to the AGUA channel, like a board's button.\nScheduled alerts are edited in ⚙ Settings or on the nicscom page."
+  },
+  "settings": {"version": 1, "fields": [
+    {"key": "server", "type": "host", "scope": "private", "required": true,
+     "group": {"es": "Broker", "en": "Broker"},
+     "label": {"es": "Broker MQTT", "en": "MQTT broker"},
+     "help": {"es": "IP fija del broker del laboratorio, por ejemplo 192.168.1.20. Un nombre .local solo funciona en la misma subred.",
+              "en": "Fixed IP of the lab broker, for example 192.168.1.20. A .local name only works on the same subnet."}},
+    {"key": "port", "type": "number", "min": 1, "max": 65535, "step": 1, "default": 1883,
+     "group": {"es": "Broker", "en": "Broker"},
+     "label": {"es": "Puerto", "en": "Port"}},
+    {"key": "user", "type": "text", "max": 32, "required": true, "private": true,
+     "group": {"es": "Broker", "en": "Broker"},
+     "label": {"es": "Usuario", "en": "Username"}},
+    {"key": "pass", "type": "secret", "max": 64, "required": true, "bound_to": "server",
+     "group": {"es": "Broker", "en": "Broker"},
+     "label": {"es": "Contraseña", "en": "Password"},
+     "help": {"es": "Viaja cifrada y se confirma en la pantalla. Si cambias el broker, hay que volver a ponerla.",
+              "en": "Sent encrypted and confirmed on the screen. If you change the broker, enter it again."}},
+    {"key": "wake", "type": "bool", "default": true,
+     "group": {"es": "Avisos", "en": "Alerts"},
+     "label": {"es": "Despertar la pantalla con cada aviso", "en": "Wake the screen on every alert"},
+     "help": {"es": "Apagado, el aviso sale como una banda y no despierta el reposo.",
+              "en": "When off, the alert shows as a band and does not wake the screen."}},
+    {"key": "alert_s", "type": "duration", "min": 3, "max": 60, "default": 3,
+     "group": {"es": "Avisos", "en": "Alerts"},
+     "label": {"es": "Aviso en grande durante", "en": "Show the big alert for"}},
+    {"key": "tg", "type": "bool", "default": false,
+     "group": {"es": "Avisos", "en": "Alerts"},
+     "label": {"es": "Reenviarme los avisos por Telegram", "en": "Forward alerts to me on Telegram"}},
+    {"key": "autos", "type": "list", "max_items": 24, "item_label": "{at} · {days} · {ch}",
+     "unique": ["ch", "at"], "sort_by": "at",
+     "group": {"es": "Programador", "en": "Scheduler"},
+     "label": {"es": "Avisos programados", "en": "Scheduled alerts"},
+     "help": {"es": "Cada uno avisa en su canal a esa hora los días marcados. Si la placa está apagada o sin broker a esa hora, no sale.",
+              "en": "Each one alerts its channel at that time on the chosen days. If the board is off or has no broker then, it is not sent."},
+     "fields": [
+       {"key": "ch", "type": "select", "options_from": "runtime.channels",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$", "required": true,
+        "label": {"es": "Canal", "en": "Channel"}},
+       {"key": "at", "type": "time", "required": true,
+        "label": {"es": "Hora", "en": "Time"}},
+       {"key": "days", "type": "days", "default": 31, "min": 1,
+        "label": {"es": "Días", "en": "Days"}},
+       {"key": "on", "type": "bool", "default": true,
+        "label": {"es": "Activo", "en": "Active"}}]}
+  ]},
+  "schedule": [{"list": "autos", "time": "at", "days": "days", "enabled": "on"}],
+  "actions": [
+    {"id": "post",
+     "label": {"es": "Avisar ahora", "en": "Alert now"},
+     "confirm": false,
+     "args": [
+       {"key": "ch", "type": "select", "options_from": "runtime.channels", "required": true,
+        "label": {"es": "Canal", "en": "Channel"}}]}
+  ],
+  "runtime": [{"name": "channels", "max": 60, "item_max": 64}],
+  "memory": {"psram_kb": 48, "static_kb": 2},
+  "storage": {"state_kb": 4}
+}

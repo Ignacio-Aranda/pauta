@@ -1,0 +1,461 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Ignacio-Aranda/pauta/main/schemas/manifest.schema.json",
+  "title": "Pauta Plugin API 1.0: plugin.json",
+  "description": "Manifiesto de un plugin de Pauta (docs/plugins-referencia.md, apartado 3). Vale para los nativos (kind=native) y para las recetas (kind=recipe), que llevan además la clave 'recipe' (recipe.schema.json). Lo que el esquema no puede comprobar (referencias cruzadas, glifos de la fuente, presupuestos de tamaño) lo comprueba tools/mkmanifests.py con las reglas de los apartados 13.14 y 15.",
+  "type": "object",
+  "required": ["api", "id", "version", "kind", "min_firmware", "name", "summary", "author", "license", "icon", "permissions", "surfaces", "memory"],
+  "properties": {
+    "api": {"type": "string", "pattern": "^1\\.(0|[1-9][0-9]{0,2})$", "description": "Nivel mínimo de la API que necesita, '1.0' o '1.x'."},
+    "id": {"$ref": "#/$defs/pluginId"},
+    "version": {"$ref": "#/$defs/semver"},
+    "kind": {"enum": ["native", "recipe"]},
+    "min_firmware": {"$ref": "#/$defs/semver"},
+    "name": {"$ref": "#/$defs/bi16"},
+    "summary": {"$ref": "#/$defs/bi120"},
+    "author": {"type": "string", "minLength": 1, "maxLength": 40},
+    "license": {"type": "string", "pattern": "^[A-Za-z0-9.+-]{1,40}$", "description": "Identificador SPDX."},
+    "icon": {"$ref": "#/$defs/iconName"},
+    "category": {"enum": ["trabajo", "casa", "reposo", "herramientas", "comunicacion"]},
+    "builtin": {"const": true, "description": "Solo la app de serie (Pauta)."},
+    "requires": {
+      "type": "object",
+      "properties": {
+        "build": {"type": "array", "uniqueItems": true, "maxItems": 3, "items": {"enum": ["hid", "hid.usb", "hid.ble"]}},
+        "sd": {"enum": ["optional", "required"]}
+      },
+      "additionalProperties": false
+    },
+    "permissions": {"$ref": "#/$defs/permissionList"},
+    "optional_permissions": {"$ref": "#/$defs/permissionList"},
+    "net": {
+      "type": "object",
+      "required": ["min_interval_s", "max_per_hour"],
+      "properties": {
+        "hosts": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/hostname"}},
+        "user_hosts_from": {"type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true,
+                            "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,15}(\\.[a-z][a-z0-9_]{0,15})?$"}},
+        "min_interval_s": {"type": "integer", "minimum": 60, "maximum": 86400},
+        "max_per_hour": {"type": "integer", "minimum": 1, "maximum": 600}
+      },
+      "additionalProperties": false
+    },
+    "mqtt": {
+      "type": "object",
+      "properties": {
+        "sub": {"type": "array", "maxItems": 8, "items": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[^\\u0000]+$"}},
+        "pub": {"type": "array", "maxItems": 8, "items": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[^#\\u0000]+$"}},
+        "pub_retain": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "surfaces": {
+      "type": "object",
+      "properties": {
+        "page": {"type": "boolean"},
+        "glance": {"type": "boolean"},
+        "idle": {"type": "boolean"},
+        "critical": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "touch": {
+      "type": "object",
+      "properties": {"longpress": {"type": "boolean"}},
+      "additionalProperties": false
+    },
+    "commands": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["cmd", "desc"],
+        "properties": {
+          "cmd": {"type": "string", "pattern": "^[a-z0-9_]{1,32}$",
+                  "not": {"enum": ["start", "help", "settings", "plugins", "status", "lock", "unlock"]}},
+          "args": {"$ref": "#/$defs/bi24"},
+          "desc": {"$ref": "#/$defs/bi64"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "help": {"$ref": "#/$defs/bi600"},
+    "settings": {"$ref": "#/$defs/settings"},
+    "schedule": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["list", "time", "days", "enabled"],
+        "properties": {
+          "list": {"$ref": "#/$defs/key"},
+          "time": {"$ref": "#/$defs/key"},
+          "days": {"$ref": "#/$defs/key"},
+          "enabled": {"$ref": "#/$defs/key"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "args"],
+        "properties": {
+          "id": {"$ref": "#/$defs/key"},
+          "label": {"$ref": "#/$defs/bi40"},
+          "args": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/argField"}},
+          "confirm": {"enum": [false, "app", "screen"]}
+        },
+        "additionalProperties": false
+      }
+    },
+    "runtime": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["name", "max"],
+        "properties": {
+          "name": {"$ref": "#/$defs/key"},
+          "kind": {"enum": ["options", "status"]},
+          "max": {"type": "integer", "minimum": 1, "maximum": 64},
+          "item_max": {"type": "integer", "minimum": 1, "maximum": 64},
+          "pairs": {"type": "boolean"},
+          "cols": {
+            "description": "Filas [valor, col1, col2…] con columnas tipadas: int, date (hora Unix que la Mini App pinta como fecha corta en su idioma), text (hasta item_max caracteres) y tag (código corto).",
+            "type": "array", "minItems": 1, "maxItems": 4,
+            "items": {"type": "object", "required": ["key", "type"],
+                      "properties": {"key": {"$ref": "#/$defs/key"}, "type": {"enum": ["int", "date", "text", "tag"]}},
+                      "additionalProperties": false}},
+          "label": {"type": "string", "minLength": 1, "maxLength": 64, "description": "Cómo se compone la etiqueta con las columnas, por ejemplo '{n} · {at} · {cap}'."}
+        },
+        "additionalProperties": false,
+        "not": {"required": ["pairs", "cols"]},
+        "dependentRequired": {"label": ["cols"], "cols": ["label"]}
+      }
+    },
+    "memory": {
+      "type": "object",
+      "required": ["psram_kb"],
+      "properties": {
+        "psram_kb": {"type": "integer", "minimum": 4, "maximum": 256},
+        "static_kb": {"type": "integer", "minimum": 0, "maximum": 8}
+      },
+      "additionalProperties": false
+    },
+    "storage": {
+      "type": "object",
+      "properties": {
+        "state_kb": {"type": "integer", "minimum": 0, "maximum": 8},
+        "data_kb": {"type": "integer", "minimum": 0, "maximum": 4096},
+        "sd_mb": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "sd_shared": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"}
+      },
+      "additionalProperties": false
+    },
+    "attribution": {"$ref": "#/$defs/bi60"},
+    "legacy": {
+      "type": "object",
+      "required": ["nvs"],
+      "properties": {"nvs": {"const": "taskdesk"}},
+      "additionalProperties": false
+    },
+    "recipe": {"$ref": "recipe.schema.json"}
+  },
+  "patternProperties": {"^x_": {}},
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "description": "Una receta lleva 'recipe'; un nativo no. Una receta no puede ser la app de serie, no tiene variables fijas en RAM interna ni pinta la capa crítica por su cuenta.",
+      "if": {"properties": {"kind": {"const": "recipe"}}, "required": ["kind"]},
+      "then": {
+        "required": ["recipe"],
+        "properties": {
+          "builtin": false,
+          "legacy": false,
+          "memory": {"properties": {"static_kb": {"const": 0}}},
+          "surfaces": {"properties": {"critical": {"const": false}}}
+        }
+      },
+      "else": {
+        "properties": {"recipe": false},
+        "required": ["memory"]
+      }
+    },
+    {
+      "description": "Variables fijas: 4 KB como mucho, 8 en la app de serie.",
+      "if": {"not": {"required": ["builtin"]}},
+      "then": {"properties": {"memory": {"properties": {"static_kb": {"maximum": 4}}}}}
+    },
+    {
+      "description": "El id 'pauta' y la clave 'legacy' son solo de la app de serie.",
+      "if": {"anyOf": [{"properties": {"id": {"const": "pauta"}}, "required": ["id"]}, {"required": ["legacy"]}]},
+      "then": {"required": ["builtin"]}
+    },
+    {
+      "description": "Quien pide 'net' o 'net.user' declara su bloque 'net'.",
+      "if": {"properties": {"permissions": {"contains": {"enum": ["net", "net.user"]}}}, "required": ["permissions"]},
+      "then": {"required": ["net"]}
+    },
+    {
+      "description": "MQTT exige 'lan' y su bloque 'mqtt'.",
+      "if": {"properties": {"permissions": {"contains": {"const": "mqtt"}}}, "required": ["permissions"]},
+      "then": {"required": ["mqtt"], "properties": {"permissions": {"contains": {"const": "lan"}}}}
+    },
+    {
+      "description": "Combinaciones prohibidas (apartado 8.2): ningún servidor ni mensaje maneja tu teclado.",
+      "if": {"anyOf": [
+        {"properties": {"permissions": {"contains": {"const": "hid"}}}, "required": ["permissions"]},
+        {"properties": {"optional_permissions": {"contains": {"const": "hid"}}}, "required": ["optional_permissions"]}
+      ]},
+      "then": {
+        "properties": {
+          "permissions": {"not": {"contains": {"enum": ["net", "net.user", "mqtt", "photos", "files"]}}},
+          "optional_permissions": {"not": {"contains": {"enum": ["net", "net.user", "mqtt", "photos", "files"]}}}
+        }
+      }
+    },
+    {
+      "description": "Un plugin con página de reposo pide el permiso 'idle'.",
+      "if": {"properties": {"surfaces": {"properties": {"idle": {"const": true}}, "required": ["idle"]}}},
+      "then": {"properties": {"permissions": {"contains": {"const": "idle"}}}}
+    }
+  ],
+  "$defs": {
+    "semver": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,3})\\.(0|[1-9][0-9]{0,3})\\.(0|[1-9][0-9]{0,3})$"},
+    "pluginId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,23}$",
+      "not": {"enum": ["system", "sistema", "settings", "ajustes", "plugins", "core", "sys", "auto", "clock", "none"]}
+    },
+    "key": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,15}$"},
+    "itemId": {"type": "string", "pattern": "^[a-z2-7]{6}$"},
+    "hostname": {"type": "string", "maxLength": 253,
+                 "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$"},
+    "bi": {
+      "type": "object",
+      "required": ["es", "en"],
+      "properties": {"es": {"type": "string", "minLength": 1}, "en": {"type": "string", "minLength": 1}},
+      "additionalProperties": false
+    },
+    "bi16": {"allOf": [{"$ref": "#/$defs/bi"}, {"properties": {"es": {"maxLength": 16}, "en": {"maxLength": 16}}}]},
+    "bi24": {"allOf": [{"$ref": "#/$defs/bi"}, {"properties": {"es": {"maxLength": 24}, "en": {"maxLength": 24}}}]},
+    "bi40": {"allOf": [{"$ref": "#/$defs/bi"}, {"properties": {"es": {"maxLength": 40}, "en": {"maxLength": 40}}}]},
+    "bi60": {"allOf": [{"$ref": "#/$defs/bi"}, {"properties": {"es": {"maxLength": 60}, "en": {"maxLength": 60}}}]},
+    "bi64": {"allOf": [{"$ref": "#/$defs/bi"}, {"properties": {"es": {"maxLength": 64}, "en": {"maxLength": 64}}}]},
+    "bi120": {"allOf": [{"$ref": "#/$defs/bi"}, {"properties": {"es": {"maxLength": 120}, "en": {"maxLength": 120}}}]},
+    "bi200": {"allOf": [{"$ref": "#/$defs/bi"}, {"properties": {"es": {"maxLength": 200}, "en": {"maxLength": 200}}}]},
+    "bi600": {"allOf": [{"$ref": "#/$defs/bi"}, {"properties": {"es": {"maxLength": 600}, "en": {"maxLength": 600}}}]},
+    "unit": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 8}, {"allOf": [{"$ref": "#/$defs/bi"}, {"properties": {"es": {"maxLength": 8}, "en": {"maxLength": 8}}}]}]},
+    "iconName": {
+      "enum": ["pauta", "check", "cross", "plus", "minus", "play", "pause", "next", "prev", "stop", "reset", "timer", "bell",
+               "alert", "lock", "gear", "clock", "search", "photo", "lights", "antenna",
+               "keyboard", "mic", "mic_off", "volume", "volume_off", "camera", "camera_off", "hangup", "hand", "monitor",
+               "window", "globe", "mail", "terminal", "folder", "copy", "paste", "screenshot",
+               "sun", "moon", "cloud", "sun_cloud", "rain", "snow", "storm", "fog"]
+    },
+    "iconOrNone": {"anyOf": [{"$ref": "#/$defs/iconName"}, {"const": "none"}]},
+    "permission": {
+      "enum": ["net", "net.user", "lan", "mqtt", "location", "notify", "alert.critical", "photos", "files", "sd",
+               "idle", "hid", "freetext", "tasks.read", "tasks.write"]
+    },
+    "permissionList": {"type": "array", "uniqueItems": true, "maxItems": 15, "items": {"$ref": "#/$defs/permission"}},
+    "time": {"type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"},
+    "date": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"},
+    "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
+    "keyStep": {
+      "description": "Un paso de teclado (apartado 7.10): combinación por posición física con nombres de la distribución americana (o solo modificadores, como gui), tecla multimedia, texto de hasta 48 caracteres sin caracteres de control, o espera. Los topes de la macro entera (128 bytes en JSON compacto UTF-8, 3 s de esperas, 160 pulsaciones) los comprueban mkmanifests.py, la Mini App y la placa.",
+      "type": "string",
+      "pattern": "^(?:(?:(?:ctrl|shift|alt|gui|ralt)\\+){0,4}(?:ctrl|shift|alt|gui|ralt)|(?:(?:ctrl|shift|alt|gui|ralt)\\+){0,5}(?:[a-z0-9]|f(?:[1-9]|1[0-9]|2[0-4])|enter|esc|tab|space|backspace|delete|insert|home|end|pgup|pgdn|up|down|left|right|printscreen|capslock|menu|minus|equal|lbracket|rbracket|backslash|semicolon|quote|grave|comma|period|slash|nonus_backslash|kp_[0-9]|kp_plus|kp_minus|kp_star|kp_slash|kp_enter|kp_period)|media:(?:mute|vol_up|vol_down|play_pause|next|prev|stop|sleep)|text:[^\\u0000-\\u001f\\u007f]{1,48}|wait:(?:[1-9][0-9]|[1-9][0-9]{2}|1000))$"
+    },
+    "keys": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/keyStep"}},
+    "tzValue": {
+      "type": "object",
+      "required": ["iana", "posix"],
+      "properties": {
+        "iana": {"type": "string", "pattern": "^(UTC|[A-Za-z_]+(/[A-Za-z0-9_+-]+){1,2})$", "maxLength": 40},
+        "posix": {"type": "string", "minLength": 3, "maxLength": 64}
+      },
+      "additionalProperties": false
+    },
+    "locationValue": {
+      "type": "object",
+      "required": ["n", "lat", "lon", "tz"],
+      "properties": {
+        "n": {"type": "string", "minLength": 1, "maxLength": 40},
+        "lat": {"type": "number", "minimum": -90, "maximum": 90},
+        "lon": {"type": "number", "minimum": -180, "maximum": 180},
+        "tz": {"type": "string", "pattern": "^(UTC|[A-Za-z_]+(/[A-Za-z0-9_+-]+){1,2})$", "maxLength": 40}
+      },
+      "additionalProperties": false
+    },
+    "visibleIf": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 4,
+      "propertyNames": {"$ref": "#/$defs/key"},
+      "additionalProperties": {
+        "anyOf": [
+          {"type": ["string", "number", "boolean"]},
+          {"type": "array", "minItems": 1, "maxItems": 8, "items": {"type": ["string", "number", "boolean"]}}
+        ]
+      }
+    },
+    "option": {
+      "type": "object",
+      "required": ["v", "es", "en"],
+      "properties": {
+        "v": {"type": "string", "minLength": 1, "maxLength": 32},
+        "es": {"type": "string", "minLength": 1, "maxLength": 48},
+        "en": {"type": "string", "minLength": 1, "maxLength": 48}
+      },
+      "additionalProperties": false
+    },
+    "optionsFrom": {"type": "string", "pattern": "^(runtime|system)\\.[a-z][a-z0-9_]{0,15}$"},
+    "scope": {"enum": ["public", "private", "any"]},
+    "fieldTypes": {"enum": ["text", "number", "bool", "select", "multiselect", "time", "days", "date", "duration",
+                            "color", "url", "host", "secret", "keys", "icon", "tz", "location", "list"]},
+    "fieldCore": {
+      "description": "Lo común a todos los campos (apartado 9.1).",
+      "type": "object",
+      "required": ["key", "type", "label"],
+      "properties": {
+        "key": {"$ref": "#/$defs/key"},
+        "type": {"$ref": "#/$defs/fieldTypes"},
+        "label": {"$ref": "#/$defs/bi64"},
+        "help": {"$ref": "#/$defs/bi200"},
+        "group": {"$ref": "#/$defs/bi40"},
+        "required": {"type": "boolean"},
+        "visible_if": {"$ref": "#/$defs/visibleIf"},
+        "private": {"type": "boolean"},
+        "confirm": {"type": "boolean", "description": "Cambiarlo pide un toque en la pantalla. En una lista, cualquier cambio en ella; en un bool, solo al encenderlo."},
+        "keep_hidden": {"type": "boolean", "description": "Se conserva aunque visible_if lo oculte (cuenta siempre en el peor caso de /cfg)."},
+        "ack": {"$ref": "#/$defs/bi200", "description": "Aviso que la Mini App enseña con una casilla «Lo entiendo» que hay que marcar antes de enviar un cambio de este campo."}
+      },
+      "allOf": [
+        {"if": {"properties": {"type": {"const": "text"}}}, "then": {"properties": {
+          "max": {"type": "integer", "minimum": 1, "maximum": 200},
+          "pattern": {"type": "string", "maxLength": 128},
+          "default": {"anyOf": [{"type": "string", "maxLength": 200}, {"$ref": "#/$defs/bi"}]}}}},
+        {"if": {"properties": {"type": {"const": "number"}}}, "then": {"properties": {
+          "min": {"type": "number"}, "max": {"type": "number"},
+          "step": {"type": "number", "exclusiveMinimum": 0},
+          "unit": {"$ref": "#/$defs/unit"},
+          "default": {"type": "number"}}}},
+        {"if": {"properties": {"type": {"const": "bool"}}}, "then": {"properties": {
+          "default": {"type": "boolean"}}}},
+        {"if": {"properties": {"type": {"const": "select"}}}, "then": {
+          "properties": {
+            "options": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/option"}},
+            "options_from": {"$ref": "#/$defs/optionsFrom"},
+            "options_if": {"$ref": "#/$defs/visibleIf"},
+            "pattern": {"type": "string", "maxLength": 128},
+            "max": {"type": "integer", "minimum": 1, "maximum": 64},
+            "default": {"type": "string", "maxLength": 64}},
+          "dependentRequired": {"options_if": ["options_from"]},
+          "oneOf": [{"required": ["options"]}, {"required": ["options_from"]}]}},
+        {"if": {"properties": {"type": {"const": "multiselect"}}}, "then": {
+          "properties": {
+            "options": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/option"}},
+            "options_from": {"$ref": "#/$defs/optionsFrom"},
+            "options_if": {"$ref": "#/$defs/visibleIf"},
+            "pattern": {"type": "string", "maxLength": 128},
+            "max": {"type": "integer", "minimum": 1, "maximum": 64},
+            "default": {"type": "array", "maxItems": 64, "items": {"type": "string"}}},
+          "dependentRequired": {"options_if": ["options_from"]},
+          "oneOf": [{"required": ["options"]}, {"required": ["options_from"]}]}},
+        {"if": {"properties": {"type": {"const": "time"}}}, "then": {"properties": {
+          "default": {"$ref": "#/$defs/time"}}}},
+        {"if": {"properties": {"type": {"const": "days"}}}, "then": {"properties": {
+          "min": {"type": "integer", "minimum": 0, "maximum": 7},
+          "default": {"type": "integer", "minimum": 0, "maximum": 127}}}},
+        {"if": {"properties": {"type": {"const": "date"}}}, "then": {"properties": {
+          "min": {"$ref": "#/$defs/date"}, "max": {"$ref": "#/$defs/date"},
+          "default": {"$ref": "#/$defs/date"}}}},
+        {"if": {"properties": {"type": {"const": "duration"}}}, "then": {"properties": {
+          "min": {"type": "integer", "minimum": 0}, "max": {"type": "integer", "minimum": 1, "maximum": 604800},
+          "default": {"type": "integer", "minimum": 0}}}},
+        {"if": {"properties": {"type": {"const": "color"}}}, "then": {"properties": {
+          "palette": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/color"}},
+          "default": {"$ref": "#/$defs/color"}}}},
+        {"if": {"properties": {"type": {"const": "url"}}}, "then": {"properties": {
+          "max": {"type": "integer", "minimum": 8, "maximum": 256},
+          "scope": {"$ref": "#/$defs/scope"},
+          "default": {"type": "string", "maxLength": 256}}}},
+        {"if": {"properties": {"type": {"const": "host"}}}, "then": {"properties": {
+          "scope": {"$ref": "#/$defs/scope"},
+          "default": {"type": "string", "maxLength": 253}}}},
+        {"if": {"properties": {"type": {"const": "secret"}}}, "then": {"properties": {
+          "max": {"type": "integer", "minimum": 1, "maximum": 128},
+          "pattern": {"type": "string", "maxLength": 128},
+          "bound_to": {"$ref": "#/$defs/key"}}}},
+        {"if": {"properties": {"type": {"const": "keys"}}}, "then": {"properties": {
+          "default": {"$ref": "#/$defs/keys"}}}},
+        {"if": {"properties": {"type": {"const": "icon"}}}, "then": {"properties": {
+          "default": {"$ref": "#/$defs/iconOrNone"}}}},
+        {"if": {"properties": {"type": {"const": "tz"}}}, "then": {"properties": {
+          "default": {"$ref": "#/$defs/tzValue"}}}},
+        {"if": {"properties": {"type": {"const": "list"}}}, "then": {
+          "required": ["fields", "max_items"],
+          "not": {"required": ["ui", "order"]},
+          "properties": {
+            "fields": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"$ref": "#/$defs/subField"}},
+            "max_items": {"type": "integer", "minimum": 1, "maximum": 32},
+            "min_items": {"type": "integer", "minimum": 0, "maximum": 32},
+            "item_label": {"type": "string", "minLength": 1, "maxLength": 64},
+            "unique": {"type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": {"$ref": "#/$defs/key"}},
+            "sort_by": {"$ref": "#/$defs/key"},
+            "order": {"const": "manual"},
+            "ui": {
+              "type": "object",
+              "required": ["widget"],
+              "properties": {
+                "widget": {"const": "grid"},
+                "rows": {"$ref": "#/$defs/key"}, "cols": {"$ref": "#/$defs/key"},
+                "page": {"$ref": "#/$defs/key"}, "slot": {"$ref": "#/$defs/key"}
+              },
+              "additionalProperties": false
+            },
+            "default": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {"type": "object", "required": ["id"], "properties": {"id": {"$ref": "#/$defs/itemId"}}}
+            }}}},
+        {"if": {"properties": {"private": {"const": true}}, "required": ["private"]},
+         "then": {"properties": {"type": {"not": {"enum": ["secret", "list", "bool"]}}}}},
+        {"if": {"required": ["scope"]}, "then": {"properties": {"type": {"enum": ["url", "host"]}}}},
+        {"if": {"required": ["bound_to"]}, "then": {"properties": {"type": {"const": "secret"}}}},
+        {"if": {"properties": {"type": {"const": "secret"}}}, "then": {"not": {"required": ["default"]}}},
+        {"if": {"properties": {"type": {"const": "location"}}}, "then": {"not": {"required": ["default"]}}}
+      ]
+    },
+    "field": {
+      "description": "Un campo de ajustes de primer nivel.",
+      "$ref": "#/$defs/fieldCore",
+      "unevaluatedProperties": false
+    },
+    "subField": {
+      "description": "Un subcampo de una lista: sin listas ni secretos dentro.",
+      "$ref": "#/$defs/fieldCore",
+      "properties": {"type": {"not": {"enum": ["list", "secret"]}}},
+      "unevaluatedProperties": false
+    },
+    "argField": {
+      "description": "Un argumento de una acción: sin listas ni secretos.",
+      "$ref": "#/$defs/fieldCore",
+      "properties": {"type": {"not": {"enum": ["list", "secret"]}}},
+      "unevaluatedProperties": false
+    },
+    "settings": {
+      "type": "object",
+      "required": ["version", "fields"],
+      "properties": {
+        "version": {"type": "integer", "minimum": 1, "maximum": 999},
+        "fields": {"type": "array", "maxItems": 24, "items": {"$ref": "#/$defs/field"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

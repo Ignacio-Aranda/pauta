@@ -1,0 +1,75 @@
+{
+ "description": "Vectores de prueba de la criptografía del protocolo con la Mini App (docs/plugins-referencia.md, apartado 9). Los vectores iniciales son fijos solo aquí; en la placa y la Mini App son aleatorios. s depende del compresor: se comprueba descifrando y descomprimiendo. El envío firmado es examples/wire/miniapp-message.json en JSON compacto.",
+ "inputs": {
+  "board_priv": "27335df977daa8345f480fc3a1dcbfaa17c1d88ebedf295c8f8577f9c56d4739",
+  "dev_id": "q3x7ab",
+  "dev_name": "Android",
+  "dev_priv": "b7beb1e6d8e3e2422e452f1c29afdca21da60328be037aefbe4eb196e8c81b7e",
+  "S": "d525bd94900cc24851eabafc19013a60ad730faeb203521c30e835055611ace0",
+  "e": 3,
+  "pk_iv": "9b68a8168834b85de420d6ae",
+  "url": {
+   "l": "es",
+   "fw": "1.4.0",
+   "iv": "51b0da47e96568a9787524db",
+   "state": {
+    "r": 57,
+    "t": 1792330000,
+    "sys": {
+     "lang": "es",
+     "idle_by": "auto"
+    },
+    "p": [
+     [
+      "pauta",
+      1,
+      null
+     ],
+     [
+      "pomodoro",
+      1,
+      {
+       "work": 50
+      }
+     ]
+    ]
+   }
+  },
+  "box_pin": {
+   "pin": "1234",
+   "eph_priv": "690ea768d4cbec62a0d9dc89c9eff006161fb1eb8bfb963668e09108a1d07ab8",
+   "iv": "19756bdc686eba1453186050"
+  },
+  "box_secret": {
+   "p": "nicscom",
+   "f": "pass",
+   "value": "s3cr3t-mqtt",
+   "bound_value": "192.168.1.20",
+   "eph_priv": "ebc7c6d5fe4a702014d86cb42049fc087354b298082c49b153127df6711a0277",
+   "iv": "7a60be645d78ec1b4a99a906"
+  }
+ },
+ "outputs": {
+  "k": "BA-7J1-yYWMMXr_TPiuRT5Cc2Kqgzethc9BBYtvsWIZSfs8JEJC3DFUbVFHxcOXSUmQMiDKlUK-Ia0xHWlDGYaQ",
+  "kf": "525F139C",
+  "salt_sha256_k": "525f139c418866b69da80f0cdc005a2caacec0cbae183cc472f57438dfbe01bd",
+  "dev_pk": "BBytXbIwHOedXEomSxyaI9VjwJ18-vLBfthv5IBUGiMLW2nGLYpd64h-Xbk0kBqNkasDYjO9e9KFDsd41xV5Qos",
+  "pair_code": "YNZ·RE4",
+  "kdev": "f96fe079918d9f9b168d7307a32d92c2202d3463c35f7c54fbff63ac9a12fc61",
+  "pk_entry": "q3x7ab.m2ioFog0uF3kINauiYTEfWXfd5J1fD5RLsy-bEajHuR8vTqpNOzOp5AtrNVk5KOVQF_O-hBfaJ2gm_IVG0E",
+  "ksend": "9f09a1ab129fce652cb5dd4dba55bd049c447aad5d5570265a91fb6d34eccbfd",
+  "kurl": "41e727fc93ac96405074c63310072b6376a59460958e8f8ccc48b3f8700fcd17",
+  "url_aad": "v=1&l=es&fw=1.4.0&k=BA-7J1-yYWMMXr_TPiuRT5Cc2Kqgzethc9BBYtvsWIZSfs8JEJC3DFUbVFHxcOXSUmQMiDKlUK-Ia0xHWlDGYaQ&kf=525F139C&e=3&z=1",
+  "s": "UbDaR-llaKl4dSTbOkoLD3gWp8aTBz0a395XRCxFU_kQzosNlfxsTKY755s5n063j0Vlk-gE86OAGJTDHrZQJvojW-8w3zvV2rfqfqozTgIiKvagrNO1MeL7DUokOPAkMrLffIs87bhV7ZIRuWT7zubjHE940N_3AIE7yg",
+  "url": "https://ignacio-aranda.github.io/pauta/miniapp/?v=1&l=es&fw=1.4.0&k=BA-7J1-yYWMMXr_TPiuRT5Cc2Kqgzethc9BBYtvsWIZSfs8JEJC3DFUbVFHxcOXSUmQMiDKlUK-Ia0xHWlDGYaQ&kf=525F139C&e=3&z=1&s=UbDaR-llaKl4dSTbOkoLD3gWp8aTBz0a395XRCxFU_kQzosNlfxsTKY755s5n063j0Vlk-gE86OAGJTDHrZQJvojW-8w3zvV2rfqfqozTgIiKvagrNO1MeL7DUokOPAkMrLffIs87bhV7ZIRuWT7zubjHE940N_3AIE7yg&pk=q3x7ab.m2ioFog0uF3kINauiYTEfWXfd5J1fD5RLsy-bEajHuR8vTqpNOzOp5AtrNVk5KOVQF_O-hBfaJ2gm_IVG0E",
+  "info_pin": "pauta-sec-v1|sys|pin|57|1792330412",
+  "box_pin": "BGjfe0Cf6ZkmsKD9NFTCicroWGIou6Xmoo0pUU2A1TLuzxVi5UksNKJ26TjPtoVi6mnLmNo_hrzpvZVlEn7VZw4ZdWvcaG66FFMYYFD-hzMA54kJrdMr6CJSXS_U-G6P0pYGsRIq33jYDauyCw",
+  "info_secret": "pauta-sec-v1|nicscom|pass|57|1792330412|552354592821b7e6",
+  "box_secret": "BCPxF1u4gutWk3q21N7kzWtJVXMlrKAr5opyaNxiK-fLp8txkT0vpe2R6DRY1KltJPEIDBUdN8qLEgiFun5BoCJ6YL5kXXjsG0qZqQYxpTfRy2Cg_TMR49YJOZrrf2TrXNqm6W329zAiPffK7BmzgPAfR7i7dKw_kJZGrec",
+  "code_pin": "U6TA",
+  "code_pin_and_secret": "LXKW",
+  "message_text": "{\"v\":1,\"id\":\"7hq2mx4a\",\"d\":\"q3x7ab\",\"base\":57,\"t\":1792330412,\"ops\":[{\"op\":\"sys\",\"set\":{\"idle\":5,\"lock_sched\":true,\"lock_from\":\"19:00\",\"lock_to\":\"08:00\"},\"box\":{\"pin\":\"BGjfe0Cf6ZkmsKD9NFTCicroWGIou6Xmoo0pUU2A1TLuzxVi5UksNKJ26TjPtoVi6mnLmNo_hrzpvZVlEn7VZw4ZdWvcaG66FFMYYFD-hzMA54kJrdMr6CJSXS_U-G6P0pYGsRIq33jYDauyCw\"}},{\"op\":\"cfg\",\"p\":\"pomodoro\",\"set\":{\"work\":50,\"short\":10}},{\"op\":\"enable\",\"p\":\"semaforo\",\"on\":true},{\"op\":\"item.add\",\"p\":\"nicscom\",\"f\":\"autos\",\"id\":\"k3f7a2\",\"val\":{\"ch\":\"AGUA\",\"at\":\"09:00\",\"days\":31,\"on\":true}},{\"op\":\"item.set\",\"p\":\"nicscom\",\"f\":\"autos\",\"id\":\"q7c2d3\",\"val\":{\"at\":\"08:45\"}},{\"op\":\"item.del\",\"p\":\"nicscom\",\"f\":\"autos\",\"id\":\"x2b4e7\"},{\"op\":\"item.set\",\"p\":\"atajos\",\"f\":\"buttons\",\"id\":\"dmicro\",\"val\":{\"slot\":2}},{\"op\":\"item.set\",\"p\":\"atajos\",\"f\":\"buttons\",\"id\":\"dbloqu\",\"val\":{\"slot\":1}},{\"op\":\"item.order\",\"p\":\"semaforo\",\"f\":\"sites\",\"ids\":[\"z5a6b7\",\"k3f7a2\"]},{\"op\":\"secret\",\"p\":\"nicscom\",\"f\":\"pass\",\"box\":null},{\"op\":\"order\",\"ids\":[\"pauta\",\"pomodoro\",\"nicscom\",\"semaforo\",\"atajos\",\"salvapantallas\"]},{\"op\":\"install\",\"p\":\"frase-dia\",\"ver\":\"1.0.0\",\"sha\":\"9f2c11a03b7e44d1\"},{\"op\":\"action\",\"p\":\"nicscom\",\"a\":\"post\",\"args\":{\"ch\":\"CAFE\"}}]}",
+  "signature": "kuEUaiJPB0ki-e2tjHLlng",
+  "send_data": "{\"v\":1,\"id\":\"7hq2mx4a\",\"d\":\"q3x7ab\",\"base\":57,\"t\":1792330412,\"ops\":[{\"op\":\"sys\",\"set\":{\"idle\":5,\"lock_sched\":true,\"lock_from\":\"19:00\",\"lock_to\":\"08:00\"},\"box\":{\"pin\":\"BGjfe0Cf6ZkmsKD9NFTCicroWGIou6Xmoo0pUU2A1TLuzxVi5UksNKJ26TjPtoVi6mnLmNo_hrzpvZVlEn7VZw4ZdWvcaG66FFMYYFD-hzMA54kJrdMr6CJSXS_U-G6P0pYGsRIq33jYDauyCw\"}},{\"op\":\"cfg\",\"p\":\"pomodoro\",\"set\":{\"work\":50,\"short\":10}},{\"op\":\"enable\",\"p\":\"semaforo\",\"on\":true},{\"op\":\"item.add\",\"p\":\"nicscom\",\"f\":\"autos\",\"id\":\"k3f7a2\",\"val\":{\"ch\":\"AGUA\",\"at\":\"09:00\",\"days\":31,\"on\":true}},{\"op\":\"item.set\",\"p\":\"nicscom\",\"f\":\"autos\",\"id\":\"q7c2d3\",\"val\":{\"at\":\"08:45\"}},{\"op\":\"item.del\",\"p\":\"nicscom\",\"f\":\"autos\",\"id\":\"x2b4e7\"},{\"op\":\"item.set\",\"p\":\"atajos\",\"f\":\"buttons\",\"id\":\"dmicro\",\"val\":{\"slot\":2}},{\"op\":\"item.set\",\"p\":\"atajos\",\"f\":\"buttons\",\"id\":\"dbloqu\",\"val\":{\"slot\":1}},{\"op\":\"item.order\",\"p\":\"semaforo\",\"f\":\"sites\",\"ids\":[\"z5a6b7\",\"k3f7a2\"]},{\"op\":\"secret\",\"p\":\"nicscom\",\"f\":\"pass\",\"box\":null},{\"op\":\"order\",\"ids\":[\"pauta\",\"pomodoro\",\"nicscom\",\"semaforo\",\"atajos\",\"salvapantallas\"]},{\"op\":\"install\",\"p\":\"frase-dia\",\"ver\":\"1.0.0\",\"sha\":\"9f2c11a03b7e44d1\"},{\"op\":\"action\",\"p\":\"nicscom\",\"a\":\"post\",\"args\":{\"ch\":\"CAFE\"}}]}\nkuEUaiJPB0ki-e2tjHLlng"
+ }
+}
