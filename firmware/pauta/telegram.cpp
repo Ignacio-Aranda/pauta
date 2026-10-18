@@ -256,23 +256,36 @@ static void handlePick(int64_t chatId, const String &cmd, const String &arg) {
   std::vector<Pick>   picked;
   std::vector<String> missing;
   bool more = false;
-  size_t i = 0, n = arg.length();
-  while (i < n) {
-    if (isSep(arg[i])) { i++; continue; }
-    size_t j = i;
-    while (j < n && !isSep(arg[j])) j++;
-    String tok = arg.substring(i, j);
-    i = j;
-    // Tres cifras sobran para MAX_TASKS y evitan desbordar toInt().
-    Pick p;
-    p.pos = (isNumber(tok) && tok.length() <= 3) ? tok.toInt() : 0;
-    if (p.pos >= 1 && tasksGet(p.pos - 1, p.task)) {
-      bool dup = false;
-      for (const Pick &q : picked) if (q.task.id == p.task.id) dup = true;
-      if (!dup) picked.push_back(p);
-    } else {
-      addMissing(missing, more, tok);
+  // Cada tasksGet() toma y suelta el cerrojo por su cuenta, y entre dos
+  // numeros la pantalla puede compactar la lista (limpiar hechas). Todo lo
+  // que la cambia sube tasksRevision(): si se ha movido, se vuelve a
+  // traducir; tres intentos sobran, nadie toca la pantalla tan deprisa. Asi
+  // no hace falta copiar la lista entera (unos 4 KB) en la pila de 12 KB de
+  // esta tarea.
+  for (int attempt = 0; attempt < 3; attempt++) {
+    picked.clear();
+    missing.clear();
+    more = false;
+    uint32_t rev = tasksRevision();
+    size_t i = 0, n = arg.length();
+    while (i < n) {
+      if (isSep(arg[i])) { i++; continue; }
+      size_t j = i;
+      while (j < n && !isSep(arg[j])) j++;
+      String tok = arg.substring(i, j);
+      i = j;
+      // Tres cifras sobran para MAX_TASKS y evitan desbordar toInt().
+      Pick p;
+      p.pos = (isNumber(tok) && tok.length() <= 3) ? tok.toInt() : 0;
+      if (p.pos >= 1 && tasksGet(p.pos - 1, p.task)) {
+        bool dup = false;
+        for (const Pick &q : picked) if (q.task.id == p.task.id) dup = true;
+        if (!dup) picked.push_back(p);
+      } else {
+        addMissing(missing, more, tok);
+      }
     }
+    if (tasksRevision() == rev) break;  // todo se leyo de la misma lista
   }
 
   // Sin ningun numero, como un "/done" a secas desde el menu, se recuerda
