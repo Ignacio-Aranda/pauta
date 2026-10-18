@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/Ignacio-Aranda/pauta/main/schemas/url-state.schema.json",
   "title": "Pauta Plugin API 1.0: estado de la URL de la Mini App, ya descifrado",
-  "description": "Lo que la Mini App obtiene del parámetro 's' de la URL del botón tras base64url -> AES-256-GCM -> deflate-raw (si z=1) -> JSON (docs/plugins-referencia.md, apartado 9.3). La parte en claro de la query se describe en $defs/query. Los ajustes van por nombre de clave; lo que vale lo de fábrica puede no viajar; un secreto puesto o un campo 'private' con valor salen como '*'.",
+  "description": "Lo que la Mini App obtiene del parámetro 's' de la URL del botón tras base64url -> AES-256-GCM -> deflate-raw (si z=1) -> JSON (docs/plugins-referencia.md, apartado 9.3). El JSON no lleva 'v': la versión va en la parte en claro, que protege la AAD. La parte en claro de la query se describe en $defs/query. Los ajustes van por nombre de clave; lo que vale lo de fábrica puede no viajar; un secreto puesto o un campo 'private' con valor salen como '*'.",
   "type": "object",
   "required": ["r", "t", "p"],
   "properties": {
@@ -26,20 +26,20 @@
   "additionalProperties": false,
   "$defs": {
     "query": {
-      "description": "Parte en claro de la query del botón (no se valida aquí; es documentación). Orden fijo: v, l, fw, k, kf, e, z, p (si va), s y pk (si va). El dato asociado (AAD) del cifrado es el texto exacto de la query desde 'v=' hasta justo antes de '&s='; pk no entra.",
+      "description": "Parte en claro de la query del botón (no se valida aquí; es documentación). Orden fijo: v, l, fw, k, kf (si va), e, z, p (si va), s y pk (si va). El dato asociado (AAD) del cifrado son las claves en claro presentes de v a p, en ese orden, como clave=valor unidas por '&', sin s ni pk: es el prefijo literal que escribe la placa, y la Mini App lo rehace con URLSearchParams para que no le afecte un reordenado (perfil pauta-crypto-v1, apartado 9.9). Todo en base64url va sin '=' y en forma canónica.",
       "type": "object",
-      "required": ["v", "l", "fw", "k", "kf"],
+      "required": ["v", "l", "fw", "k"],
       "properties": {
         "v": {"const": "1"},
         "l": {"enum": ["es", "en"]},
         "fw": {"$ref": "manifest.schema.json#/$defs/semver"},
         "k": {"type": "string", "pattern": "^[A-Za-z0-9_-]{87}$", "description": "Clave pública ECDH P-256 de la placa (65 bytes)."},
-        "kf": {"type": "string", "pattern": "^[0-9A-F]{8}$", "description": "Huella: 8 primeros hex del SHA-256 de k."},
-        "e": {"type": "string", "pattern": "^[0-9]{1,5}$", "description": "Época de la clave del estado."},
+        "kf": {"type": "string", "pattern": "^[0-9A-F]{8}$", "description": "Huella informativa: 8 primeros hex del SHA-256 de k, en mayúsculas. La placa de la v1 no la manda (la Mini App la calcula de k); si llega, entra en la AAD. No sirve para comprobar nada: falsificarla cuesta unas 3 horas en un PC."},
+        "e": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,4})$", "description": "Época de la clave del estado (un número, no una bandera), en decimal sin ceros delante."},
         "z": {"const": "1", "description": "El JSON va comprimido con deflate-raw antes de cifrar (normativo en la v1)."},
-        "s": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$", "description": "base64url(vector 12 B | cifrado | etiqueta 16 B)."},
+        "s": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$", "description": "base64url(vector 12 B | AES-256-GCM(Kurl, deflate-raw del JSON) | etiqueta 16 B)."},
         "p": {"$ref": "manifest.schema.json#/$defs/pluginId", "description": "Plugin que abre directamente (apertura en dos pasos)."},
-        "pk": {"type": "string", "pattern": "^[a-z2-7]{6}\\.[A-Za-z0-9_-]{83}(~[a-z2-7]{6}\\.[A-Za-z0-9_-]{83}){0,3}$", "description": "Hasta 4 entradas separadas por ~, una por dispositivo que tiene que recoger la clave del estado: <id>.base64url(vector 12 B | AES-256-GCM(Kdev, S 32 B + e uint16 big-endian, AAD 'pauta-pk-v1|<id>|<e>') | etiqueta 16 B), 90 caracteres cada una."}
+        "pk": {"type": "string", "pattern": "^[a-z2-7]{6}\\.[A-Za-z0-9_-]{86}(,[a-z2-7]{6}\\.[A-Za-z0-9_-]{86}){0,3}$", "description": "Hasta 4 entradas separadas por comas, una por dispositivo que tiene que recoger la clave del estado: <id>.base64url(vector 12 B | AES-256-GCM(Kdev, S de 32 B | e en uint32 big-endian, AAD = ASCII de <id>) | etiqueta 16 B), 93 caracteres cada una."}
       }
     },
     "time": {"$ref": "manifest.schema.json#/$defs/time"},

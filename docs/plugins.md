@@ -142,9 +142,13 @@ otro campo (`visible_if`).
 **Ida y vuelta.** La placa le pasa su estado a la Mini App en la URL del
 botón, comprimido y **cifrado**: GitHub Pages solo ve datos cifrados
 ([§9.3](plugins-referencia.md#93-estado-en-la-url-cifrado-y-comprimido)). Para
-leerlo, cada móvil u ordenador se **empareja** una vez: la Mini App y la
-pantalla enseñan el mismo código de 6 caracteres y lo confirmas en la placa
-([§9.4](plugins-referencia.md#94-emparejar-dispositivos)). Caben 4
+leerlo, cada móvil u ordenador se **empareja** una vez: pides «Emparejar» en
+el menú de la placa, la pantalla enseña durante 2 minutos un código de un solo
+uso de 10 caracteres (y su QR), y la Mini App lo escanea o lo tecleas
+([§9.4](plugins-referencia.md#94-emparejar-dispositivos)). Con ese código, la
+Mini App demuestra que ha visto la pantalla, así que nadie puede colarse por
+el camino. Es la recomendación de una pregunta abierta
+([P29](plugins-referencia.md#p29-cómo-se-empareja-un-dispositivo)). Caben 4
 dispositivos. A la vuelta, la Mini App manda los cambios con `sendData` (4096
 bytes como mucho), firmados por tu dispositivo; la placa los valida con las
 mismas tablas, los guarda y contesta «Guardado: Pomodoro (2 cambios)»
@@ -162,8 +166,7 @@ pulsado 1 segundo** el botón de aceptar en la pantalla, en menos de 2 minutos
   tu ordenador;
 - aceptar permisos nuevos, también al actualizar un plugin;
 - borrar fotos o datos de la microSD;
-- instalar una receta, emparejar un dispositivo o instalar una actualización
-  del firmware;
+- instalar una receta o una actualización del firmware;
 - encender «Desbloquear desde Telegram».
 
 Los casos de las fotos y del desbloqueo dependen todavía de dos preguntas
@@ -173,7 +176,8 @@ cuya recomendación ya aplica el texto.
 
 **En la pantalla, solo lo imprescindible**: el menú del sistema activa y
 desactiva plugins, bloquea, pone el reposo, sale del modo seguro, actualiza y
-olvida dispositivos ([§5.8](plugins-referencia.md#58-menú-del-sistema)).
+empareja u olvida dispositivos
+([§5.8](plugins-referencia.md#58-menú-del-sistema)).
 **Telegram** sigue para escribir tareas, los comandos de los plugins
 (`/nics AGUA`, `/webs`, `/fondo`), mandar fotos y recibir avisos
 ([§6.2](plugins-referencia.md#62-telegram)).
@@ -214,9 +218,12 @@ MQTT del laboratorio ([§7.7](plugins-referencia.md#77-secretos)):
 - **Entran solo por la Mini App, en un «sobre sellado»**
   ([§9.7](plugins-referencia.md#97-cómo-se-meten-los-secretos-el-sobre-sellado)).
   La Mini App lo cifra con la clave pública de la placa (ECDH P-256, HKDF y
-  AES-GCM, piezas estándar de criptografía), así que Telegram solo ve datos
-  cifrados. El botón de enviar y la pantalla enseñan el mismo código de 4
-  caracteres, y lo confirmas con el toque.
+  AES-GCM, piezas estándar de criptografía, con los parámetros exactos y sus
+  vectores de prueba en el perfil `pauta-crypto-v1`,
+  [§9.9](plugins-referencia.md#99-perfil-criptográfico-pauta-crypto-v1)), así
+  que Telegram solo ve datos cifrados. El botón de enviar y la pantalla
+  enseñan el mismo código de 4 caracteres, para que sepas que lo que apruebas
+  con el toque es justo ese envío.
 - **Viven en el cofre**, un archivo cifrado del disco interno de la placa cuya
   clave está en la NVS. Nunca van a la URL, a la microSD ni a copias.
 - **El plugin nunca los ve.** Solo los nombra («usa el secreto `pass`») y es
@@ -659,11 +666,11 @@ Cada fase termina en un firmware publicable
 
 | Fase | Firmware | Qué trae |
 |---|---|---|
-| F0 Cimientos | 1.2.0 | El host de plugins, el disco interno de la placa (9,6 MB de su flash, hoy sin usar), los secretos apartados, el modo seguro y el núcleo del motor de recetas. Pauta se reescribe como plugin y por fuera no cambia nada |
+| F0 Cimientos | 1.2.0 | El host de plugins, el disco interno de la placa (9,76 MB útiles de su flash, hoy sin usar), los secretos apartados, el modo seguro y el núcleo del motor de recetas. Pauta se reescribe como plugin y por fuera no cambia nada |
 | F1 Páginas y Pomodoro | 1.3.0 | Deslizar entre páginas, línea de estado, avisos, reposo con reloj, menú del sistema, arranque sin WiFi, el motor `timer` y el **Pomodoro**, con los valores de fábrica hasta F2 |
 | F2 Mini App y OTA | 1.4.0 | Primero se mide cuánto cabe en la URL. Después, la Mini App con emparejamiento y estado cifrado, ciudad y tiempo en la cabecera, bloqueo con PIN, secretos, la actualización firmada por WiFi y el catálogo |
 | F3 nicscom | 1.5.0 | El servicio MQTT, el programador y **nicscom** |
-| F4 Oficina | 1.6.0 | El teclado USB (en un firmware aparte, `v1-hid`), el vigilante de webs y las recetas **Atajos** y **Semáforo** |
+| F4 Oficina | 1.6.0 | El teclado USB, en un firmware aparte (`v1-hid`) porque su pila USB ocupa unos 43 KB de la memoria interna del chip aunque no se use; el vigilante de webs y las recetas **Atajos** y **Semáforo** |
 | F5 Fotos | 1.7.0 | La microSD, las fotos del bot, el servicio de imágenes y el **Salvapantallas** |
 
 ## 9. Dónde está cada cosa en la referencia

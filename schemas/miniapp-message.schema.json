@@ -2,15 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/Ignacio-Aranda/pauta/main/schemas/miniapp-message.schema.json",
   "title": "Pauta Plugin API 1.0: envío de la Mini App a la placa (sendData)",
-  "description": "La parte JSON de Telegram.WebApp.sendData() (docs/plugins-referencia.md, apartado 9.5). Todo envío salvo la petición de emparejar termina con un salto de línea y la firma: HMAC-SHA256 de los bytes UTF-8 del JSON tal cual se manda (hasta el último salto de línea, sin incluirlo), recortado a 16 bytes y en base64url (22 caracteres), con la clave propia del dispositivo Ksend = HKDF-SHA256(Kdev, sal = SHA-256(k), info = 'pauta-send-v1|<d>'). La firma no forma parte de este JSON. Vectores de prueba en examples/wire/vectors.json. Tope: 4096 bytes con la firma, 32 operaciones. Una operación, un campo o una 'v' desconocidos hacen rechazar el envío entero.",
+  "description": "La parte JSON de Telegram.WebApp.sendData() (docs/plugins-referencia.md, apartado 9.5). Todo envío salvo la petición de emparejar termina con un salto de línea y la firma: HMAC-SHA256 de los bytes UTF-8 del JSON tal cual se manda (hasta el último salto de línea, sin incluirlo), recortado a 16 bytes y en base64url (22 caracteres), con la clave propia del dispositivo Ksend = HKDF-SHA256(Kdev, sal = SHA-256(k), info = 'pauta-send-v1|<d>'). El JSON va en una sola línea y la placa corta por el ÚLTIMO salto de línea. La firma no forma parte de este JSON. Perfil criptográfico pauta-crypto-v1 (apartado 9.9) y vectores oficiales en examples/wire/vectors.json. Tope: 4096 bytes con la firma, 32 operaciones. Una operación, un campo o una 'v' desconocidos hacen rechazar el envío entero.",
   "type": "object",
   "required": ["v", "id", "base", "t", "ops"],
   "properties": {
     "v": {"const": 1},
-    "id": {"type": "string", "pattern": "^[a-z2-7]{8}$", "description": "Identificador del envío, para descartar repeticiones (la placa recuerda los 16 últimos)."},
+    "id": {"type": "string", "pattern": "^[a-z2-7]{8}$", "description": "Identificador del envío, para descartar repeticiones (la placa recuerda los de los últimos 12 minutos, 32 como mucho)."},
     "d": {"$ref": "manifest.schema.json#/$defs/itemId", "description": "Dispositivo emparejado que firma. Falta solo en 'pair'."},
     "base": {"type": "integer", "minimum": 0, "maximum": 4294967295, "description": "Revisión con la que se abrió la Mini App."},
-    "t": {"type": "integer", "minimum": 1700000000, "description": "Hora del envío (segundos Unix). Las acciones se descartan con más de 10 minutos."},
+    "t": {"type": "integer", "minimum": 1700000000, "description": "Hora del envío (segundos Unix). La placa rechaza el envío entero si t cae fuera de [ahora − 10 min, ahora + 2 min], y un id ya visto dentro de esa ventana."},
     "ops": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/op"}}
   },
   "additionalProperties": false,
@@ -27,8 +27,8 @@
     "key": {"$ref": "manifest.schema.json#/$defs/key"},
     "itemId": {"$ref": "manifest.schema.json#/$defs/itemId"},
     "box": {
-      "description": "Sobre sellado: base64url(clave de un solo uso 65 B | vector 12 B | cifrado | etiqueta 16 B). El texto en claro va relleno con 0x00 hasta 16 B (PIN) o hasta el múltiplo de 32 siguiente (secretos, 128 como mucho): 146 caracteres el PIN y de 167 a 295 un secreto. null borra el secreto.",
-      "anyOf": [{"type": "string", "pattern": "^[A-Za-z0-9_-]{146,295}$"}, {"type": "null"}]
+      "description": "Sobre sellado (perfil pauta-crypto-v1, apartado 9.9): base64url(clave de un solo uso E de 65 B | vector 12 B | cifrado | etiqueta 16 B), con AAD = E. El texto en claro es el secreto en UTF-8, sin relleno ni terminador, de 1 a 128 bytes: 93 B de sobrecoste, de 126 a 295 caracteres (el PIN de 4 a 8 cifras, de 130 a 135). Un secreto vacío no vale: para borrarlo se manda null.",
+      "anyOf": [{"type": "string", "pattern": "^[A-Za-z0-9_-]{126,295}$"}, {"type": "null"}]
     },
     "values": {
       "type": "object",
@@ -98,10 +98,11 @@
           "sha": {"type": "string", "pattern": "^[0-9a-f]{16}$", "description": "16 primeros hex del SHA-256 del archivo de la receta, como figura en el índice firmado."}}}},
         {"if": {"properties": {"op": {"const": "remove"}}}, "then": {"required": ["p"], "properties": {
           "p": {"$ref": "#/$defs/pid"}}}},
-        {"if": {"properties": {"op": {"const": "pair"}}}, "then": {"required": ["dev", "name", "pk"], "properties": {
+        {"if": {"properties": {"op": {"const": "pair"}}}, "then": {"required": ["dev", "name", "pk", "mac"], "properties": {
           "dev": {"$ref": "#/$defs/itemId"},
           "name": {"type": "string", "minLength": 1, "maxLength": 16},
-          "pk": {"type": "string", "pattern": "^[A-Za-z0-9_-]{87}$", "description": "Clave pública ECDH P-256 temporal del dispositivo (65 bytes)."}}}},
+          "pk": {"type": "string", "pattern": "^[A-Za-z0-9_-]{87}$", "description": "Clave pública ECDH P-256 temporal del dispositivo: SEC1 sin comprimir (0x04 | X | Y), 65 bytes."},
+          "mac": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22}$", "description": "base64url(HMAC-SHA256(clave = ASCII del código T que enseña la pantalla, mensaje = 'pauta-pair-v1|<dev>|<pk>|<k>')[0:16]), con pk y k en base64url (apartado 9.4)."}}}},
         {"if": {"properties": {"op": {"const": "unpair"}}}, "then": {"required": ["dev"], "properties": {
           "dev": {"anyOf": [{"$ref": "#/$defs/itemId"}, {"const": "*"}]}}}}
       ],

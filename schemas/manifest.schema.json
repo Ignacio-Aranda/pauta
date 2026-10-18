@@ -276,7 +276,7 @@
       "required": ["iana", "posix"],
       "properties": {
         "iana": {"type": "string", "pattern": "^(UTC|[A-Za-z_]+(/[A-Za-z0-9_+-]+){1,2})$", "maxLength": 40},
-        "posix": {"type": "string", "minLength": 3, "maxLength": 64}
+        "posix": {"type": "string", "minLength": 4, "maxLength": 47, "pattern": "^(?:[A-Za-z]{3,11}|<[-+0-9A-Za-z]{1,11}>)[-+]?[0-9]{1,2}(?::[0-9]{2}){0,2}(?:(?:[A-Za-z]{3,11}|<[-+0-9A-Za-z]{1,11}>)(?:[-+]?[0-9]{1,2}(?::[0-9]{2}){0,2})?,M(?:[1-9]|1[0-2])\\.[1-5]\\.[0-6](?:/[0-9]{1,3}(?::[0-9]{2}){0,2})?,M(?:[1-9]|1[0-2])\\.[1-5]\\.[0-6](?:/[0-9]{1,3}(?::[0-9]{2}){0,2})?)?$", "description": "Regla POSIX en la gramática que entiende newlib 4.3 (la del core 3.3.12): nombres de 3 a 11 letras o entre ángulos, y reglas M con la hora de cambio sin signo. Cabe en los 48 B del campo de la placa (la más larga de tzdata mide 44)."}
       },
       "additionalProperties": false
     },

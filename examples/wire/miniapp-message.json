@@ -1,6 +1,6 @@
 {"v": 1, "id": "7hq2mx4a", "d": "q3x7ab", "base": 57, "t": 1792330412, "ops": [
   {"op": "sys", "set": {"idle": 5, "lock_sched": true, "lock_from": "19:00", "lock_to": "08:00"},
-   "box": {"pin": "BGjfe0Cf6ZkmsKD9NFTCicroWGIou6Xmoo0pUU2A1TLuzxVi5UksNKJ26TjPtoVi6mnLmNo_hrzpvZVlEn7VZw4ZdWvcaG66FFMYYFD-hzMA54kJrdMr6CJSXS_U-G6P0pYGsRIq33jYDauyCw"}},
+   "box": {"pin": "BFLXfrX4QTs6pzk7Dj1rKOCp_9KVOxhBByM0ekEVCSk0lRHXGDXnf0fF4Tbje65_cUwmvCgQ5T5a7qs0fQBNOqCMTV4QbnZlRQjaz5e6KY-fTrNQLRlakVDBvxDkUF4HgLHM"}},
   {"op": "cfg", "p": "pomodoro", "set": {"work": 50, "short": 10}},
   {"op": "enable", "p": "semaforo", "on": true},
   {"op": "item.add", "p": "nicscom", "f": "autos", "id": "k3f7a2", "val": {"ch": "AGUA", "at": "09:00", "days": 31, "on": true}},
