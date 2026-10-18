@@ -203,6 +203,15 @@ que algo cambia, pero las del arranque (`lienzo …`, `Pauta …`,
 nada más terminar `upload`, que reinicia la placa. Por el CP2102 es
 `/dev/ttyUSB0`, con el firmware compilado con `CDCOnBoot=default` (paso 3).
 
+**Cuidado con el token en los registros.** El firmware no lo escribe nunca en
+la consola, pero si compilas con más registro del core (`DebugLevel=debug` o
+`DebugLevel=verbose` en el FQBN, o «Core Debug Level» en Debug o Verbose en el
+Arduino IDE), la librería HTTPClient imprime la URL de cada petición, y en la
+API de Telegram el token va dentro de la URL. No compartas esos registros (en
+un issue, un foro o un chat) sin borrarlo antes. Si ya se ha compartido
+alguno, escríbele `/revoke` a [@BotFather](https://t.me/botfather) para
+anular ese token, y pega el nuevo en el portal manteniendo pulsado el logo.
+
 ### Qué mirar primero
 
 El punto del pie dice cómo va la conexión con Telegram:

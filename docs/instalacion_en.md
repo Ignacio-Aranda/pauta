@@ -208,6 +208,15 @@ console right after `upload` finishes, which reboots the board. On the CP2102
 it's `/dev/ttyUSB0`, with the firmware built with `CDCOnBoot=default`
 (step 3). The console messages are in Spanish.
 
+**Watch out for the token in logs.** The firmware never writes it to the
+console, but if you build with more core logging (`DebugLevel=debug` or
+`DebugLevel=verbose` in the FQBN, or "Core Debug Level" set to Debug or
+Verbose in the Arduino IDE), the HTTPClient library prints the URL of every
+request, and Telegram's API carries the token inside the URL. Don't share
+those logs (in an issue, a forum or a chat) without removing it first. If one
+has already been shared, send `/revoke` to [@BotFather](https://t.me/botfather)
+to kill that token, and paste the new one in the portal by holding the logo.
+
 ### What to check first
 
 The footer dot tells you how the Telegram connection is doing:
