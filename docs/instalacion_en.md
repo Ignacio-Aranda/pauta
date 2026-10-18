@@ -337,9 +337,10 @@ if something went wrong.
 
 ### Going back to an earlier version
 
-To go back to an earlier version, build its git tag. The first one, `v1.0.0`,
-didn't have `sketch.yaml` yet, so it's extracted on the side and given the
-current one, which pins the same core and library versions:
+To go back to an earlier version, build its git tag. The first one, `v1.0.0`
+(commit `dd5c737`), didn't have `sketch.yaml` yet, so it's extracted on the
+side and given the current one, which pins the same core and library
+versions:
 
 ```bash
 export ARDUINO_DIRECTORIES_DATA=$PWD/tools/adata
@@ -351,10 +352,11 @@ tools/arduino-cli compile /tmp/pauta-v1.0.0/firmware/pauta
 tools/arduino-cli upload -p /dev/ttyACM0 /tmp/pauta-v1.0.0/firmware/pauta
 ```
 
-(If you cloned before the tag existed, fetch tags with `git fetch --tags`. On
-V2.0, change the pins in `/tmp/pauta-v1.0.0`'s `board.h` first and add
-`--profile v2`.) The list and the settings stay in NVS, and the earlier
-version reads them just the same.
+(If you cloned before the tag existed, fetch tags with `git fetch --tags`; if
+`git archive` still says `not a valid object name`, use `dd5c737` instead of
+`v1.0.0`, which is the same commit. On V2.0, change the pins in
+`/tmp/pauta-v1.0.0`'s `board.h` first and add `--profile v2`.) The list and
+the settings stay in NVS, and the earlier version reads them just the same.
 
 ### Giving it away or selling it
 

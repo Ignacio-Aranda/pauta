@@ -331,8 +331,9 @@ ido mal.
 ### Volver a una versión anterior
 
 Para volver a una versión anterior, compila su etiqueta de git. La primera,
-`v1.0.0`, aún no traía `sketch.yaml`, así que se saca aparte y se le pone el
-de ahora, que fija las mismas versiones del core y las librerías:
+`v1.0.0` (el commit `dd5c737`), aún no traía `sketch.yaml`, así que se saca
+aparte y se le pone el de ahora, que fija las mismas versiones del core y las
+librerías:
 
 ```bash
 export ARDUINO_DIRECTORIES_DATA=$PWD/tools/adata
@@ -345,9 +346,11 @@ tools/arduino-cli upload -p /dev/ttyACM0 /tmp/pauta-v1.0.0/firmware/pauta
 ```
 
 (Si clonaste antes de que existiera la etiqueta, trae las etiquetas con
-`git fetch --tags`. En la V2.0, cambia antes los pines en el `board.h` de
-`/tmp/pauta-v1.0.0` y añade `--profile v2`.) La lista y la configuración
-siguen en la NVS, y la versión anterior las lee igual.
+`git fetch --tags`; si aun así `git archive` dice `not a valid object name`,
+pon `dd5c737` en lugar de `v1.0.0`, que es el mismo commit. En la V2.0,
+cambia antes los pines en el `board.h` de `/tmp/pauta-v1.0.0` y añade
+`--profile v2`.) La lista y la configuración siguen en la NVS, y la versión
+anterior las lee igual.
 
 ### Regalarla o venderla
 
