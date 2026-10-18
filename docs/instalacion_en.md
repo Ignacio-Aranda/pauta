@@ -78,14 +78,33 @@ To start over, hold the logo on the screen for 8 seconds.
 
 ### Another language
 
-Every string for the screen, the bot and the portal lives together in
-`firmware/pauta/i18n.cpp`, in a table indexed by language. To add one:
+Strings for the screen and the bot live in `firmware/pauta/i18n.cpp`, one
+array per language (`STR_ES`, `STR_EN`) indexed by `StrId`. The portal form is
+the exception: it shows up before a language has been chosen, so its text
+lives in `portal.cpp`, in both languages at once ("Idioma · Language"). Only
+the "Saved" page, which comes after choosing, is taken from the table.
 
-1. Add the value to `enum Lang` and a column to `STRINGS`, plus its day and
-   month names.
-2. Add the option to the dropdown in `portal.cpp`.
-3. If it needs characters the fonts don't have, extend `CHARS` in
-   `tools/mkfont.py` and regenerate them.
+To add a language:
+
+1. Add the value to `enum Lang` in `i18n.h`.
+2. In `i18n.cpp`, copy a whole array (say `STR_EN`) under a new name,
+   translate it and add it to `STRINGS` in the same order as `enum Lang`. If
+   a string is missing or there's one too many, the `static_assert` below it
+   stops the build.
+3. Write its bot help too (like `HELP_EN`, which sits in the array in the
+   `S_BOT_HELP` slot) and its day and month names, and make `dayName()` and
+   `monthName()` use them.
+4. Make `i18nCode()` return its two-letter code and
+   `i18nSetLang(const String &)` recognise it: that code is what gets stored
+   in NVS and what the portal sends.
+5. Add the option to the dropdown in `portal.cpp`, with that same code as its
+   `value`.
+6. If it needs characters the fonts don't have, extend `CHARS` in
+   `tools/mkfont.py` and regenerate them. Only the screen cares: the bot and
+   the portal can use any character.
+
+To add a string, its `StrId` goes at the end of the enum, just before
+`STR_COUNT`, and its text at the end of every array, in the same order.
 
 Strings with `%d` or `%s` are formatted by the caller, not by the table.
 

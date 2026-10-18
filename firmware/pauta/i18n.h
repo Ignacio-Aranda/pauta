@@ -1,8 +1,13 @@
 // Traduccion de la interfaz, del bot y del portal.
 //
-// El idioma se elige en la puesta en marcha y se guarda en NVS. Afecta a las
-// tres superficies a la vez: lo que se lee en la pantalla, lo que contesta el
-// bot y la propia pagina de configuracion.
+// El idioma se elige en la puesta en marcha y se guarda en NVS. Afecta a lo
+// que se lee en la pantalla, a lo que contesta el bot y a la pagina de
+// "Guardado" del portal. El formulario del portal no pasa por aqui: se ve
+// antes de elegir idioma, asi que sus textos van en portal.cpp, en los dos
+// idiomas a la vez.
+//
+// Un StrId nuevo va al final del enum, justo antes de STR_COUNT, y su frase
+// al final de cada array de i18n.cpp. Si falta en alguno, no compila.
 #pragma once
 #include <Arduino.h>
 
@@ -24,6 +29,8 @@ enum StrId : uint16_t {
   S_BOT_CLEARED, S_BOT_NOTHING_DONE, S_BOT_UNKNOWN_CMD, S_BOT_TAKEN,
   S_BOT_LIST_HEADER, S_BOT_LIST_FOOTER,
   S_SCREEN_DONE, S_SCREEN_REOPENED, S_SCREEN_CLEARED,
+  // Portal web, pagina de confirmacion
+  S_WEB_SAVED, S_WEB_CONNECTING_TO, S_WEB_CLOSE_HINT,
   STR_COUNT
 };
 

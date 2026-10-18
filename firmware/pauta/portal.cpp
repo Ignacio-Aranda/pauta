@@ -81,16 +81,18 @@ a.rescan{display:inline-block;margin-top:14px;color:var(--accent);
 .ok .rule{height:2px;background:var(--accent);width:44px;margin:0 auto 22px}
 )CSS";
 
+// El formulario sale antes de elegir idioma, asi que va en los dos a la vez
+// ("es · en") en lugar de pasar por T().
 static void sendPage() {
   String h;
-  h.reserve(4200);
+  h.reserve(4600);
   h += F("<!doctype html><html lang=es><head><meta charset=utf-8>"
          "<meta name=viewport content='width=device-width,initial-scale=1'>"
          "<title>Pauta</title><style>");
   h += FPSTR(PAGE_CSS);
   h += F("</style></head><body>"
          "<div class=mark><i></i><i></i><i></i></div>"
-         "<h1>Pauta</h1><p class=sub>Primera puesta en marcha</p>"
+         "<h1>Pauta</h1><p class=sub>Puesta en marcha · Setup</p>"
          "<form method=POST action=/save><div class=card>"
          "<label>Idioma · Language</label>"
          "<select name=lang>"
@@ -99,18 +101,21 @@ static void sendPage() {
          "</select>"
          "<label>Red WiFi · WiFi network</label><select name=ssid>");
   h += s_networks.isEmpty()
-         ? F("<option value=''>— no se encontraron redes —</option>")
+         ? F("<option value=''>— sin redes · no networks —</option>")
          : s_networks;
   h += F("</select>"
-         "<a class=rescan href=/rescan>Buscar redes otra vez</a>"
+         "<a class=rescan href=/rescan>Buscar otra vez · Rescan</a>"
          "<label>Contraseña · Password</label>"
-         "<input name=pass type=password autocomplete=off placeholder='Tu contraseña'>"
-         "<label>Token del bot de Telegram</label>"
+         "<input name=pass type=password autocomplete=off>"
+         "<label>Token del bot · Bot token</label>"
          "<input name=token autocomplete=off placeholder='123456789:AA...'>"
          "<p class=hint>Crea un bot escribiendo a <b>@BotFather</b> con "
          "<b>/newbot</b>. Te dará un token con esta forma. Se guarda solo en "
          "la placa, nunca sale de ahí.</p>"
-         "<button type=submit>Guardar y conectar</button>"
+         "<p class=hint>Create a bot by messaging <b>@BotFather</b> with "
+         "<b>/newbot</b>. It gives you a token shaped like this. It's stored "
+         "only on the board and never leaves it.</p>"
+         "<button type=submit>Guardar · Save</button>"
          "</div></form></body></html>");
   s_web.send(200, "text/html; charset=utf-8", h);
 }
@@ -127,17 +132,24 @@ static void handleSave() {
   if (token.length()) settingsSetToken(token);
   if (lang.length()) i18nSetLang(lang);
 
+  // i18nSetLang ya ha cambiado el idioma: la confirmacion sale en el que se
+  // acaba de elegir, que es el mismo que usaran la pantalla y el bot.
   String h;
-  h += F("<!doctype html><html lang=es><head><meta charset=utf-8>"
+  h += F("<!doctype html><html lang=");
+  h += i18nCode();
+  h += F("><head><meta charset=utf-8>"
          "<meta name=viewport content='width=device-width,initial-scale=1'>"
          "<title>Pauta</title><style>");
   h += FPSTR(PAGE_CSS);
   h += F("</style></head><body><div class='card ok'><div class=rule></div>"
-         "<h1>Guardado</h1><p class=sub>Conectando a ");
+         "<h1>");
+  h += T(S_WEB_SAVED);
+  h += F("</h1><p class=sub>");
+  h += T(S_WEB_CONNECTING_TO);
   h += esc(ssid);
-  h += F("</p><p class=hint style='margin-top:18px'>Ya puedes cerrar esta "
-         "página y volver a tu WiFi de siempre.</p>"
-         "</div></body></html>");
+  h += F("</p><p class=hint style='margin-top:18px'>");
+  h += T(S_WEB_CLOSE_HINT);
+  h += F("</p></div></body></html>");
   s_web.send(200, "text/html; charset=utf-8", h);
   s_saved = true;
 }

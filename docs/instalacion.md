@@ -78,14 +78,33 @@ Para empezar de cero, mantén pulsado el logo en la pantalla 8 segundos.
 
 ### Otro idioma
 
-Las cadenas de la pantalla, del bot y del portal están todas juntas en
-`firmware/pauta/i18n.cpp`, en una tabla indexada por idioma. Para añadir uno:
+Las cadenas de la pantalla y del bot están en `firmware/pauta/i18n.cpp`, en un
+array por idioma (`STR_ES`, `STR_EN`) indexado por `StrId`. El formulario del
+portal es la excepción: se ve antes de elegir idioma, así que sus textos están
+en `portal.cpp` y en los dos idiomas a la vez ("Idioma · Language"). Solo la
+página de "Guardado", que llega después de elegir, sale de la tabla.
 
-1. Añade el valor al `enum Lang` y una columna a `STRINGS`, más sus nombres de
-   día y de mes.
-2. Añade la opción al desplegable de `portal.cpp`.
-3. Si necesita caracteres que no están en las fuentes, amplía `CHARS` en
-   `tools/mkfont.py` y regenéralas.
+Para añadir un idioma:
+
+1. Añade el valor al `enum Lang` de `i18n.h`.
+2. En `i18n.cpp`, copia un array entero (por ejemplo `STR_EN`) con otro
+   nombre, tradúcelo y añádelo a `STRINGS` en el mismo orden que el
+   `enum Lang`. Si te falta o te sobra una frase, el `static_assert` que hay
+   debajo no deja compilar.
+3. Escribe también su ayuda del bot (como `HELP_EN`, que va en el array en el
+   sitio de `S_BOT_HELP`) y sus nombres de día y de mes, y haz que
+   `dayName()` y `monthName()` los usen.
+4. Haz que `i18nCode()` devuelva su código de dos letras y que
+   `i18nSetLang(const String &)` lo reconozca: ese código es lo que se guarda
+   en NVS y lo que manda el portal.
+5. Añade la opción al desplegable de `portal.cpp`, con ese mismo código como
+   `value`.
+6. Si necesita caracteres que no están en las fuentes, amplía `CHARS` en
+   `tools/mkfont.py` y regenéralas. Esto solo afecta a la pantalla: el bot y
+   el portal pueden usar cualquier carácter.
+
+Para añadir una frase, su `StrId` va al final del `enum`, justo antes de
+`STR_COUNT`, y el texto al final de cada array, en el mismo orden.
 
 Las cadenas con `%d` o `%s` las formatea quien las usa, no la tabla.
 

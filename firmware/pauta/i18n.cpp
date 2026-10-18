@@ -4,7 +4,7 @@
 static Lang s_lang = LANG_ES;
 
 // Ayuda del bot. Va aparte por longitud, pero se indexa igual que el resto.
-static const char *HELP_ES =
+static const char HELP_ES[] =
   "Pauta — la checklist de tu escritorio.\n\n"
   "Escríbeme cualquier cosa y la apunto. Si mandas varias líneas, apunto una "
   "tarea por línea.\n\n"
@@ -16,7 +16,7 @@ static const char *HELP_ES =
   "/help — esto\n\n"
   "Y en la pantalla, toca un renglón para tacharlo.";
 
-static const char *HELP_EN =
+static const char HELP_EN[] =
   "Pauta — the checklist on your desk.\n\n"
   "Write me anything and I'll jot it down. Send several lines and I'll add "
   "one task per line.\n\n"
@@ -28,69 +28,85 @@ static const char *HELP_EN =
   "/help — this\n\n"
   "And on the screen, tap a line to cross it off.";
 
+// Un array por idioma y sin tamano, para que el compilador cuente las frases:
+// con una tabla [LANG_COUNT][STR_COUNT], una frase olvidada desplazaba las
+// siguientes y dejaba un nullptr al final sin ningun aviso.
 // Las cadenas con %d o %s las formatea quien las usa.
-static const char *STRINGS[LANG_COUNT][STR_COUNT] = {
-  // ---------------- Español ----------------
-  {
-    "lista vacía", "todo hecho", "1 pendiente", "%d pendientes",
-    "La hoja está en blanco",
-    "Escríbele a tu bot y lo que le mandes",
-    "aparecerá aquí, renglón a renglón.",
-    "limpiar hechas",
+static const char *const STR_ES[] = {
+  "lista vacía", "todo hecho", "1 pendiente", "%d pendientes",
+  "La hoja está en blanco",
+  "Escríbele a tu bot y lo que le mandes",
+  "aparecerá aquí, renglón a renglón.",
+  "limpiar hechas",
 
-    "primera puesta en marcha", "Conéctame a tu WiFi",
-    "Escanea el código con el", "móvil y se abrirá sola.",
-    "red", "clave", "o entra a ", "Conectando",
+  "primera puesta en marcha", "Conéctame a tu WiFi",
+  "Escanea el código con el", "móvil y se abrirá sola.",
+  "red", "clave", "o entra a ", "Conectando",
 
-    "Se borrará la configuración", "suelta para cancelar",
-    "Borrando la configuración", "Vuelvo al punto de acceso…",
+  "Se borrará la configuración", "suelta para cancelar",
+  "Borrando la configuración", "Vuelvo al punto de acceso…",
 
-    HELP_ES,
-    "Listo, esta pauta ya es tuya.",
-    "La hoja está en blanco. Escríbeme algo y lo apunto.",
-    "Apuntada. Ya está en la pantalla.",
-    "Apuntadas %d tareas.",
-    "La lista está llena (%d máximo). Tacha alguna o usa /clear.",
-    "No encuentro esa tarea. Mira /list.",
-    "Hecha — %s", "Reabierta — %s", "Borrada — %s",
-    "Quitadas %d tareas hechas.", "No había ninguna hecha.",
-    "No conozco ese comando. Prueba /help.",
-    "Esta pantalla ya está vinculada a otra conversación.",
-    "Tu lista:", "\n%d pendientes de %d.",
-    "Hecha — %s", "Reabierta — %s",
-    "Quitadas %d tareas hechas desde la pantalla.",
-  },
-  // ---------------- English ----------------
-  {
-    "empty list", "all done", "1 to do", "%d to do",
-    "The page is blank",
-    "Write to your bot and whatever",
-    "you send lands here, line by line.",
-    "clear done",
+  HELP_ES,
+  "Listo, esta pauta ya es tuya.",
+  "La hoja está en blanco. Escríbeme algo y lo apunto.",
+  "Apuntada. Ya está en la pantalla.",
+  "Apuntadas %d tareas.",
+  "La lista está llena (%d máximo). Tacha alguna o usa /clear.",
+  "No encuentro esa tarea. Mira /list.",
+  "Hecha — %s", "Reabierta — %s", "Borrada — %s",
+  "Quitadas %d tareas hechas.", "No había ninguna hecha.",
+  "No conozco ese comando. Prueba /help.",
+  "Esta pantalla ya está vinculada a otra conversación.",
+  "Tu lista:", "\n%d pendientes de %d.",
+  "Hecha — %s", "Reabierta — %s",
+  "Quitadas %d tareas hechas desde la pantalla.",
 
-    "first run", "Connect me to your WiFi",
-    "Scan the code with your", "phone and setup opens.",
-    "network", "password", "or visit ", "Connecting",
-
-    "Settings will be erased", "release to cancel",
-    "Erasing settings", "Back to the access point…",
-
-    HELP_EN,
-    "Done — this Pauta is yours now.",
-    "The page is blank. Write me something and I'll jot it down.",
-    "Jotted down. It's on the screen.",
-    "Jotted down %d tasks.",
-    "The list is full (%d max). Cross some off or use /clear.",
-    "I can't find that task. Check /list.",
-    "Done — %s", "Reopened — %s", "Deleted — %s",
-    "Removed %d finished tasks.", "Nothing was finished.",
-    "I don't know that command. Try /help.",
-    "This screen is already linked to another chat.",
-    "Your list:", "\n%d of %d still to do.",
-    "Done — %s", "Reopened — %s",
-    "Removed %d finished tasks from the screen.",
-  },
+  "Guardado", "Conectando a ",
+  "Ya puedes cerrar esta página y volver a tu WiFi de siempre.",
 };
+
+static const char *const STR_EN[] = {
+  "empty list", "all done", "1 to do", "%d to do",
+  "The page is blank",
+  "Write to your bot and whatever",
+  "you send lands here, line by line.",
+  "clear done",
+
+  "first run", "Connect me to your WiFi",
+  "Scan the code with your", "phone and setup opens.",
+  "network", "password", "or visit ", "Connecting",
+
+  "Settings will be erased", "release to cancel",
+  "Erasing settings", "Back to the access point…",
+
+  HELP_EN,
+  "Done — this Pauta is yours now.",
+  "The page is blank. Write me something and I'll jot it down.",
+  "Jotted down. It's on the screen.",
+  "Jotted down %d tasks.",
+  "The list is full (%d max). Cross some off or use /clear.",
+  "I can't find that task. Check /list.",
+  "Done — %s", "Reopened — %s", "Deleted — %s",
+  "Removed %d finished tasks.", "Nothing was finished.",
+  "I don't know that command. Try /help.",
+  "This screen is already linked to another chat.",
+  "Your list:", "\n%d of %d still to do.",
+  "Done — %s", "Reopened — %s",
+  "Removed %d finished tasks from the screen.",
+
+  "Saved", "Connecting to ",
+  "You can close this page and go back to your usual WiFi.",
+};
+
+static_assert(sizeof(STR_ES) / sizeof(STR_ES[0]) == STR_COUNT,
+              "STR_ES no tiene exactamente una frase por cada StrId");
+static_assert(sizeof(STR_EN) / sizeof(STR_EN[0]) == STR_COUNT,
+              "STR_EN no tiene exactamente una frase por cada StrId");
+
+// En el mismo orden que enum Lang.
+static const char *const *const STRINGS[] = { STR_ES, STR_EN };
+static_assert(sizeof(STRINGS) / sizeof(STRINGS[0]) == LANG_COUNT,
+              "STRINGS necesita un array por cada idioma de enum Lang");
 
 static const char *DAYS_ES[]   = {"dom","lun","mar","mié","jue","vie","sáb"};
 static const char *DAYS_EN[]   = {"sun","mon","tue","wed","thu","fri","sat"};
@@ -114,7 +130,10 @@ const char *i18nCode() { return s_lang == LANG_EN ? "en" : "es"; }
 
 const char *T(StrId id) {
   if (id >= STR_COUNT) return "";
-  return STRINGS[s_lang][id];
+  // Los static_assert ya exigen una frase por StrId; esto cubre un nullptr
+  // escrito a mano, que acabaria dentro de un String o de un printf.
+  const char *s = STRINGS[s_lang][id];
+  return s ? s : "";
 }
 
 const char *dayName(int wday) {
