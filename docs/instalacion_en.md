@@ -174,11 +174,13 @@ portal so you can change the network or the password, but it doesn't stay
 there. The top line says "can't reach" and your network's name, and the bottom
 left says what it's doing:
 
-- **Still trying**: nobody is connected to its access point, so it keeps
-  trying to join your network.
-- **Waiting for you to finish**: a phone is connected to its network. It stops
-  trying so it won't kick you out halfway through the form, and starts again
-  as soon as you disconnect.
+- **Still trying**: nobody is using the portal, so it keeps trying to join
+  your network.
+- **Waiting for you to finish**: a phone connected to its network has opened
+  the portal in the last 10 minutes. It stops trying so it won't kick you out
+  halfway through the form, and starts again as soon as you disconnect or 10
+  minutes go by without you reloading or saving the page. That way a phone
+  that stays connected without using the portal can't keep it stuck forever.
 - **Back to the list**: your network is back. If the connection holds for 10
   seconds straight, it saves the list and reboots to get back to it.
 

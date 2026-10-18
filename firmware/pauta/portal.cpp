@@ -4,11 +4,27 @@
 #include <WiFi.h>
 #include <DNSServer.h>
 #include <WebServer.h>
+#include <esp_wifi.h>
 
 static DNSServer  s_dns;
 static WebServer  s_web(80);
 static bool       s_saved = false;
 static const byte DNS_PORT = 53;
+
+// Ultima peticion al portal, para portalInUse(). s_anyReq evita que en los
+// primeros 10 min del arranque, con s_lastReq aun a 0, parezca que alguien
+// lo esta usando.
+static uint32_t s_lastReq = 0;
+static bool     s_anyReq  = false;
+// No bajarlo: si el STA vuelve a probar mientras alguien rellena el
+// formulario, el punto de acceso salta al canal del router y lo echa.
+static const uint32_t PORTAL_IDLE_MS = 10UL * 60 * 1000;
+
+// Un movil que se va sin desasociarse sigue contando como conectado hasta
+// que el punto de acceso lo echa por inactividad: 300 s por defecto.
+static const uint16_t AP_INACTIVE_S = 120;
+
+static void touch() { s_lastReq = millis(); s_anyReq = true; }
 
 // Redes del ultimo escaneo. Se guardan en crudo y no como <option> ya
 // pintadas para poder marcar la que toca al volver a ensenar el formulario.
@@ -123,11 +139,14 @@ a.rescan{display:inline-block;margin-top:14px;color:var(--accent);
 )CSS";
 
 // El formulario sale antes de elegir idioma, asi que va en los dos a la vez
-// ("es · en") en lugar de pasar por T().
+// ("es · en") en lugar de pasar por T(). Pasan por aqui "/", las rutas
+// desconocidas (las sondas de portal cautivo del movil) y los errores de
+// /save, asi que cada una cuenta como uso del portal.
 static void sendPage(const Form &f) {
+  touch();
   const Settings &cfg = settingsGet();
   String h;
-  h.reserve(7600);
+  h.reserve(7800);
   h += F("<!doctype html><html lang=es><head><meta charset=utf-8>"
          "<meta name=viewport content='width=device-width,initial-scale=1'>"
          "<title>Pauta</title><style>");
@@ -145,14 +164,16 @@ static void sendPage(const Form &f) {
     h += F("» · Can't reach «");
     h += name;
     h += F("»</p>"
-           "<p class=hint>Mientras estés conectado aquí, la placa espera. "
-           "Cuando te desconectes, seguirá probando esa red y volverá sola a "
-           "la lista en cuanto conecte. Si la red o su contraseña han "
-           "cambiado, cámbialas abajo.</p>"
-           "<p class=hint>While you're connected here, the board waits. Once "
-           "you disconnect, it keeps trying that network and goes back to the "
-           "list by itself as soon as it connects. If the network or its "
-           "password changed, update them below.</p>");
+           "<p class=hint>Mientras uses esta página, la placa espera. "
+           "Cuando te desconectes, o tras 10 minutos sin recargarla ni "
+           "guardar, seguirá probando esa red y volverá sola a la lista en "
+           "cuanto conecte. Si la red o su contraseña han cambiado, cámbialas "
+           "abajo.</p>"
+           "<p class=hint>While you're using this page, the board waits. Once "
+           "you disconnect, or after 10 minutes without reloading or saving, "
+           "it keeps trying that network and goes back to the list by itself "
+           "as soon as it connects. If the network or its password changed, "
+           "update them below.</p>");
   } else {
     h += F("<p class=sub>Puesta en marcha · Setup</p>");
   }
@@ -267,6 +288,7 @@ static void addError(Form &f, const __FlashStringHelper *msg) {
 }
 
 static void handleSave() {
+  touch();
   const Settings &cfg = settingsGet();
   Form f;
   f.lang  = s_web.arg("lang");
@@ -335,6 +357,7 @@ static void handleSave() {
 }
 
 static void handleRescan() {
+  touch();
   scanNetworks();
   s_web.sendHeader("Location", "/", true);
   s_web.send(302, "text/plain", "");
@@ -349,6 +372,11 @@ void portalBegin() {
   // Despues de encender la radio: es lo que da entropia a esp_random().
   settingsEnsureApPassword();
   WiFi.softAP(apName().c_str(), apPassword().c_str());
+  // Despues de softAP(): antes el driver contesta ESP_ERR_WIFI_NOT_STARTED.
+  esp_err_t err = esp_wifi_set_inactive_time(WIFI_IF_AP, AP_INACTIVE_S);
+  if (err != ESP_OK) {
+    Serial.printf("portal: no pude acortar la inactividad del AP (%s)\n", esp_err_to_name(err));
+  }
   delay(300);
   scanNetworks();
 
@@ -369,3 +397,7 @@ void portalLoop() {
 
 bool   portalSaved() { return s_saved; }
 String portalApIp()  { return WiFi.softAPIP().toString(); }
+
+bool portalInUse() {
+  return s_anyReq && (uint32_t)(millis() - s_lastReq) < PORTAL_IDLE_MS;
+}

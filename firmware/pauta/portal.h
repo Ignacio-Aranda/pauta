@@ -10,4 +10,5 @@
 void portalBegin();      // levanta el AP, el DNS y el servidor web
 void portalLoop();       // atiende peticiones; llamar a menudo
 bool portalSaved();      // true cuando el usuario ya ha guardado la configuracion
+bool portalInUse();      // true si alguien ha pedido una pagina hace menos de 10 min
 String portalApIp();

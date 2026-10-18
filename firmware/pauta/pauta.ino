@@ -105,10 +105,10 @@ static void restartNow() {
 
 // Portal abierto con una red ya guardada. Casi siempre es un apagon: la placa
 // arranca antes que el router, no lo encuentra en 20 s y se quedaba en el
-// portal para siempre. Ahora, mientras nadie este conectado al punto de
-// acceso, sigue probando esa red, y cuando la conexion aguanta reinicia para
-// volver a la lista. Nunca por tiempo: con un router que va y viene, eso
-// seria un bucle de reinicios.
+// portal para siempre. Ahora, mientras nadie use el portal, sigue probando
+// esa red, y cuando la conexion aguanta reinicia para volver a la lista.
+// Nunca por tiempo: con un router que va y viene, eso seria un bucle de
+// reinicios.
 static void portalRetry() {
   if (!settingsHasWifi() || portalSaved()) return;
   static uint32_t lastCheck = 0;
@@ -117,10 +117,13 @@ static void portalRetry() {
   lastCheck = now;
 
   const Settings &cfg = settingsGet();
-  if (WiFi.softAPgetStationNum() > 0) {
+  if (WiFi.softAPgetStationNum() > 0 && portalInUse()) {
     // Hay alguien en el portal. Si el STA conectara, el punto de acceso
     // saltaria al canal del router y el movil se caeria a mitad del
     // formulario. Se para sin apagar la radio, para que el canal no cambie.
+    // Estar asociado no basta, hace falta haber pedido una pagina hace menos
+    // de 10 min: un movil con la red guardada se une solo tras el apagon y,
+    // si se quedaba, la placa no volvia nunca a la lista.
     if (WiFi.getAutoReconnect()) {
       Serial.println("portal: hay un movil conectado, dejo de probar la red");
       WiFi.setAutoReconnect(false);
@@ -131,8 +134,8 @@ static void portalRetry() {
     return;
   }
 
-  // Sin nadie conectado y con el reconectado parado (lo para el bloque de
-  // arriba, o un escaneo del portal), se vuelve a empezar.
+  // Sin nadie usando el portal y con el reconectado parado (lo para el
+  // bloque de arriba, o un escaneo del portal), se vuelve a empezar.
   if (!WiFi.getAutoReconnect()) {
     Serial.printf("portal: vuelvo a probar con %s\n", cfg.ssid.c_str());
     WiFi.setAutoReconnect(true);

@@ -12,8 +12,8 @@ enum UiScreen : uint8_t {
 // Que pasa con la red guardada mientras se ve el portal. Sin red guardada
 // (primera puesta en marcha) no se usa.
 enum UiLink : uint8_t {
-  UI_LINK_TRYING,   // nadie en el punto de acceso: se sigue probando
-  UI_LINK_PAUSED,   // hay un movil conectado: se espera a que termine
+  UI_LINK_TRYING,   // nadie usando el portal: se sigue probando
+  UI_LINK_PAUSED,   // hay un movil usando el portal: se espera a que termine
   UI_LINK_UP,       // ha vuelto: en unos segundos, reinicio y a la lista
 };
 

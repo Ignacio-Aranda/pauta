@@ -171,11 +171,13 @@ puedas cambiar la red o la contraseña, pero no se queda ahí. Arriba pone «sin
 conexión con» y el nombre de tu red, y abajo a la izquierda, qué está
 haciendo:
 
-- **Sigo probando**: nadie está conectado a su punto de acceso, así que sigue
-  intentando conectar con tu red.
-- **Esperando a que termines**: hay un móvil conectado a su red. Deja de
-  probar para no echarte a mitad del formulario, y vuelve a hacerlo en cuanto
-  te desconectes.
+- **Sigo probando**: nadie está usando el portal, así que sigue intentando
+  conectar con tu red.
+- **Esperando a que termines**: hay un móvil conectado a su red que ha
+  abierto el portal en los últimos 10 minutos. Deja de probar para no echarte
+  a mitad del formulario, y vuelve a hacerlo en cuanto te desconectes o pasen
+  10 minutos sin que recargues la página ni guardes. Así, un móvil que se
+  queda conectado sin usar el portal no la tiene parada para siempre.
 - **Vuelvo a la lista**: tu red ha vuelto. Si la conexión aguanta 10 segundos
   seguidos, guarda la lista y se reinicia para volver a ella.
 
