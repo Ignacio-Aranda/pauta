@@ -79,9 +79,10 @@ top, with what you had typed, and saves nothing.
   seen right now, and leaving the password empty keeps the saved one. Same
   with the token: leave it empty and the saved one stays.
 
-Once configured, send `/start` to your bot to pair it. **The first chat to
-write claims the screen**; everyone else gets a notice and is ignored, so a
-leaked token can't fill your list.
+Once configured, write to your bot to pair it. Any message will do, though
+`/start` answers with the help. **The first chat to write claims the
+screen**; everyone else gets a notice and is ignored, so a leaked token can't
+fill your list.
 
 ### If it can't reach your WiFi
 
@@ -109,7 +110,26 @@ Reflashing **does not wipe your settings**. `arduino-cli` writes the
 bootloader, the partition table and the application; the NVS partition is left
 alone, so WiFi, token, language and list are all still there.
 
-To start over, hold the logo on the screen for 8 seconds.
+To set it up again, hold the logo on the screen for 8 seconds. It forgets
+WiFi, token, language, theme and the paired chat, but **keeps the list**. It
+reboots into the portal, and once you've set it up you'll need to write to
+your bot again: the screen pairs with the first message it gets, it doesn't
+have to be `/start`.
+
+### Giving it away or selling it
+
+The board doesn't encrypt its flash, so anyone with it and a USB cable can
+read the WiFi and the token it stores. Holding the logo isn't enough: it marks
+the settings as erased, but the data can stay in flash until that block gets
+reused, and it keeps the list too. The sure way is to erase the whole flash
+and reflash it:
+
+```bash
+esptool --port /dev/ttyACM0 erase-flash
+tools/arduino-cli upload -p /dev/ttyACM0 --fqbn "$FQBN" firmware/pauta
+```
+
+It boots as if fresh out of the box, into first-time setup.
 
 ## Customising
 

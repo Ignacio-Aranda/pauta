@@ -143,6 +143,10 @@ static void portalRetry() {
 }
 
 void setup() {
+  // Antes que cualquier otra llamada a WiFi. Sin esto el driver guardaba su
+  // propia copia de la red y la clave en "nvs.net80211", que el reset del logo
+  // no borraba; el firmware ya pasa siempre las credenciales a WiFi.begin().
+  WiFi.persistent(false);
   Serial.begin(115200);
 
   settingsBegin();

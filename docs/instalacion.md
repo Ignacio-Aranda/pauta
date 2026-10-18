@@ -79,9 +79,10 @@ el error arriba, con lo que habías escrito y sin guardar nada.
   dejas la contraseña vacía se conserva la que tenía. Con el token pasa lo
   mismo: vacío, se queda el guardado.
 
-Después de configurarla, escríbele `/start` a tu bot para vincularla. **El
-primer chat que escriba se queda con la pantalla**; el resto reciben un aviso
-y se ignoran, para que un token filtrado no llene tu lista.
+Después de configurarla, escríbele a tu bot para vincularla. Vale cualquier
+mensaje, aunque `/start` te contesta con la ayuda. **El primer chat que
+escriba se queda con la pantalla**; el resto reciben un aviso y se ignoran,
+para que un token filtrado no llene tu lista.
 
 ### Si no conecta con tu WiFi
 
@@ -109,7 +110,26 @@ Volver a flashear **no borra tu configuración**. `arduino-cli` escribe el
 bootloader, la tabla de particiones y la aplicación; la partición NVS queda
 intacta, así que el WiFi, el token, el idioma y la lista siguen ahí.
 
-Para empezar de cero, mantén pulsado el logo en la pantalla 8 segundos.
+Para volver a configurarla, mantén pulsado el logo en la pantalla 8 segundos.
+Olvida el WiFi, el token, el idioma, el tema y el chat vinculado, pero
+**conserva la lista**. Se reinicia en el portal, y cuando la configures
+tendrás que escribirle otra vez a tu bot: la pantalla se vincula con el
+primer mensaje que le llegue, no hace falta que sea `/start`.
+
+### Regalarla o venderla
+
+La placa no cifra su memoria, así que cualquiera con ella y un cable USB puede
+leer el WiFi y el token que guarda. El gesto del logo no basta: marca la
+configuración como borrada, pero los datos pueden seguir en la flash hasta que
+se reutiliza ese trozo, y además deja la lista. Lo definitivo es borrar la
+flash entera y volver a flashear:
+
+```bash
+esptool --port /dev/ttyACM0 erase-flash
+tools/arduino-cli upload -p /dev/ttyACM0 --fqbn "$FQBN" firmware/pauta
+```
+
+Arranca como recién sacada de la caja, en la primera puesta en marcha.
 
 ## Personalizar
 

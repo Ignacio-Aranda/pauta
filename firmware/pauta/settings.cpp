@@ -68,11 +68,26 @@ void settingsSetLang(const String &code) {
   s_prefs.end();
 }
 
+// Olvida WiFi, token, idioma, tema, chat vinculado y clave del punto de
+// acceso; la lista ('taskdesk') se queda. Detras siempre viene un reinicio,
+// asi que s_settings no se toca: el bot puede estar leyendo el token desde el
+// otro nucleo, y reasignarlo a la vez lo podia dejar a medias.
 void settingsClear() {
-  s_settings = Settings{};
+  // Con la radio apagada, para que el driver no vuelva a escribir su copia
+  // justo despues de borrarla.
+  WiFi.mode(WIFI_OFF);
   s_prefs.begin(NS, false);
   s_prefs.clear();
   s_prefs.end();
+  // La copia de la red y la clave que guardaba el propio driver, en las
+  // placas que arrancaron antes de WiFi.persistent(false). No vale
+  // WiFi.disconnect(true, true): con persistent(false) solo borra la copia en
+  // RAM, y nunca toca la del punto de acceso.
+  Preferences p;
+  if (p.begin("nvs.net80211", false)) {
+    p.clear();
+    p.end();
+  }
 }
 
 bool settingsHasWifi()  { return s_settings.ssid.length() > 0; }

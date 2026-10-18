@@ -38,6 +38,8 @@ cross it off, and the bot confirms it back to you.
 | `/del N` | Delete it |
 | `/del 2 3` · `/done 1,4` | Several at once |
 | `/clear` | Remove everything crossed off |
+| `/start` | Welcome and help |
+| `/help` | See every command |
 
 N is the number shown in `/list`. Deleting moves the ones below up, so to
 remove several, do it in one go with several numbers.
@@ -48,7 +50,7 @@ remove several, do it in one go with several numbers.
 | Drag | Scroll the list, with inertia when you let go |
 | "Clear done" | Remove the crossed-off ones |
 | Sun / moon | Switch between day and night paper |
-| Hold the logo | Back to first-time setup |
+| Hold the logo | Forget WiFi and token, and go back to the portal (the list stays) |
 
 Interface and bot speak **English or Spanish**; you pick during setup.
 
@@ -84,8 +86,10 @@ The first time you power it on it has no idea which WiFi to join, so it
 phone, it joins the device's network, and the setup page opens by itself: pick
 your WiFi, type the password, paste your bot token, choose a language.
 
-It reboots and that's it. Everything is stored on the board, and survives both
-reboots and reflashing.
+It reboots and that's it; then write to your bot. The first message it gets,
+whatever it is (it doesn't have to be `/start`), pairs the screen with your
+chat. Everything is stored on the board, and survives both reboots and
+reflashing.
 
 **The token is only ever typed into that page and only ever lives in the
 board's flash.** It is not in this repository and never leaves the device.
@@ -108,8 +112,15 @@ or its password, the QR code is still there to set it up again.
 
 Hold your finger on the logo. After 3 seconds a 5-second countdown appears;
 let go before it ends and nothing happens. Let it reach zero and the board
-forgets its settings and returns to the setup portal, ready for a different
-network or a new token.
+forgets WiFi, token, language, theme and the paired chat, and returns to the
+setup portal, ready for a different network or a new token. **Your task list
+stays.** Once it's set up again, write to your bot again to pair it.
+
+The board doesn't encrypt its flash, and the gesture marks the settings as
+erased without overwriting them: anyone with the board and a USB cable can
+read what it stores. To give it away or sell it, the sure way is to erase the
+whole flash and reflash it; see the
+[installation guide](docs/instalacion_en.md#giving-it-away-or-selling-it).
 
 ## How it's built
 

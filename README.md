@@ -37,6 +37,8 @@ te lo confirma.
 | `/del N` | Borrarla |
 | `/del 2 3` · `/done 1,4` | Varias de una vez |
 | `/clear` | Quitar todas las tachadas |
+| `/start` | Bienvenida y ayuda |
+| `/help` | Ver todas las órdenes |
 
 N es el número que sale en `/list`. Al borrar, los de debajo se recolocan:
 para quitar varias, mejor de una vez con varios números.
@@ -47,7 +49,7 @@ para quitar varias, mejor de una vez con varios números.
 | Arrastrar | Recorrer la lista, con inercia al soltar |
 | "Limpiar hechas" | Quitar las tachadas |
 | Sol / luna | Cambiar entre papel de día y de noche |
-| Mantener pulsado el logo | Volver a la configuración inicial |
+| Mantener pulsado el logo | Olvidar WiFi y token, y volver al portal (la lista se queda) |
 
 La interfaz y el bot hablan **español o inglés**; se elige en la puesta en
 marcha.
@@ -84,8 +86,10 @@ propio punto de acceso** y enseña un QR. Lo escaneas con el móvil, te conecta 
 su red y se abre sola la página de configuración: eliges tu WiFi, escribes la
 contraseña, pegas el token del bot y eliges idioma.
 
-Se reinicia y ya está. Todo queda guardado en la placa, y sobrevive tanto a
-reinicios como a volver a flashear.
+Se reinicia y ya está; después escríbele a tu bot. El primer mensaje que le
+llegue, sea cual sea (no hace falta que sea `/start`), vincula la pantalla a
+tu chat. Todo queda guardado en la placa, y sobrevive tanto a reinicios como a
+volver a flashear.
 
 **El token solo se escribe en esa página y solo vive en la memoria de la
 placa.** No está en este repositorio ni sale del dispositivo.
@@ -107,8 +111,16 @@ vez.
 </p>
 
 Mantén el dedo sobre el logo. A los 3 segundos aparece una cuenta atrás de 5;
-si sueltas antes, no pasa nada. Si la dejas llegar a cero, la placa olvida su
-configuración y vuelve al portal, lista para otro WiFi u otro token.
+si sueltas antes, no pasa nada. Si la dejas llegar a cero, la placa olvida el
+WiFi, el token, el idioma, el tema y el chat vinculado, y vuelve al portal,
+lista para otro WiFi u otro token. **La lista de tareas se queda.** Cuando la
+configures, escríbele otra vez a tu bot para vincularla.
+
+La placa no cifra su memoria, y el gesto marca la configuración como borrada
+pero no la machaca: cualquiera con la placa y un cable USB puede leer lo que
+guarda. Para regalarla o venderla, lo definitivo es borrar la flash entera y
+volver a flashear; está en la
+[guía de instalación](docs/instalacion.md#regalarla-o-venderla).
 
 ## Cómo está hecho
 

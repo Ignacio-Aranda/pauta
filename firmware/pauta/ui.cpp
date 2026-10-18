@@ -46,8 +46,9 @@ static uint16_t s_pressedId = 0;
 static uint32_t s_lastTapMs = 0;
 
 // --- Reset por pulsacion larga sobre el logotipo ---------------------------
-// Mantener el dedo sobre el logo borra la configuracion y devuelve la placa
-// al portal, que es la unica forma de cambiar de WiFi o de token sin cable.
+// Mantener el dedo sobre el logo borra la configuracion (la lista no) y
+// devuelve la placa al portal, que es la unica forma de cambiar de WiFi o de
+// token sin cable.
 // Los primeros segundos no avisan (para no asustar con un roce) y despues
 // aparece una cuenta atras: soltar antes de que llegue a cero lo cancela.
 static const uint32_t HOLD_WARN_MS  = 3000;   // cuando aparece el aviso
@@ -705,6 +706,9 @@ static void doReset() {
   cv.pushSprite(0, 0);
   delay(1400);
   settingsClear();
+  // La lista se queda, y con ella lo que hubiera llegado en el ultimo segundo
+  // y medio, que el guardado diferido aun no habia escrito.
+  tasksFlushNow();
   ESP.restart();
 }
 
