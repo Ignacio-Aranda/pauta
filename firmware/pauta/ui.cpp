@@ -70,12 +70,34 @@ static void ring(int cx, int cy, int r, float thick, uint32_t color) {
   cv.fillArc(cx, cy, r - thick, r, 0, 360, color);
 }
 
+// toUpperCase solo entiende ASCII: "mié", "sáb" o "lista vacía" salian con
+// la tilde en minuscula. En UTF-8, las minusculas U+00E0..U+00FE son 0xC3
+// 0xA0..0xBE y su mayuscula esta justo 0x20 antes; la excepcion es 0xB7, que
+// es el signo de dividir y no tiene pareja.
+static void upperUtf8(String &s) {
+  s.toUpperCase();
+  for (size_t i = 0; i + 1 < s.length(); i++) {
+    if ((uint8_t)s[i] != 0xC3) continue;
+    uint8_t b = (uint8_t)s[i + 1];
+    if (b >= 0xA0 && b <= 0xBE && b != 0xB7) s.setCharAt(i + 1, (char)(b - 0x20));
+    i++;
+  }
+}
+
+// Bytes que ocupa la letra UTF-8 que empieza por c.
+static size_t utf8LeadLen(uint8_t c) {
+  if ((c & 0xE0) == 0xC0) return 2;
+  if ((c & 0xF0) == 0xE0) return 3;
+  if ((c & 0xF8) == 0xF0) return 4;
+  return 1;
+}
+
 // Texto con letras separadas, en mayusculas. Es el recurso tipografico que da
 // el aire editorial a las etiquetas pequeñas; LovyanGFX no tiene interletraje,
 // asi que se dibuja caracter a caracter.
 static int drawTracked(const String &text, int x, int y, int tracking) {
   String up = text;
-  up.toUpperCase();
+  upperUtf8(up);
 
   // Impone su propia alineacion en vez de heredar la del llamante: con el
   // datum centrado cada letra se dibujaria centrada en su propia posicion, y
@@ -86,11 +108,8 @@ static int drawTracked(const String &text, int x, int y, int tracking) {
   int cx = x, prevW = 0;
   String prefix;
   for (size_t i = 0; i < up.length(); ) {
-    // Respeta UTF-8: los acentos ocupan dos bytes.
-    size_t len = 1;
-    uint8_t c = (uint8_t)up[i];
-    if ((c & 0xE0) == 0xC0) len = 2;
-    else if ((c & 0xF0) == 0xE0) len = 3;
+    // Respeta UTF-8: una tilde ocupa dos bytes y un emoji, cuatro.
+    size_t len = utf8LeadLen((uint8_t)up[i]);
     String ch = up.substring(i, i + len);
 
     // El avance se mide EN CONTEXTO, no aislando la letra: en una fuente VLW
@@ -109,11 +128,10 @@ static int drawTracked(const String &text, int x, int y, int tracking) {
 
 static int trackedWidth(const String &text, int tracking) {
   String up = text;
-  up.toUpperCase();
+  upperUtf8(up);
   int n = 0;
   for (size_t i = 0; i < up.length(); ) {
-    uint8_t c = (uint8_t)up[i];
-    i += ((c & 0xE0) == 0xC0) ? 2 : (((c & 0xF0) == 0xE0) ? 3 : 1);
+    i += utf8LeadLen((uint8_t)up[i]);
     n++;
   }
   return cv.textWidth(up) + tracking * (n - 1);
