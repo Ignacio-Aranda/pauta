@@ -37,6 +37,15 @@ void     tasksClearAll();
 // saber si tiene que repintar, sin necesidad de callbacks entre nucleos.
 uint32_t tasksRevision();
 
+// Ultimo message_id del dueno ya atendido. Se guarda en NVS con la lista
+// para que, tras un reinicio, los mensajes que Telegram vuelve a entregar
+// (los que no llego a dar por leidos) no se apliquen dos veces.
+// tasksSetLastMsg lo cambia solo en RAM; tasksResetLastMsg lo pone a 0 y lo
+// escribe en el momento, para cuando cambia el chat vinculado.
+int64_t  tasksLastMsg();
+void     tasksSetLastMsg(int64_t msgId);
+void     tasksResetLastMsg();
+
 // Guarda en NVS si hay cambios pendientes. Se llama desde el bucle principal
 // para no escribir en flash dentro de cada operacion. Si NVS no acepta la
 // escritura, lo dice por Serial y lo vuelve a intentar mas tarde.

@@ -10,6 +10,7 @@ static uint16_t          s_nextId = 1;
 static uint32_t          s_revision = 1;
 static bool              s_dirty = false;
 static uint32_t          s_dirtySince = 0;
+static int64_t           s_lastMsg = 0;
 static SemaphoreHandle_t s_lock = nullptr;
 static Preferences       s_prefs;
 
@@ -37,8 +38,7 @@ struct Guard {
   ~Guard() { if (s_lock) xSemaphoreGive(s_lock); }
 };
 
-static void markChanged() {
-  s_revision++;
+static void markDirty() {
   // Un cambio nuevo tras un fallo vuelve a la espera corta: puede ser justo
   // el borrado que deja sitio para guardar.
   if (!s_dirty || s_saveDelay != SAVE_DELAY_MS) {
@@ -46,6 +46,11 @@ static void markChanged() {
     s_dirtySince = millis();
     s_saveDelay = SAVE_DELAY_MS;
   }
+}
+
+static void markChanged() {
+  s_revision++;
+  markDirty();
 }
 
 // --- Serializacion ----------------------------------------------------------
@@ -109,9 +114,14 @@ static void deserialize(const String &blob) {
 
 // Devuelve false si NVS no ha aceptado la escritura. putString devuelve los
 // bytes escritos, asi que una lista vacia bien guardada tambien da 0.
-static bool save(const String &blob) {
+//
+// 'lastmsg' va antes que 'tasks': si la luz se va entre las dos, al volver
+// se da por atendida una orden que no llego a guardarse. Se pierde, pero
+// nunca se aplica dos veces.
+static bool save(const String &blob, int64_t lastMsg) {
   if (!s_prefs.begin(NVS_NS, false)) return false;
-  bool ok = s_prefs.putString("tasks", blob) == blob.length();
+  bool ok = s_prefs.putLong64("lastmsg", lastMsg) == sizeof(int64_t);
+  ok = s_prefs.putString("tasks", blob) == blob.length() && ok;
   s_prefs.end();
   return ok;
 }
@@ -122,9 +132,13 @@ void tasksBegin() {
   s_lock = xSemaphoreCreateMutex();
   s_prefs.begin(NVS_NS, true);
   String blob = s_prefs.getString("tasks", "");
+  // Sin la clave (placas con firmware anterior) vale 0: se atiende todo lo
+  // que llegue, como antes.
+  int64_t lastMsg = s_prefs.getLong64("lastmsg", 0);
   s_prefs.end();
   Guard g;
   deserialize(blob);
+  s_lastMsg = lastMsg;
   s_revision++;
 }
 
@@ -241,8 +255,38 @@ void tasksClearAll() {
 
 uint32_t tasksRevision() { Guard g; return s_revision; }
 
+int64_t tasksLastMsg() { Guard g; return s_lastMsg; }
+
+// Solo en RAM: llega a NVS con el siguiente guardado, que en las ordenes que
+// cambian la lista es el de ese mismo cambio.
+void tasksSetLastMsg(int64_t msgId) {
+  Guard g;
+  s_lastMsg = msgId;
+}
+
+void tasksResetLastMsg() {
+  {
+    Guard g;
+    s_lastMsg = 0;
+    // Un guardado que estuviera en marcha podria escribir el valor viejo
+    // despues del de abajo; el siguiente lo corrige.
+    markDirty();
+  }
+  // Se escribe ya y con su propio manejador, sin esperar al guardado
+  // diferido del bucle: si la luz se fuera antes, el chat nuevo quedaria
+  // guardado junto al numero del anterior. NVS admite varios manejadores
+  // abiertos a la vez desde nucleos distintos.
+  Preferences p;
+  if (p.begin(NVS_NS, false)) {
+    if (p.putLong64("lastmsg", 0) != sizeof(int64_t))
+      Serial.println("tareas: no se ha podido poner lastmsg a 0");
+    p.end();
+  }
+}
+
 void tasksFlushIfDirty() {
   String blob;
+  int64_t lastMsg;
   {
     Guard g;
     if (!s_dirty || millis() - s_dirtySince < s_saveDelay) return;
@@ -250,8 +294,9 @@ void tasksFlushIfDirty() {
     // Se copia bajo el mutex y se escribe fuera: la flash tarda y el bot no
     // tiene por que esperarla para leer o cambiar la lista.
     blob = serialize();
+    lastMsg = s_lastMsg;
   }
-  if (save(blob)) return;
+  if (save(blob, lastMsg)) return;
 
   Serial.printf("tareas: NVS no acepta la lista (%u bytes), reintento en %u s\n",
                 (unsigned)blob.length(), (unsigned)(SAVE_RETRY_MS / 1000));

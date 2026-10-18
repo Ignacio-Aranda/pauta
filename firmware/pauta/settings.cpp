@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "model.h"
 #include <Preferences.h>
 #include <WiFi.h>
 #include <esp_mac.h>
@@ -39,6 +40,10 @@ void settingsSetToken(const String &token) {
 
 void settingsSetChatId(int64_t chatId) {
   if (s_settings.chatId == chatId) return;
+  // Los message_id son de cada chat: con el ultimo del dueno anterior se
+  // ignorarian los primeros mensajes del nuevo. Va antes que el chat para
+  // que un corte entre las dos escrituras no deje esa mezcla guardada.
+  tasksResetLastMsg();
   s_settings.chatId = chatId;
   s_prefs.begin(NS, false);
   s_prefs.putLong64("chat", chatId);

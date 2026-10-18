@@ -234,6 +234,19 @@ static void processUpdate(JsonObjectConst update) {
     return;
   }
 
+  // s_offset solo vive en RAM: tras un reinicio, Telegram vuelve a entregar
+  // lo que no se llego a confirmar con el siguiente sondeo. Sin esto, un
+  // corte justo despues de contestar repetia la ultima orden.
+  int64_t msgId = msg["message_id"] | 0LL;
+  if (msgId > 0 && msgId <= tasksLastMsg()) {
+    Serial.printf("telegram: mensaje %lld ya atendido, se salta\n", (long long)msgId);
+    return;
+  }
+  // Se apunta antes de aplicar la orden, para que el guardado de ese cambio
+  // lo lleve consigo. Las que no tocan la lista lo dejan solo en RAM:
+  // repetirlas tras un reinicio no hace dano.
+  if (msgId > 0) tasksSetLastMsg(msgId);
+
   handleText(chatId, String(text));
 }
 
