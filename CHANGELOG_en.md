@@ -20,10 +20,13 @@ Security, below).
 ### Added
 
 - Version number: it shows at the end of `/help`, in the bottom-left corner
-  of the setup portal and on the first line of the serial console, which also
-  says why the board last restarted (power cut, watchdog, panic…).
+  of the setup portal screen and on the `Pauta …` line the serial console
+  prints at boot, right before another one that says why the board last
+  restarted (power cut, watchdog, panic…).
 - `/done`, `/undo` and `/del` take several numbers at once: `/del 2 3` or
-  `/done 1,4`. They all refer to the `/list` numbering you were looking at.
+  `/done 1,4`. They're all resolved against the same numbering, the list as
+  it is at that moment, before anything is changed. Two separate commands
+  don't work that way: after each delete, the ones below move up.
 - Typing `/` in the chat brings up Telegram's menu with the commands and what
   each one does, in English or Spanish.
 - Send `/done`, `/undo` or `/del` without a number and the bot reminds you how
@@ -36,7 +39,8 @@ Security, below).
   each notice.
 - With the list empty, the screen reminds you of your bot's @username.
 - If the list doesn't fit and a new task arrives, the screen scrolls down on
-  its own to show it, unless you touched it less than 5 seconds ago.
+  its own to show it, unless you touched it less than 5 seconds ago. Touching
+  it while it scrolls just stops it: nothing gets crossed off.
 - In the setup portal, an "other network" field to type the name by hand,
   which also works for hidden networks. Your saved network comes preselected
   even if the scan doesn't find it.
@@ -53,8 +57,9 @@ Security, below).
 - The ESP32 core (3.3.12) and library (LovyanGFX 1.2.33 and ArduinoJson
   7.4.3) versions are pinned in `sketch.yaml`, and the guide installs
   `arduino-cli` 1.5.1. Building is just
-  `tools/arduino-cli compile firmware/pauta`. The first build downloads the
-  core again.
+  `tools/arduino-cli compile firmware/pauta`, with the two variables from
+  [step 3](docs/instalacion_en.md#3-build-and-flash) exported. The first
+  build downloads the core again.
 - After a power cut, the portal no longer talks about "first run": it says
   "can't reach" and your network's name, and at the bottom what it's doing in
   the meantime.
@@ -72,9 +77,8 @@ Security, below).
 - If the board restarted right after a command, it got that command again
   when it came back and applied it twice: a duplicated task, or a `/del` that
   deleted a different one.
-- `/del 2` followed by `/del 3` deleted task 2 and the one that used to be 4,
-  because numbers move up after a delete. And if the task was removed from
-  the screen at the same time, the bot still answered "Deleted".
+- If the task had already been removed from the screen when its `/del`
+  arrived, the bot still answered "Deleted".
 - Tapping a line could cross off a different one if a `/del` or `/clear`
   arrived at that moment and the list shifted. Now the line that lit up is
   always the one that gets crossed off.
@@ -119,9 +123,9 @@ Security, below).
 ### Security
 
 - The setup network's password no longer comes from the MAC address, which
-  anyone nearby could see: it's now 10 random letters, stored on the board,
-  and new after every logo reset. If your phone had saved the board's
-  network, scan the QR code again.
+  anyone nearby could see: it's now 10 random letters and digits, stored on
+  the board, and new after every logo reset. If your phone had saved the
+  board's network, scan the QR code again.
 - Holding the logo now also erases the copy of your WiFi and its password
   that the driver kept on its own, which used to survive the reset.
 - The guide warns that the board doesn't encrypt its memory, so to give it

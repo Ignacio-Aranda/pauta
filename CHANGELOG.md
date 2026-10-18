@@ -19,12 +19,14 @@ configuración (ver Seguridad, más abajo).
 
 ### Añadido
 
-- Número de versión: sale al final de `/help`, abajo a la izquierda del
-  portal y en la primera línea de la consola serie, que además dice por qué
-  se reinició la placa la última vez (apagón, watchdog, pánico…).
+- Número de versión: sale al final de `/help`, abajo a la izquierda de la
+  pantalla del portal y en la línea `Pauta …` que escribe la consola serie al
+  arrancar, justo antes de otra que dice por qué se reinició la placa la
+  última vez (apagón, watchdog, pánico…).
 - `/done`, `/undo` y `/del` aceptan varios números a la vez: `/del 2 3` o
-  `/done 1,4`. Todos se refieren a la numeración de `/list` que estabas
-  viendo.
+  `/done 1,4`. Todos se resuelven con la misma numeración, la de la lista en
+  ese momento, antes de tocar nada. Con dos órdenes seguidas no es así: tras
+  cada borrado, los de debajo se recolocan.
 - Al escribir `/` en el chat sale el menú de Telegram con las órdenes y lo
   que hace cada una, en español o en inglés.
 - Si mandas `/done`, `/undo` o `/del` sin número, el bot te recuerda cómo va
@@ -37,7 +39,8 @@ configuración (ver Seguridad, más abajo).
   [guía de instalación](docs/instalacion.md#avisos-en-el-pie).
 - Con la lista vacía, la pantalla te recuerda el @usuario de tu bot.
 - Si la lista no cabe entera y llega una tarea nueva, la pantalla baja sola
-  hasta enseñarla, salvo que la hayas tocado hace menos de 5 segundos.
+  hasta enseñarla, salvo que la hayas tocado hace menos de 5 segundos. Si la
+  tocas mientras baja, solo se para: no tacha nada.
 - En el portal, un campo «otra red» para escribir el nombre a mano, que sirve
   también para redes ocultas. Tu red guardada sale ya elegida aunque la
   búsqueda no la encuentre.
@@ -54,8 +57,9 @@ configuración (ver Seguridad, más abajo).
 - Las versiones del core de ESP32 (3.3.12) y de las librerías (LovyanGFX
   1.2.33 y ArduinoJson 7.4.3) quedan fijadas en `sketch.yaml`, y la guía
   instala `arduino-cli` 1.5.1. Para compilar basta con
-  `tools/arduino-cli compile firmware/pauta`. La primera compilación vuelve
-  a descargar el core.
+  `tools/arduino-cli compile firmware/pauta`, con las dos variables del
+  [paso 3](docs/instalacion.md#3-compilar-y-flashear) exportadas. La primera
+  compilación vuelve a descargar el core.
 - Tras un apagón, el portal ya no habla de «primera puesta en marcha»: dice
   «sin conexión con» y el nombre de tu red, y abajo qué está haciendo
   mientras tanto.
@@ -73,9 +77,8 @@ configuración (ver Seguridad, más abajo).
 - Si la placa se reiniciaba justo después de una orden, al volver la recibía
   otra vez y la aplicaba dos veces: una tarea duplicada o un `/del` que
   borraba otra.
-- `/del 2` seguido de `/del 3` borraba la 2 y la que antes era la 4, porque
-  los números se recolocan al borrar. Y si la tarea se quitaba a la vez desde
-  la pantalla, el bot contestaba «Borrada» igual.
+- Si la tarea ya se había quitado desde la pantalla cuando llegaba su
+  `/del`, el bot contestaba «Borrada» igual.
 - Tocar un renglón podía tachar otro si en ese momento llegaba un `/del` o
   un `/clear` y la lista se movía. Ahora se tacha siempre el que se ha
   iluminado.
@@ -122,9 +125,9 @@ configuración (ver Seguridad, más abajo).
 ### Seguridad
 
 - La contraseña de la red de configuración ya no sale de la dirección MAC,
-  que cualquiera cerca podía ver: ahora son 10 letras al azar, se guardan en
-  la placa y cambian con cada reset del logo. Si tu móvil tenía guardada la
-  red de la placa, vuelve a escanear el QR.
+  que cualquiera cerca podía ver: ahora son 10 letras y cifras al azar, se
+  guardan en la placa y cambian con cada reset del logo. Si tu móvil tenía
+  guardada la red de la placa, vuelve a escanear el QR.
 - Mantener pulsado el logo borra también la copia de tu WiFi y su contraseña
   que guardaba por su cuenta el driver, y que antes sobrevivía al reset.
 - La guía avisa de que la placa no cifra su memoria, así que para regalarla
