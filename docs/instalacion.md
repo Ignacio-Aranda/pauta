@@ -66,6 +66,19 @@ logo. Si el móvil la tenía guardada de antes, escanea el QR otra vez.
 Para el token: escríbele `/newbot` a
 [@BotFather](https://t.me/botfather) en Telegram.
 
+La página comprueba lo que escribes antes de guardar. Si falta la red, si la
+contraseña WiFi no tiene de 8 a 63 caracteres (o 64 hexadecimales; vacía vale
+para una red abierta) o si el token no tiene la forma de los de @BotFather
+(por ejemplo, porque se ha colado un espacio al pegarlo), vuelve a salir con
+el error arriba, con lo que habías escrito y sin guardar nada.
+
+- Si tu red no sale en la lista, o es oculta, escribe su nombre exacto en
+  **Otra red**: lo que pongas ahí manda sobre el desplegable.
+- **Buscar otra vez** repite el escaneo.
+- Si ya había una red guardada, sale elegida aunque ahora no se vea, y si
+  dejas la contraseña vacía se conserva la que tenía. Con el token pasa lo
+  mismo: vacío, se queda el guardado.
+
 Después de configurarla, escríbele `/start` a tu bot para vincularla. **El
 primer chat que escriba se queda con la pantalla**; el resto reciben un aviso
 y se ignoran, para que un token filtrado no llene tu lista.

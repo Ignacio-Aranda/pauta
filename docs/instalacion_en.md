@@ -66,6 +66,19 @@ logo. If your phone had it saved from before, scan the QR code again.
 For the token, send `/newbot` to [@BotFather](https://t.me/botfather) on
 Telegram.
 
+The page checks what you type before saving. If the network is missing, if
+the WiFi password isn't 8 to 63 characters long (or 64 hex digits; empty is
+fine for an open network) or if the token doesn't look like a @BotFather one
+(say, a space crept in when pasting it), it comes back with the error at the
+top, with what you had typed, and saves nothing.
+
+- If your network isn't listed, or it's hidden, type its exact name under
+  **Other network**: whatever you put there wins over the list.
+- **Rescan** runs the scan again.
+- If a network was already saved, it comes preselected even if it can't be
+  seen right now, and leaving the password empty keeps the saved one. Same
+  with the token: leave it empty and the saved one stays.
+
 Once configured, send `/start` to your bot to pair it. **The first chat to
 write claims the screen**; everyone else gets a notice and is ignored, so a
 leaked token can't fill your list.
