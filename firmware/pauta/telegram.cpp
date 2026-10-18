@@ -471,7 +471,17 @@ static void processUpdate(JsonObjectConst update, bool fresh) {
   if (msgId > 0) tasksSetLastMsg(msgId);
 
   // Antes se descartaba sin decir nada, y una nota de voz parecia perdida.
-  if (!text) { sendMessage(chatId, T(S_BOT_TEXT_ONLY)); return; }
+  // Un album llega como un mensaje por foto, todos con el mismo
+  // media_group_id: se contesta solo al primero, y no una vez por foto.
+  // Solo lo usa esta tarea.
+  if (!text) {
+    static char s_lastGroup[32] = "";
+    const char *g = msg["media_group_id"];  // en la Bot API es una cadena
+    if (g && strcmp(g, s_lastGroup) == 0) return;
+    strlcpy(s_lastGroup, g ? g : "", sizeof(s_lastGroup));
+    sendMessage(chatId, T(S_BOT_TEXT_ONLY));
+    return;
+  }
   handleText(chatId, String(text));
 }
 
