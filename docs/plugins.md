@@ -40,11 +40,11 @@ reales:
 
 | Plugin | Qué hace | Tipo | Llega en |
 |---|---|---|---|
-| **Pomodoro** | Temporizador grande de trabajo y descanso que sigue contando en las demás páginas | Receta | F1 (1.3.0) |
-| **nicscom** | Pauta como un nodo más de la red nicscom: recibe avisos en grande, los manda y los programa por hora | Nativo | F3 (1.5.0) |
-| **Atajos** | Rejilla de botones que mandan atajos de teclado al PC por el USB, sin instalar nada en él | Receta | F4 (1.6.0) |
-| **Semáforo** | Vigila tus webs y páginas de estado y avisa tras fallos repetidos o si caduca un certificado | Receta | F4 (1.6.0) |
-| **Salvapantallas** | Pase de las fotos que mandas al bot o copias a la microSD; es el reposo natural | Receta | F5 (1.7.0) |
+| **Pomodoro** | Temporizador grande de trabajo y descanso que sigue contando en las demás páginas | Receta | F1 o F2 (1.2.0 o 1.3.0) |
+| **nicscom** | Pauta como un nodo más de la red nicscom: recibe avisos en grande, los manda y los programa por hora | Nativo | F3 (1.4.0) |
+| **Atajos** | Rejilla de botones que mandan atajos de teclado al PC por el USB, sin instalar nada en él | Receta | F4 (1.5.0) |
+| **Semáforo** | Vigila tus webs y páginas de estado y avisa tras fallos repetidos o si caduca un certificado | Receta | F4 (1.5.0) |
+| **Salvapantallas** | Pase de las fotos que mandas al bot o copias a la microSD; es el reposo natural | Receta | F5 (1.6.0) |
 
 La cabecera (480×78 píxeles) y el pie (480×34) son del sistema; en medio queda
 la página del plugin, de 480×208. Cada plugin con página es una página más, y
@@ -182,12 +182,14 @@ tres preguntas abiertas
 cuya recomendación ya aplica el texto.
 
 **En la pantalla, solo lo imprescindible**: el menú del sistema activa y
-desactiva plugins, bloquea, pone el reposo, sale del modo seguro, actualiza y
-empareja u olvida dispositivos, y el programador de nicscom se edita en su
-propia página. La subpágina **Pantalla** del menú deja a mano lo que se
-cambia con la placa delante: el reposo (reloj o foto), cómo salen los
-avisos de nicscom (pantalla completa o banda), el tema y el brillo
-([§5.8](plugins-referencia.md#58-menú-del-sistema)).
+desactiva plugins, bloquea, pone y cambia el PIN, pone el reposo, sale del
+modo seguro, actualiza y empareja u olvida dispositivos, y el programador de
+nicscom se edita en su propia página. La subpágina **Pantalla** del menú deja
+a mano lo que se cambia con la placa delante: el reposo (reloj o foto), cómo
+salen los avisos de nicscom (pantalla completa o banda), el tema y el brillo
+([§5.8](plugins-referencia.md#58-menú-del-sistema)). La ciudad y la zona
+horaria se eligen también en el portal de configuración, el mismo de la WiFi
+([§7.3](plugins-referencia.md#73-ubicación-y-tiempo)).
 **Telegram** sigue para escribir tareas, los comandos de los plugins
 (`/nics AGUA`, `/webs`, `/fondo`), mandar fotos y recibir avisos
 ([§6.2](plugins-referencia.md#62-telegram)).
@@ -251,7 +253,7 @@ La receta entera está en
 (6 KB en JSON compacto). Aquí va por partes, con los textos largos abreviados
 con «…»; el formato completo está en
 [§13](plugins-referencia.md#13-recetas-declarativas-formato-v1) y la receta
-comentada, en [A.4](plugins-referencia.md#a4-pomodoro-receta-f1).
+comentada, en [A.4](plugins-referencia.md#a4-pomodoro-receta-f1-o-f2).
 
 ### Paso 1. El manifiesto
 
@@ -279,6 +281,8 @@ comentada, en [A.4](plugins-referencia.md#a4-pomodoro-receta-f1).
 
 - `id` no cambia nunca: minúsculas, cifras y guiones, de 2 a 24 caracteres.
   `kind: "recipe"` dice que lleva una receta en vez de código.
+- `min_firmware` es el primer firmware que lo trae: la 1.3.0, si el Pomodoro
+  no entra ya en la 1.2.0 ([§8](#8-plan-por-fases)).
 - `permissions`: `notify` para escribirte al acabar una fase y
   `alert.critical` para el aviso a pantalla completa y el mensaje con sonido.
 - `memory`: 16 KB de la memoria externa (la PSRAM); una receta nunca gasta
@@ -671,17 +675,20 @@ Plugin API 1.0» ([§15](plugins-referencia.md#15-conformidad)).
 
 ## 8. Plan por fases
 
-Cada fase termina en un firmware publicable
+La versión 1.2.0 trae los cimientos y las pantallas nuevas, en dos tramos
+que se prueban en la placa: F0 rehace Pauta por dentro sin que se note por
+fuera, y F1 añade lo visible. La 1.2.0 se publica al acabar F1, y desde F2
+cada fase es una versión
 ([§0](plugins-referencia.md#0-estado-versión-y-glosario)):
 
 | Fase | Firmware | Qué trae |
 |---|---|---|
-| F0 Cimientos | 1.2.0 | El host de plugins, el disco interno de la placa (9,76 MB útiles de su flash, hoy sin usar), los secretos apartados, el modo seguro y el núcleo del motor de recetas. Pauta se reescribe como plugin y por fuera no cambia nada |
-| F1 Páginas y Pomodoro | 1.3.0 | Deslizar entre páginas, línea de estado, avisos, reposo con reloj, menú del sistema, arranque sin WiFi, el motor `timer` y el **Pomodoro**, con los valores de fábrica hasta F2 |
-| F2 Mini App y OTA | 1.4.0 | Primero se mide cuánto cabe en la URL. Después, la Mini App con emparejamiento y estado cifrado, ciudad y tiempo en la cabecera, bloqueo con PIN, secretos, la actualización firmada por WiFi y el catálogo |
-| F3 nicscom | 1.5.0 | El servicio MQTT, el programador y **nicscom** |
-| F4 Oficina | 1.6.0 | El teclado USB, en un firmware aparte (`v1-hid`) porque su pila USB ocupa unos 43 KB de la memoria interna del chip aunque no se use; el vigilante de webs y las recetas **Atajos** y **Semáforo** |
-| F5 Fotos | 1.7.0 | La microSD, las fotos del bot, el servicio de imágenes y el **Salvapantallas** |
+| F0 Cimientos | 1.2.0, primer tramo | El host de plugins, el disco interno de la placa (9,76 MB útiles de su flash, hoy sin usar), los secretos apartados, el modo seguro y el núcleo del motor de recetas. Pauta se reescribe como plugin. Por fuera, este tramo se ve y se comporta igual que la 1.1.0 y conserva la lista guardada |
+| F1 Pantallas nuevas | 1.2.0, segundo tramo | La cabecera con la hora, la fecha y el tiempo; la ciudad y la zona horaria, elegidas en el portal de configuración; deslizar entre páginas, línea de estado, avisos en banda y a pantalla completa, reposo con reloj, el menú del sistema con su subpágina Pantalla, bloqueo con un PIN que se pone y se cambia en el menú, y arranque sin WiFi. El **Pomodoro**, con los valores de fábrica hasta F2, si sale barato con el motor de recetas; si no, llega en la 1.3.0 |
+| F2 Mini App y OTA | 1.3.0 | Primero se mide cuánto cabe en la URL. Después, la Mini App con emparejamiento y estado cifrado, los secretos en sobres sellados, la actualización firmada por WiFi y el catálogo. La Mini App también cambia la ciudad y el PIN |
+| F3 nicscom | 1.4.0 | El servicio MQTT, el programador y **nicscom** |
+| F4 Oficina | 1.5.0 | El teclado USB, en un firmware aparte (`v1-hid`) porque su pila USB ocupa unos 43 KB de la memoria interna del chip aunque no se use; el vigilante de webs y las recetas **Atajos** y **Semáforo** |
+| F5 Fotos | 1.6.0 | La microSD, las fotos del bot, el servicio de imágenes y el **Salvapantallas** |
 
 ## 9. Dónde está cada cosa en la referencia
 

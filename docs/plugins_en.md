@@ -42,11 +42,11 @@ five real cases:
 
 | Plugin | What it does | Type | Arrives in |
 |---|---|---|---|
-| **Pomodoro** | Big work-and-break timer that keeps counting on the other pages | Recipe | F1 (1.3.0) |
-| **nicscom** | Pauta as one more node on the nicscom network: receives alerts in large type, sends them and schedules them by time of day | Native | F3 (1.5.0) |
-| **Shortcuts** | Grid of buttons that send keyboard shortcuts to the PC over USB, without installing anything on it | Recipe | F4 (1.6.0) |
-| **Status lights** | Watches your websites and status pages and alerts you after repeated failures or if a certificate expires | Recipe | F4 (1.6.0) |
-| **Screensaver** | Slideshow of the photos you send to the bot or copy to the microSD; it is the natural idle screen | Recipe | F5 (1.7.0) |
+| **Pomodoro** | Big work-and-break timer that keeps counting on the other pages | Recipe | F1 or F2 (1.2.0 or 1.3.0) |
+| **nicscom** | Pauta as one more node on the nicscom network: receives alerts in large type, sends them and schedules them by time of day | Native | F3 (1.4.0) |
+| **Shortcuts** | Grid of buttons that send keyboard shortcuts to the PC over USB, without installing anything on it | Recipe | F4 (1.5.0) |
+| **Status lights** | Watches your websites and status pages and alerts you after repeated failures or if a certificate expires | Recipe | F4 (1.5.0) |
+| **Screensaver** | Slideshow of the photos you send to the bot or copy to the microSD; it is the natural idle screen | Recipe | F5 (1.6.0) |
 
 The header (480×78 pixels) and the footer (480×34) belong to the system; in
 between sits the plugin's page, 480×208. Each plugin with a page is one more
@@ -190,12 +190,14 @@ questions
 whose recommended answers the text already applies.
 
 **On the screen, only the essentials**: the system menu enables and disables
-plugins, locks the screen, puts it into idle mode, leaves safe mode, installs
-updates and pairs or forgets devices, and the nicscom scheduler is edited on
-its own page. The menu's **Screen** subpage keeps within reach what you change
-with the board in front of you: idle mode (clock or photo), how nicscom alerts
-appear (full screen or band), the theme and the brightness
-([§5.8](plugins-referencia_en.md#58-system-menu)).
+plugins, locks the screen, sets and changes the PIN, puts it into idle mode,
+leaves safe mode, installs updates and pairs or forgets devices, and the
+nicscom scheduler is edited on its own page. The menu's **Screen** subpage
+keeps within reach what you change with the board in front of you: idle mode
+(clock or photo), how nicscom alerts appear (full screen or band), the theme
+and the brightness ([§5.8](plugins-referencia_en.md#58-system-menu)). The city
+and the time zone can also be chosen in the configuration portal, the same one
+used for the WiFi ([§7.3](plugins-referencia_en.md#73-location-and-weather)).
 **Telegram** is still there for writing tasks, the plugins' commands
 (`/nics AGUA`, `/webs`, `/fondo`), sending photos and receiving alerts
 ([§6.2](plugins-referencia_en.md#62-telegram)).
@@ -262,7 +264,7 @@ The whole recipe is in
 (6 KB as compact JSON). Here it is in parts, with the long texts shortened to
 "…"; the full format is in
 [§13](plugins-referencia_en.md#13-declarative-recipes-v1-format) and the
-annotated recipe, in [A.4](plugins-referencia_en.md#a4-pomodoro-recipe-f1).
+annotated recipe, in [A.4](plugins-referencia_en.md#a4-pomodoro-recipe-f1-or-f2).
 
 ### Step 1. The manifest
 
@@ -290,6 +292,8 @@ annotated recipe, in [A.4](plugins-referencia_en.md#a4-pomodoro-recipe-f1).
 
 - `id` never changes: lowercase letters, digits and hyphens, from 2 to 24
   characters. `kind: "recipe"` says it carries a recipe instead of code.
+- `min_firmware` is the first firmware that ships it: 1.3.0, if the Pomodoro
+  does not already make it into 1.2.0 ([§8](#8-phased-plan)).
 - `permissions`: `notify` to message you when a phase ends, and
   `alert.critical` for the full-screen alert and the message with sound.
 - `memory`: 16 KB of the external memory (the PSRAM); a recipe never uses
@@ -688,17 +692,20 @@ API 1.0" ([§15](plugins-referencia_en.md#15-conformance)).
 
 ## 8. Phased plan
 
-Each phase ends in a firmware that can be released
+Version 1.2.0 brings the foundations and the new screens, in two stretches
+that are tested on the board: F0 rebuilds Pauta on the inside without it
+showing on the outside, and F1 adds what you see. 1.2.0 is released when F1 is
+done, and from F2 on each phase is a version
 ([§0](plugins-referencia_en.md#0-status-version-and-glossary)):
 
 | Phase | Firmware | What it brings |
 |---|---|---|
-| F0 Foundations | 1.2.0 | The plugin host, the board's internal disk (9.76 MB usable of its flash, unused today), secrets kept apart, safe mode and the core of the recipe engine. Pauta is rewritten as a plugin and nothing changes on the outside |
-| F1 Pages and Pomodoro | 1.3.0 | Swiping between pages, status line, alerts, idle mode with a clock, system menu, booting without WiFi, the `timer` engine and the **Pomodoro**, with factory defaults until F2 |
-| F2 Mini App and OTA | 1.4.0 | First, measuring how much fits in the URL. Then, the Mini App with pairing and encrypted state, city and weather in the header, PIN lock, secrets, the signed WiFi update and the catalogue |
-| F3 nicscom | 1.5.0 | The MQTT service, the scheduler and **nicscom** |
-| F4 Office | 1.6.0 | The USB keyboard, in a separate firmware (`v1-hid`) because its USB stack takes up about 43 KB of the chip's internal memory even when it is not used; the website watcher and the **Shortcuts** and **Status lights** recipes |
-| F5 Photos | 1.7.0 | The microSD, photos from the bot, the image service and the **Screensaver** |
+| F0 Foundations | 1.2.0, first stretch | The plugin host, the board's internal disk (9.76 MB usable of its flash, unused today), secrets kept apart, safe mode and the core of the recipe engine. Pauta is rewritten as a plugin. On the outside, this stretch looks and behaves exactly like 1.1.0 and keeps the saved list |
+| F1 New screens | 1.2.0, second stretch | The header with the time, the date and the weather; the city and the time zone, chosen in the configuration portal; swiping between pages, status line, band and full-screen alerts, idle mode with a clock, the system menu with its Screen subpage, a PIN lock whose PIN is set and changed in the menu, and booting without WiFi. The **Pomodoro**, with factory defaults until F2, if it turns out cheap with the recipe engine; if not, it arrives in 1.3.0 |
+| F2 Mini App and OTA | 1.3.0 | First, measuring how much fits in the URL. Then, the Mini App with pairing and encrypted state, secrets in sealed envelopes, the signed WiFi update and the catalogue. The Mini App can also change the city and the PIN |
+| F3 nicscom | 1.4.0 | The MQTT service, the scheduler and **nicscom** |
+| F4 Office | 1.5.0 | The USB keyboard, in a separate firmware (`v1-hid`) because its USB stack takes up about 43 KB of the chip's internal memory even when it is not used; the website watcher and the **Shortcuts** and **Status lights** recipes |
+| F5 Photos | 1.6.0 | The microSD, photos from the bot, the image service and the **Screensaver** |
 
 ## 9. Where to find each thing in the reference
 
