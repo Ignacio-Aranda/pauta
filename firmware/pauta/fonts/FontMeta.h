@@ -1,5 +1,6 @@
 // Generado por tools/mkfont.py — no editar a mano.
 // NotoSans-Regular.ttf a 13px, 134 glifos, 10903 bytes.
+// Noto Sans — SIL Open Font License 1.1, ver OFL.txt.
 #pragma once
 #include <pgmspace.h>
 

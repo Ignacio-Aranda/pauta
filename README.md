@@ -159,4 +159,9 @@ volver a flashear; está en la
 
 ## Licencia
 
-MIT. Ver [LICENSE](LICENSE).
+Código MIT; fuentes Noto bajo SIL OFL 1.1.
+
+- El código: MIT, ver [LICENSE](LICENSE).
+- Las fuentes de `firmware/pauta/fonts/`, generadas a partir de Noto Sans y
+  Noto Serif Display: SIL Open Font License 1.1, ver
+  [OFL.txt](firmware/pauta/fonts/OFL.txt).

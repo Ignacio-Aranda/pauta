@@ -334,7 +334,16 @@ python3 -m venv .venv && .venv/bin/pip install Pillow
 .venv/bin/python tools/mkfont.py firmware/pauta/fonts
 ```
 
-Edit the `specs` list at the end of the script to change typefaces or sizes.
+The current ones come from Noto Sans and Noto Serif Display, which the script
+looks for in `/usr/share/fonts/truetype/noto/`: on Debian and Ubuntu,
+`sudo apt install fonts-noto-core` puts them there. If your TTFs live
+somewhere else, change the `SANS` and `SERIF` paths at the end of the script,
+and edit the `specs` list to change typefaces or sizes.
+
+Noto is under the SIL Open Font License 1.1, which asks for derived fonts to
+travel with its notice: it's in `firmware/pauta/fonts/OFL.txt`, and the script
+points to it in the header of every `.h`. If you switch to a typeface under a
+different license, change `LICENCIA` in the script and that file.
 
 Whatever the font lacks isn't drawn: `printable()` in `ui.cpp` strips it from
 the line before drawing (the stored text doesn't change). Watch out for
@@ -362,7 +371,7 @@ firmware/pauta/
   sketch.yaml      pinned core and library versions (profiles v1 and v2)
   board.h          pins and panel configuration
   theme.h/.cpp     palette, metrics, fonts and logo
-  fonts/           the five pre-generated VLW fonts (FontBody.h, FontMeta.h…)
+  fonts/           the five pre-generated VLW fonts and their license, OFL.txt
   i18n.h/.cpp      translations for screen, bot and portal
   utf8.h           validating and trimming UTF-8 without splitting letters
   model.h/.cpp     the list: data, NVS persistence, mutex

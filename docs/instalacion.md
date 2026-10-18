@@ -329,7 +329,16 @@ python3 -m venv .venv && .venv/bin/pip install Pillow
 .venv/bin/python tools/mkfont.py firmware/pauta/fonts
 ```
 
-Edita la lista `specs` al final del script para cambiar tipografías o tamaños.
+Las de ahora salen de Noto Sans y Noto Serif Display, que el script busca en
+`/usr/share/fonts/truetype/noto/`: en Debian y Ubuntu las deja ahí
+`sudo apt install fonts-noto-core`. Si tienes los TTF en otro sitio, cambia
+las rutas `SANS` y `SERIF` del final del script, y edita la lista `specs`
+para cambiar tipografías o tamaños.
+
+Noto va bajo la SIL Open Font License 1.1, que pide que las fuentes
+derivadas viajen con su aviso: está en `firmware/pauta/fonts/OFL.txt`, y el
+script lo recuerda en la cabecera de cada `.h`. Si cambias a una tipografía
+con otra licencia, cambia `LICENCIA` en el script y ese archivo.
 
 Lo que la fuente no tiene no se pinta: `printable()`, en `ui.cpp`, lo quita
 del renglón antes de dibujarlo (el texto guardado no cambia). Ojo con
@@ -357,7 +366,7 @@ firmware/pauta/
   sketch.yaml      versiones fijas del core y las librerías (perfiles v1 y v2)
   board.h          pines y configuración del panel
   theme.h/.cpp     paleta, métricas, fuentes y logotipo
-  fonts/           las cinco fuentes VLW ya generadas (FontBody.h, FontMeta.h…)
+  fonts/           las cinco fuentes VLW ya generadas y su licencia, OFL.txt
   i18n.h/.cpp      traducción de pantalla, bot y portal
   utf8.h           validar y recortar texto UTF-8 sin partir letras
   model.h/.cpp     la lista: datos, persistencia en NVS, mutex

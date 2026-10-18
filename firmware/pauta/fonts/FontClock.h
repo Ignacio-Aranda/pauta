@@ -1,5 +1,6 @@
 // Generado por tools/mkfont.py — no editar a mano.
 // NotoSerifDisplay-Regular.ttf a 36px, 134 glifos, 59573 bytes.
+// Noto Serif Display — SIL Open Font License 1.1, ver OFL.txt.
 #pragma once
 #include <pgmspace.h>
 

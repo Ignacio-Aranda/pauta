@@ -161,4 +161,9 @@ whole flash and reflash it; see the
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Code under MIT; Noto fonts under SIL OFL 1.1.
+
+- The code: MIT, see [LICENSE](LICENSE).
+- The fonts in `firmware/pauta/fonts/`, generated from Noto Sans and Noto
+  Serif Display: SIL Open Font License 1.1, see
+  [OFL.txt](firmware/pauta/fonts/OFL.txt).
