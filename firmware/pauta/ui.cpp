@@ -6,6 +6,7 @@
 #include "telegram.h"
 #include "i18n.h"
 #include "utf8.h"
+#include "version.h"
 #include <WiFi.h>
 #include <time.h>
 
@@ -663,6 +664,13 @@ static void drawPortal() {
     cv.setTextColor(s_link == UI_LINK_UP ? P.accent : P.inkMute);
     drawTracked(fitName("%s", T(note), qrX - 10 - MARGIN - 12, 2), MARGIN, 262, 2);
   }
+
+  // La version, abajo a la izquierda y apagada: es para quien la busque, no
+  // para la puesta en marcha. fMeta mide 18 px de alto: deja 8 px bajo el
+  // aviso de la linea 262 y 14 hasta el borde, y a esa altura ya no queda
+  // nada a la derecha con lo que pueda chocar.
+  cv.setTextColor(P.inkMute);
+  cv.drawString("v" PAUTA_VERSION, MARGIN, 288);
 }
 
 static void drawConnecting() {

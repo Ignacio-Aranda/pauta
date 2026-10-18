@@ -203,6 +203,14 @@ que algo cambia, pero las del arranque (`lienzo …`, `Pauta …`,
 nada más terminar `upload`, que reinicia la placa. Por el CP2102 es
 `/dev/ttyUSB0`, con el firmware compilado con `CDCOnBoot=default` (paso 3).
 
+La línea `Pauta 1.1.0 (esp32:esp32:esp32s3:…)` dice qué versión lleva la
+placa y con qué opciones se compiló. La siguiente, `ultimo reinicio: …`,
+dice por qué arrancó: `encendido, apagon o boton RST` y `USB` (después de
+flashear) son lo normal, y `reinicio pedido por el firmware` sale cuando
+vuelve sola del portal, tras configurarla o tras mantener pulsado el logo.
+`panico`, `watchdog` o `bajada de tension` apuntan a un fallo del firmware o
+a una alimentación que no da la talla (prueba con otro cable o cargador).
+
 **Cuidado con el token en los registros.** El firmware no lo escribe nunca en
 la consola, pero si compilas con más registro del core (`DebugLevel=debug` o
 `DebugLevel=verbose` en el FQBN, o «Core Debug Level» en Debug o Verbose en el
@@ -258,6 +266,10 @@ a hablar con Telegram) y la explicación que da Telegram o la librería.
 Volver a flashear **no borra tu configuración**. `arduino-cli` escribe el
 bootloader, la tabla de particiones y la aplicación; la partición NVS queda
 intacta, así que el WiFi, el token, el idioma y la lista siguen ahí.
+
+Para saber qué versión lleva la placa, mira el final de `/help`, la esquina
+de abajo a la izquierda del portal o la primera línea de la consola al
+arrancar.
 
 Para volver a configurarla, mantén pulsado el logo en la pantalla 8 segundos.
 Olvida el WiFi, el token, el idioma, el tema y el chat vinculado, pero
@@ -428,6 +440,7 @@ oliva del acento pierde contraste, así que en cada uno se ajustó por separado.
 ```
 firmware/pauta/
   pauta.ino        arranque y máquina de estados
+  version.h        número de versión (PAUTA_VERSION)
   sketch.yaml      versiones fijas del core y las librerías (perfiles v1 y v2)
   board.h          pines y configuración del panel
   theme.h/.cpp     paleta, métricas, fuentes y logotipo

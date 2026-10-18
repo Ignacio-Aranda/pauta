@@ -15,7 +15,9 @@
 #include "portal.h"
 #include "telegram.h"
 #include "i18n.h"
+#include "version.h"
 #include <WiFi.h>
+#include <esp_system.h>
 
 static bool     s_portalMode = false;
 static uint32_t s_savedAt = 0;
@@ -67,6 +69,31 @@ static void enterPortal() {
   s_retryGap = RETRY_FIRST_MS;
   s_retryAt = millis() + s_retryGap;
   uiSetScreen(UI_PORTAL);
+}
+
+// Por que se reinicio la placa la ultima vez. Una placa que aparece en el
+// portal o con la lista recien cargada puede venir de un apagon, de un
+// watchdog o de un panico, y desde fuera no se distingue. Va en castellano
+// sin tildes, como el resto de la consola.
+static const char *resetReasonText(esp_reset_reason_t r) {
+  switch (r) {
+    case ESP_RST_POWERON:    return "encendido, apagon o boton RST";
+    case ESP_RST_EXT:        return "pin de reset externo";
+    case ESP_RST_SW:         return "reinicio pedido por el firmware";
+    case ESP_RST_PANIC:      return "panico (excepcion o abort)";
+    case ESP_RST_INT_WDT:    return "watchdog de interrupciones";
+    case ESP_RST_TASK_WDT:   return "watchdog de tareas";
+    case ESP_RST_WDT:        return "otro watchdog";
+    case ESP_RST_DEEPSLEEP:  return "salida del sueno profundo";
+    case ESP_RST_BROWNOUT:   return "bajada de tension (brownout)";
+    case ESP_RST_SDIO:       return "SDIO";
+    case ESP_RST_USB:        return "USB (por ejemplo, al flashear)";
+    case ESP_RST_JTAG:       return "JTAG";
+    case ESP_RST_EFUSE:      return "error de efuse";
+    case ESP_RST_PWR_GLITCH: return "fallo breve de alimentacion";
+    case ESP_RST_CPU_LOCKUP: return "CPU bloqueada (doble excepcion)";
+    default:                 return "desconocido";
+  }
 }
 
 // La lista se guarda antes: el guardado diferido espera 1,5 s y lo que
@@ -158,9 +185,19 @@ void setup() {
   uint32_t splashUntil = millis() + SPLASH_MS;
   while (millis() < splashUntil) { uiLoop(); delay(10); }
 
-  Serial.printf("\nPauta — wifi=%s token=%s\n",
+  // Version y FQBN, para saber que lleva la placa y con que opciones se
+  // compilo. El FQBN lo pone el platform.txt del core; otro entorno podria no
+  // definirlo.
+#ifdef ARDUINO_FQBN
+  const char *build = " (" ARDUINO_FQBN ")";
+#else
+  const char *build = "";
+#endif
+  Serial.printf("\nPauta %s%s — wifi=%s token=%s\n", PAUTA_VERSION, build,
                 settingsHasWifi() ? "si" : "no",
                 settingsHasToken() ? "si" : "no");
+  esp_reset_reason_t rst = esp_reset_reason();
+  Serial.printf("ultimo reinicio: %s (%d)\n", resetReasonText(rst), (int)rst);
 
   if (!settingsHasWifi() || !connectWifi()) {
     Serial.println("sin conexion: abriendo portal de configuracion");

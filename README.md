@@ -38,7 +38,7 @@ te lo confirma.
 | `/del 2 3` · `/done 1,4` | Varias de una vez |
 | `/clear` | Quitar todas las tachadas |
 | `/start` | Bienvenida y ayuda |
-| `/help` | Ver todas las órdenes |
+| `/help` | Ver todas las órdenes y la versión del firmware |
 | `/` | Menú de Telegram con las órdenes y lo que hace cada una |
 
 N es el número que sale en `/list`. Al borrar, los de debajo se recolocan:

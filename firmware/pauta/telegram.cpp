@@ -4,6 +4,7 @@
 #include "telegram_ca.h"
 #include "i18n.h"
 #include "utf8.h"
+#include "version.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -327,6 +328,12 @@ static void handlePick(int64_t chatId, const String &cmd, const String &arg) {
   sendMessage(chatId, out);
 }
 
+// La ayuda termina con la version: asi se sabe que firmware lleva la placa
+// sin cable ni consola. Va fuera de la tabla de frases porque no se traduce.
+static String helpText() {
+  return String(T(S_BOT_HELP)) + "\n\nPauta " PAUTA_VERSION;
+}
+
 static void handleCommand(int64_t chatId, const String &text) {
   String cmd = text, arg;
   int sp = text.indexOf(' ');
@@ -336,9 +343,9 @@ static void handleCommand(int64_t chatId, const String &text) {
   if (at > 0) cmd = cmd.substring(0, at);
 
   if (cmd == "/start") {
-    sendMessage(chatId, String(T(S_BOT_WELCOME)) + "\n\n" + T(S_BOT_HELP));
+    sendMessage(chatId, String(T(S_BOT_WELCOME)) + "\n\n" + helpText());
   } else if (cmd == "/help") {
-    sendMessage(chatId, T(S_BOT_HELP));
+    sendMessage(chatId, helpText());
   } else if (cmd == "/list") {
     sendMessage(chatId, renderList());
   } else if (cmd == "/done" || cmd == "/undo" || cmd == "/del") {

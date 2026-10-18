@@ -208,6 +208,16 @@ console right after `upload` finishes, which reboots the board. On the CP2102
 it's `/dev/ttyUSB0`, with the firmware built with `CDCOnBoot=default`
 (step 3). The console messages are in Spanish.
 
+The `Pauta 1.1.0 (esp32:esp32:esp32s3:…)` line tells you which version the
+board runs and which options it was built with. The next one,
+`ultimo reinicio: …` ("last reset"), says why it booted:
+`encendido, apagon o boton RST` (power-on, power cut or the RST button) and
+`USB` (after flashing) are normal, and `reinicio pedido por el firmware`
+(restart requested by the firmware) shows up when it comes back from the
+portal on its own, after setup or after holding the logo. `panico` (panic),
+`watchdog` or `bajada de tension` (brownout) point to a firmware fault or to
+a power supply that isn't up to it (try another cable or charger).
+
 **Watch out for the token in logs.** The firmware never writes it to the
 console, but if you build with more core logging (`DebugLevel=debug` or
 `DebugLevel=verbose` in the FQBN, or "Core Debug Level" set to Debug or
@@ -263,6 +273,9 @@ talk to Telegram) and the explanation given by Telegram or the library.
 Reflashing **does not wipe your settings**. `arduino-cli` writes the
 bootloader, the partition table and the application; the NVS partition is left
 alone, so WiFi, token, language and list are all still there.
+
+To find out which version the board runs, look at the end of `/help`, the
+bottom-left corner of the setup portal, or the first console line at boot.
 
 To set it up again, hold the logo on the screen for 8 seconds. It forgets
 WiFi, token, language, theme and the paired chat, but **keeps the list**. It
@@ -433,6 +446,7 @@ the olive accent loses contrast, so each was tuned separately.
 ```
 firmware/pauta/
   pauta.ino        startup and state machine
+  version.h        version number (PAUTA_VERSION)
   sketch.yaml      pinned core and library versions (profiles v1 and v2)
   board.h          pins and panel configuration
   theme.h/.cpp     palette, metrics, fonts and logo

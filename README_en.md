@@ -39,7 +39,7 @@ cross it off, and the bot confirms it back to you.
 | `/del 2 3` · `/done 1,4` | Several at once |
 | `/clear` | Remove everything crossed off |
 | `/start` | Welcome and help |
-| `/help` | See every command |
+| `/help` | See every command and the firmware version |
 | `/` | Telegram's menu with the commands and what each one does |
 
 N is the number shown in `/list`. Deleting moves the ones below up, so to
