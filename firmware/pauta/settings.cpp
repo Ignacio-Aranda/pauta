@@ -34,6 +34,15 @@ void settingsSetWifi(const String &ssid, const String &pass) {
 }
 
 void settingsSetToken(const String &token) {
+  // Cada bot numera sus message_id desde 1: con el ultimo del bot anterior se
+  // saltarian los primeros mensajes del nuevo. El bot es lo que va antes de
+  // ':'; con el mismo bot y el token revocado el contador sigue y no se toca.
+  // Va antes que el token, por lo mismo que en settingsSetChatId.
+  auto botId = [](const String &t) {
+    int c = t.indexOf(':');
+    return c > 0 ? t.substring(0, c) : t;
+  };
+  if (botId(token) != botId(s_settings.token)) tasksResetLastMsg();
   s_settings.token = token;
   s_prefs.begin(NS, false);
   s_prefs.putString("token", token);

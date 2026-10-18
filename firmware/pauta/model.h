@@ -41,7 +41,7 @@ uint32_t tasksRevision();
 // para que, tras un reinicio, los mensajes que Telegram vuelve a entregar
 // (los que no llego a dar por leidos) no se apliquen dos veces.
 // tasksSetLastMsg lo cambia solo en RAM; tasksResetLastMsg lo pone a 0 y lo
-// escribe en el momento, para cuando cambia el chat vinculado.
+// escribe en el momento, para cuando cambia el chat vinculado o el bot.
 int64_t  tasksLastMsg();
 void     tasksSetLastMsg(int64_t msgId);
 void     tasksResetLastMsg();

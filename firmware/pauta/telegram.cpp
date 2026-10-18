@@ -422,7 +422,8 @@ static bool isMedia(JsonObjectConst msg) {
   return false;
 }
 
-static void processUpdate(JsonObjectConst update) {
+// fresh: el lote se pidio sin offset, como al arrancar (ver mas abajo).
+static void processUpdate(JsonObjectConst update, bool fresh) {
   int64_t updateId = update["update_id"] | 0LL;
   if (updateId >= s_offset) s_offset = updateId + 1;
 
@@ -451,8 +452,16 @@ static void processUpdate(JsonObjectConst update) {
   // s_offset solo vive en RAM: tras un reinicio, Telegram vuelve a entregar
   // lo que no se llego a confirmar con el siguiente sondeo. Sin esto, un
   // corte justo despues de contestar repetia la ultima orden.
+  //
+  // Solo se mira en un lote pedido sin offset. Lo que puede volver es lo que
+  // no se confirmo, y pedir con offset confirma todo lo anterior: lo atendido
+  // y sin confirmar es siempre el ultimo lote, y con limit=5 son las updates
+  // sin confirmar mas antiguas, las primeras que llegan al pedir sin offset.
+  // Asi un lastmsg ajeno (el de otro bot, si se cambio de bot con un
+  // firmware que no conocia esta clave) cuesta como mucho un lote, en vez de
+  // dejar al bot sin contestar hasta que sus message_id lo pasen.
   int64_t msgId = msg["message_id"] | 0LL;
-  if (msgId > 0 && msgId <= tasksLastMsg()) {
+  if (fresh && msgId > 0 && msgId <= tasksLastMsg()) {
     Serial.printf("telegram: mensaje %lld ya atendido, se salta\n", (long long)msgId);
     return;
   }
@@ -512,7 +521,9 @@ static bool pollOnce() {
 
   s_state = TG_OK;
   setFault(TG_FAULT_NONE);
-  for (JsonObjectConst u : doc["result"].as<JsonArrayConst>()) processUpdate(u);
+  // Antes del bucle: processUpdate cambia s_offset.
+  bool fresh = (s_offset == 0);
+  for (JsonObjectConst u : doc["result"].as<JsonArrayConst>()) processUpdate(u, fresh);
   return true;
 }
 
