@@ -156,6 +156,7 @@ volver a flashear; está en la
 |---|---|
 | [Hardware](docs/hardware.md) | La placa, los pines y cómo saber tu revisión |
 | [Instalación](docs/instalacion.md) | Compilar, flashear y personalizar |
+| [Registro de cambios](CHANGELOG.md) | Qué cambia en cada versión |
 
 ## Licencia
 

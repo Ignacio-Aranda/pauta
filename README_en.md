@@ -158,6 +158,7 @@ whole flash and reflash it; see the
 |---|---|
 | [Hardware](docs/hardware_en.md) | The board, the pins, and which revision you have |
 | [Installing](docs/instalacion_en.md) | Building, flashing and customising |
+| [Changelog](CHANGELOG_en.md) | What changes in each version |
 
 ## License
 
