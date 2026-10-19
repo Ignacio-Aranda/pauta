@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Ignacio-Aranda/pauta/main/schemas/url-state.schema.json",
+  "title": "Pauta Plugin API 1.0: estado de la URL de la Mini App, ya descifrado",
+  "description": "Lo que la Mini App obtiene del parámetro 's' de la URL del botón tras base64url -> AES-256-GCM -> deflate-raw (si z=1) -> JSON (docs/plugins-referencia.md, apartado 9.3). El JSON no lleva 'v': la versión va en la parte en claro, que protege la AAD. La parte en claro de la query se describe en $defs/query. Los ajustes van por nombre de clave; lo que vale lo de fábrica puede no viajar; un secreto puesto o un campo 'private' con valor salen como '*'.",
+  "type": "object",
+  "required": ["r", "t", "p"],
+  "properties": {
+    "r": {"type": "integer", "minimum": 0, "maximum": 4294967295, "description": "Revisión de los ajustes."},
+    "t": {"type": "integer", "minimum": 1700000000, "description": "Cuándo se generó (segundos Unix)."},
+    "sys": {"$ref": "#/$defs/sys"},
+    "inf": {"$ref": "#/$defs/inf"},
+    "p": {"type": "array", "maxItems": 24, "items": {"$ref": "#/$defs/pluginEntry"}},
+    "rt": {
+      "description": "Listas de la placa de cada plugin. Viajan con los ajustes de su plugin: si este va como '@', ellas también se quedan fuera.",
+      "type": "object",
+      "propertyNames": {"$ref": "manifest.schema.json#/$defs/pluginId"},
+      "additionalProperties": {
+        "type": "object",
+        "maxProperties": 4,
+        "propertyNames": {"$ref": "manifest.schema.json#/$defs/key"},
+        "additionalProperties": {"$ref": "#/$defs/runtimeList"}
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "query": {
+      "description": "Parte en claro de la query del botón (no se valida aquí; es documentación). Orden fijo: v, l, fw, k, kf (si va), e, z, p (si va), s y pk (si va). El dato asociado (AAD) del cifrado son las claves en claro presentes de v a p, en ese orden, como clave=valor unidas por '&', sin s ni pk: es el prefijo literal que escribe la placa, y la Mini App lo rehace con URLSearchParams para que no le afecte un reordenado (perfil pauta-crypto-v1, apartado 9.9). Todo en base64url va sin '=' y en forma canónica.",
+      "type": "object",
+      "required": ["v", "l", "fw", "k"],
+      "properties": {
+        "v": {"const": "1"},
+        "l": {"enum": ["es", "en"]},
+        "fw": {"$ref": "manifest.schema.json#/$defs/semver"},
+        "k": {"type": "string", "pattern": "^[A-Za-z0-9_-]{87}$", "description": "Clave pública ECDH P-256 de la placa (65 bytes)."},
+        "kf": {"type": "string", "pattern": "^[0-9A-F]{8}$", "description": "Huella informativa: 8 primeros hex del SHA-256 de k, en mayúsculas. La placa de la v1 no la manda (la Mini App la calcula de k); si llega, entra en la AAD. No sirve para comprobar nada: falsificarla cuesta unas 3 horas en un PC."},
+        "e": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,4})$", "description": "Época de la clave del estado (un número, no una bandera), en decimal sin ceros delante."},
+        "z": {"const": "1", "description": "El JSON va comprimido con deflate-raw antes de cifrar (normativo en la v1)."},
+        "s": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$", "description": "base64url(vector 12 B | AES-256-GCM(Kurl, deflate-raw del JSON) | etiqueta 16 B)."},
+        "p": {"$ref": "manifest.schema.json#/$defs/pluginId", "description": "Plugin que abre directamente (apertura en dos pasos)."},
+        "pk": {"type": "string", "pattern": "^[a-z2-7]{6}\\.[A-Za-z0-9_-]{86}(,[a-z2-7]{6}\\.[A-Za-z0-9_-]{86}){0,3}$", "description": "Hasta 4 entradas separadas por comas, una por dispositivo que tiene que recoger la clave del estado: <id>.base64url(vector 12 B | AES-256-GCM(Kdev, S de 32 B | e en uint32 big-endian, AAD = ASCII de <id>) | etiqueta 16 B), 93 caracteres cada una."}
+      }
+    },
+    "time": {"$ref": "manifest.schema.json#/$defs/time"},
+    "sys": {
+      "description": "Ajustes del sistema: las claves del manifiesto del sistema (apartado 9.8).",
+      "type": "object",
+      "properties": {
+        "lang": {"enum": ["es", "en"]},
+        "theme": {"enum": ["day", "night", "auto"]},
+        "bright": {"type": "integer", "minimum": 10, "maximum": 100, "multipleOf": 10},
+        "loc": {"$ref": "manifest.schema.json#/$defs/locationValue"},
+        "tz": {"$ref": "manifest.schema.json#/$defs/tzValue"},
+        "idle": {"type": "integer", "minimum": 0, "maximum": 240},
+        "idle_by": {"anyOf": [{"$ref": "manifest.schema.json#/$defs/pluginId"}, {"const": "clock"}]},
+        "night": {"type": "boolean"},
+        "night_from": {"$ref": "#/$defs/time"},
+        "night_to": {"$ref": "#/$defs/time"},
+        "live_idle": {"type": "boolean"},
+        "home": {"anyOf": [{"$ref": "manifest.schema.json#/$defs/pluginId"}, {"const": "pauta"}]},
+        "home_min": {"type": "integer", "minimum": 0, "maximum": 60},
+        "pin": {"const": "*"},
+        "lock_min": {"type": "integer", "minimum": 0, "maximum": 240},
+        "lock_sched": {"type": "boolean"},
+        "lock_from": {"$ref": "#/$defs/time"},
+        "lock_to": {"$ref": "#/$defs/time"},
+        "lock_show": {"enum": ["idle", "clock"]},
+        "live_lock": {"type": "boolean"},
+        "unlock_tg": {"type": "boolean"},
+        "photos": {"anyOf": [{"$ref": "manifest.schema.json#/$defs/pluginId"}, {"const": "none"}]},
+        "kb": {"enum": ["us", "es", "es-mac"]},
+        "kb_speed": {"enum": ["50", "20", "10"]},
+        "ntp": {"type": "string", "maxLength": 253}
+      },
+      "additionalProperties": false
+    },
+    "inf": {
+      "description": "Datos del sistema que no son ajustes y la Mini App solo enseña.",
+      "type": "object",
+      "properties": {
+        "var": {"type": "string", "pattern": "^v[0-9]+(-[a-z]{2,8})?$", "description": "Variante del firmware: v1, v1-hid, v2."},
+        "dev": {
+          "description": "Dispositivos emparejados: [id, nombre, fecha].",
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {"$ref": "manifest.schema.json#/$defs/itemId"},
+              {"type": "string", "minLength": 1, "maxLength": 16},
+              {"type": "integer", "minimum": 1700000000}
+            ],
+            "minItems": 3,
+            "items": false
+          }
+        },
+        "safe": {"type": "integer", "minimum": 0, "maximum": 1, "description": "1 = en modo seguro."},
+        "ota": {"anyOf": [{"$ref": "manifest.schema.json#/$defs/semver"}, {"type": "null"}], "description": "Versión nueva disponible, o null."},
+        "sd": {"type": "boolean", "description": "Hay microSD montada."},
+        "hid": {"enum": ["none", "unplugged", "suspended", "ready"]},
+        "last": {
+          "description": "Los 4 últimos envíos aplicados: [id del envío, resultado, operaciones aplicadas, choques]. Con él la Mini App sabe si borrar el borrador o mandar la parte siguiente (apartado 9.5).",
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {"type": "string", "pattern": "^[a-z2-7]{8}$"},
+              {"enum": ["ok", "partial", "pending", "error", "cancelled"]},
+              {"type": "integer", "minimum": 0, "maximum": 32},
+              {"type": "integer", "minimum": 0, "maximum": 32}
+            ],
+            "minItems": 4,
+            "items": false
+          }
+        },
+        "opt": {
+          "description": "Permisos opcionales concedidos: plugin -> lista. Se quitan con la operación revoke.",
+          "type": "object",
+          "maxProperties": 24,
+          "propertyNames": {"$ref": "manifest.schema.json#/$defs/pluginId"},
+          "additionalProperties": {"type": "array", "uniqueItems": true, "maxItems": 15, "items": {"$ref": "manifest.schema.json#/$defs/permission"}}
+        },
+        "ext": {
+          "description": "Recetas que no vienen con este firmware o cuya versión es otra: id -> [versión, origen]. La Mini App carga su manifiesto del catálogo.",
+          "type": "object",
+          "maxProperties": 16,
+          "propertyNames": {"$ref": "manifest.schema.json#/$defs/pluginId"},
+          "additionalProperties": {
+            "type": "array",
+            "prefixItems": [
+              {"$ref": "manifest.schema.json#/$defs/semver"},
+              {"enum": ["catalog", "sd"]}
+            ],
+            "minItems": 2,
+            "items": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "pluginEntry": {
+      "description": "[id, estado, ajustes | '@' | null, motivo]. Estado: 0 inactivo, 1 activo, 2 sin configurar, 3 no disponible, 4 fallido, 5 cuarentena. null = no hay nada guardado: valen los valores de fábrica y se puede editar. '@' = no cabe: apertura en dos pasos (op open).",
+      "type": "array",
+      "prefixItems": [
+        {"anyOf": [{"$ref": "manifest.schema.json#/$defs/pluginId"}, {"const": "pauta"}]},
+        {"type": "integer", "minimum": 0, "maximum": 5},
+        {"anyOf": [{"$ref": "#/$defs/settingsValues"}, {"const": "@"}, {"type": "null"}]},
+        {"type": "string", "minLength": 1, "maxLength": 28}
+      ],
+      "minItems": 3,
+      "maxItems": 4,
+      "items": false
+    },
+    "settingsValues": {
+      "type": "object",
+      "maxProperties": 24,
+      "propertyNames": {"$ref": "manifest.schema.json#/$defs/key"},
+      "additionalProperties": {
+        "anyOf": [
+          {"type": ["string", "number", "boolean", "null"]},
+          {"type": "array", "maxItems": 64, "items": {"type": ["string", "number"]}},
+          {"$ref": "#/$defs/listValue"},
+          {"$ref": "#/$defs/listWindow"},
+          {"$ref": "manifest.schema.json#/$defs/locationValue"},
+          {"$ref": "manifest.schema.json#/$defs/tzValue"},
+          {"$ref": "manifest.schema.json#/$defs/keys"}
+        ]
+      }
+    },
+    "listItem": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {"id": {"$ref": "manifest.schema.json#/$defs/itemId"}},
+      "propertyNames": {"pattern": "^(id|[a-z][a-z0-9_]{0,15})$"},
+      "maxProperties": 13
+    },
+    "listValue": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/listItem"}},
+    "listWindow": {
+      "description": "Un trozo de una lista que no cabe entera: desde el elemento o, de un total de n.",
+      "type": "object",
+      "required": ["o", "n", "items"],
+      "properties": {
+        "o": {"type": "integer", "minimum": 0, "maximum": 31},
+        "n": {"type": "integer", "minimum": 0, "maximum": 32},
+        "items": {"$ref": "#/$defs/listValue"}
+      },
+      "additionalProperties": false
+    },
+    "runtimeItems": {
+      "anyOf": [
+        {"description": "Opciones sueltas.", "type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 64}},
+        {"description": "Opciones en pares [valor, etiqueta].", "type": "array", "maxItems": 64,
+         "items": {"type": "array", "prefixItems": [{"type": "string", "maxLength": 64}, {"type": "string", "maxLength": 64}],
+                   "minItems": 2, "items": false}},
+        {"description": "Filas con columnas [valor, col1, col2…] (runtime con cols).", "type": "array", "maxItems": 64,
+         "items": {"type": "array", "prefixItems": [{"type": "string", "maxLength": 64}],
+                   "minItems": 2, "maxItems": 5, "items": {"anyOf": [{"type": "string", "maxLength": 64}, {"type": "number"}]}}}
+      ]
+    },
+    "runtimeList": {
+      "anyOf": [
+        {"$ref": "#/$defs/runtimeItems"},
+        {"description": "Una ventana de una lista que pasa de 2 KB en el peor caso: desde la entrada o, de un total de n.",
+         "type": "object", "required": ["o", "n", "items"],
+         "properties": {"o": {"type": "integer", "minimum": 0, "maximum": 63}, "n": {"type": "integer", "minimum": 0, "maximum": 64},
+                        "items": {"$ref": "#/$defs/runtimeItems"}},
+         "additionalProperties": false},
+        {"description": "Estados por elemento (kind status).", "type": "object", "maxProperties": 64,
+         "propertyNames": {"$ref": "manifest.schema.json#/$defs/itemId"},
+         "additionalProperties": {"enum": ["ok", "warn", "fail", "stale"]}}
+      ]
+    }
+  }
+}

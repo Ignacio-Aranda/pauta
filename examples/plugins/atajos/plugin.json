@@ -1,0 +1,228 @@
+{
+  "api": "1.0",
+  "id": "atajos",
+  "version": "1.0.0",
+  "kind": "recipe",
+  "min_firmware": "1.5.0",
+  "name": {"es": "Atajos", "en": "Shortcuts"},
+  "summary": {
+    "es": "Botonera en pantalla que manda atajos de teclado, teclas multimedia y textos a tu ordenador por el USB.",
+    "en": "On-screen button grid that sends keyboard shortcuts, media keys and text to your computer over USB."
+  },
+  "author": "Ignacio Aranda",
+  "license": "MIT",
+  "icon": "keyboard",
+  "category": "trabajo",
+  "requires": {"build": ["hid"]},
+  "permissions": ["hid"],
+  "surfaces": {"page": true},
+  "touch": {"longpress": true},
+  "settings": {"version": 1, "fields": [
+    {"key": "os", "type": "select", "default": "windows",
+     "group": {"es": "Ordenador", "en": "Computer"},
+     "label": {"es": "Sistema del ordenador", "en": "Computer's system"},
+     "help": {"es": "Solo cambia los botones de ejemplo y el nombre de las teclas (Win o Cmd).",
+              "en": "Only changes the example buttons and key names (Win or Cmd)."},
+     "options": [{"v": "windows", "es": "Windows", "en": "Windows"},
+                 {"v": "mac", "es": "macOS", "en": "macOS"},
+                 {"v": "linux", "es": "Linux", "en": "Linux"}]},
+    {"key": "keep_awake", "type": "bool", "default": false,
+     "group": {"es": "Ordenador", "en": "Computer"},
+     "label": {"es": "Sin reposo con el ordenador conectado", "en": "Stay awake while the computer is connected"},
+     "help": {"es": "Con su página a la vista y el ordenador encendido y conectado, la pantalla no entra en reposo.",
+              "en": "With its page on screen and the computer on and connected, the screen won't go idle."}},
+    {"key": "rows", "type": "number", "min": 1, "max": 3, "default": 3, "confirm": true,
+     "group": {"es": "Rejilla", "en": "Grid"},
+     "label": {"es": "Filas", "en": "Rows"}},
+    {"key": "cols", "type": "number", "min": 2, "max": 5, "default": 4, "confirm": true,
+     "group": {"es": "Rejilla", "en": "Grid"},
+     "label": {"es": "Columnas", "en": "Columns"}},
+    {"key": "pages", "type": "number", "min": 1, "max": 3, "default": 1, "confirm": true,
+     "group": {"es": "Rejilla", "en": "Grid"},
+     "label": {"es": "Páginas de botones", "en": "Button pages"},
+     "help": {"es": "Con más de una, el botón del pie pasa de página. Las páginas se reparten los 16 botones.",
+              "en": "With more than one, the footer button flips the page. The pages share the 16 buttons."}},
+    {"key": "buttons", "type": "list", "max_items": 16, "item_label": "{label}",
+     "unique": ["page", "slot"], "confirm": true,
+     "ui": {"widget": "grid", "rows": "rows", "cols": "cols", "page": "page", "slot": "slot"},
+     "label": {"es": "Botones", "en": "Buttons"},
+     "help": {"es": "Cualquier cambio en los botones, también en su etiqueta, icono o casilla, se confirma en la pantalla de Pauta. Caben 16.",
+              "en": "Any change to the buttons, even to a label, icon or cell, is confirmed on Pauta's screen. Up to 16."},
+     "default": [
+       {"id": "dmicro", "label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "page": 1, "slot": 1,
+        "kind": "combo", "keys": ["ctrl+shift+m"]},
+       {"id": "dbloqu", "label": {"es": "Bloquear", "en": "Lock"}, "icon": "lock", "page": 1, "slot": 2,
+        "kind": "combo", "keys": ["gui+l"]},
+       {"id": "dmusic", "label": {"es": "Música", "en": "Music"}, "icon": "play", "page": 1, "slot": 3,
+        "kind": "media", "media": "play_pause"},
+       {"id": "dnotas", "label": {"es": "Notas", "en": "Notes"}, "icon": "window", "page": 1, "slot": 4,
+        "kind": "macro", "keys": ["gui+r", "wait:300", "text:notepad", "enter"]}
+     ],
+     "fields": [
+       {"key": "label", "type": "text", "max": 10, "required": true,
+        "label": {"es": "Etiqueta", "en": "Label"}},
+       {"key": "icon", "type": "icon", "default": "keyboard",
+        "label": {"es": "Icono", "en": "Icon"}},
+       {"key": "page", "type": "number", "min": 1, "max": 3, "default": 1,
+        "label": {"es": "Página", "en": "Page"}},
+       {"key": "slot", "type": "number", "min": 1, "max": 15, "required": true,
+        "label": {"es": "Posición", "en": "Position"},
+        "help": {"es": "1 es arriba a la izquierda; se cuenta por filas.",
+                 "en": "1 is top left; count along the rows."}},
+       {"key": "kind", "type": "select", "default": "combo",
+        "label": {"es": "Qué hace", "en": "What it does"},
+        "options": [{"v": "combo", "es": "Atajo de teclado", "en": "Keyboard shortcut"},
+                    {"v": "media", "es": "Tecla multimedia", "en": "Media key"},
+                    {"v": "text", "es": "Escribir un texto", "en": "Type some text"},
+                    {"v": "macro", "es": "Secuencia (macro)", "en": "Sequence (macro)"},
+                    {"v": "hold", "es": "Mantener pulsado (hablar)", "en": "Hold down (push to talk)"}]},
+       {"key": "keys", "type": "keys", "required": true, "visible_if": {"kind": ["combo", "macro", "hold"]},
+        "label": {"es": "Teclas", "en": "Keys"},
+        "help": {"es": "Elige un preajuste o pulsa las teclas en el grabador. Ejemplo: ctrl+shift+m",
+                 "en": "Pick a preset or press the keys in the recorder. Example: ctrl+shift+m"}},
+       {"key": "media", "type": "select", "default": "play_pause", "visible_if": {"kind": "media"},
+        "label": {"es": "Tecla", "en": "Key"},
+        "options": [{"v": "mute", "es": "Silenciar el sonido", "en": "Mute sound"},
+                    {"v": "vol_up", "es": "Subir volumen", "en": "Volume up"},
+                    {"v": "vol_down", "es": "Bajar volumen", "en": "Volume down"},
+                    {"v": "play_pause", "es": "Reproducir o pausar", "en": "Play or pause"},
+                    {"v": "next", "es": "Siguiente", "en": "Next"},
+                    {"v": "prev", "es": "Anterior", "en": "Previous"},
+                    {"v": "stop", "es": "Parar", "en": "Stop"}]},
+       {"key": "text", "type": "text", "max": 64, "required": true, "visible_if": {"kind": "text"},
+        "label": {"es": "Texto", "en": "Text"},
+        "help": {"es": "Hasta 64 caracteres, en una línea. No guardes contraseñas aquí.",
+                 "en": "Up to 64 characters, on one line. Don't store passwords here."}},
+       {"key": "enter", "type": "bool", "default": false, "visible_if": {"kind": "text"},
+        "label": {"es": "Pulsar Intro al acabar", "en": "Press Enter at the end"}}
+     ]}
+  ]},
+  "actions": [
+    {"id": "preset", "confirm": "screen",
+     "label": {"es": "Añadir botones de ejemplo", "en": "Add example buttons"},
+     "args": [
+       {"key": "set", "type": "select", "required": true,
+        "label": {"es": "Juego", "en": "Set"},
+        "options": [{"v": "teams", "es": "Reuniones de Teams", "en": "Teams meetings"},
+                    {"v": "meet", "es": "Google Meet", "en": "Google Meet"},
+                    {"v": "zoom", "es": "Zoom", "en": "Zoom"},
+                    {"v": "media", "es": "Música y volumen", "en": "Music and volume"},
+                    {"v": "system", "es": "Sistema: bloquear y captura", "en": "System: lock and screenshot"}]}
+     ]}
+  ],
+  "memory": {"psram_kb": 24, "static_kb": 0},
+  "storage": {"state_kb": 1},
+  "recipe": {
+    "format": 1,
+    "vars": {
+      "pg": {"type": "int", "min": 1, "max": 3, "default": 1}
+    },
+    "tables": {
+      "presets": {
+        "teams": [
+          {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["ctrl+shift+m"]},
+          {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["ctrl+shift+o"]},
+          {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["ctrl+shift+k"]},
+          {"label": {"es": "Colgar", "en": "Hang up"}, "icon": "hangup", "kind": "combo", "keys": ["ctrl+shift+h"]}
+        ],
+        "teams.mac": [
+          {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["gui+shift+m"]},
+          {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["gui+shift+o"]},
+          {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["gui+shift+k"]},
+          {"label": {"es": "Colgar", "en": "Hang up"}, "icon": "hangup", "kind": "combo", "keys": ["gui+shift+h"]}
+        ],
+        "meet": [
+          {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["ctrl+d"]},
+          {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["ctrl+e"]},
+          {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["ctrl+alt+h"]}
+        ],
+        "meet.mac": [
+          {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["gui+d"]},
+          {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["gui+e"]},
+          {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["ctrl+gui+h"]}
+        ],
+        "zoom": [
+          {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["alt+a"]},
+          {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["alt+v"]},
+          {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["alt+y"]},
+          {"label": {"es": "Hablar", "en": "Talk"}, "icon": "mic", "kind": "hold", "keys": ["space"]}
+        ],
+        "zoom.mac": [
+          {"label": {"es": "Micro", "en": "Mic"}, "icon": "mic_off", "kind": "combo", "keys": ["gui+shift+a"]},
+          {"label": {"es": "Cámara", "en": "Camera"}, "icon": "camera_off", "kind": "combo", "keys": ["gui+shift+v"]},
+          {"label": {"es": "Mano", "en": "Hand"}, "icon": "hand", "kind": "combo", "keys": ["alt+y"]},
+          {"label": {"es": "Hablar", "en": "Talk"}, "icon": "mic", "kind": "hold", "keys": ["space"]}
+        ],
+        "media": [
+          {"label": {"es": "Anterior", "en": "Previous"}, "icon": "prev", "kind": "media", "media": "prev"},
+          {"label": {"es": "Música", "en": "Music"}, "icon": "play", "kind": "media", "media": "play_pause"},
+          {"label": {"es": "Siguiente", "en": "Next"}, "icon": "next", "kind": "media", "media": "next"},
+          {"label": {"es": "Silencio", "en": "Mute"}, "icon": "volume_off", "kind": "media", "media": "mute"}
+        ],
+        "system": [
+          {"label": {"es": "Bloquear", "en": "Lock"}, "icon": "lock", "kind": "combo", "keys": ["gui+l"]},
+          {"label": {"es": "Captura", "en": "Snip"}, "icon": "screenshot", "kind": "combo", "keys": ["gui+shift+s"]}
+        ],
+        "system.mac": [
+          {"label": {"es": "Bloquear", "en": "Lock"}, "icon": "lock", "kind": "combo", "keys": ["ctrl+gui+q"]},
+          {"label": {"es": "Captura", "en": "Snip"}, "icon": "screenshot", "kind": "combo", "keys": ["gui+shift+4"]}
+        ],
+        "system.linux": [
+          {"label": {"es": "Bloquear", "en": "Lock"}, "icon": "lock", "kind": "combo", "keys": ["gui+l"]},
+          {"label": {"es": "Captura", "en": "Snip"}, "icon": "screenshot", "kind": "combo", "keys": ["printscreen"]}
+        ]
+      }
+    },
+    "keep_awake": [["cfg.keep_awake", "eq", true], ["hid.link", "eq", "ready"]],
+    "header": {
+      "subtitle": [
+        {"if": [["hid.link", "eq", "ready"]], "v": {"es": "PC CONECTADO", "en": "PC CONNECTED"}},
+        {"if": [["hid.link", "eq", "suspended"]], "v": {"es": "PC DORMIDO O DESCONECTADO", "en": "PC ASLEEP OR UNPLUGGED"}},
+        {"v": {"es": "SIN ORDENADOR", "en": "NO COMPUTER"}}
+      ]
+    },
+    "footer": {
+      "label": [
+        {"if": [["cfg.pages", "gt", 1]], "v": {"es": "PÁGINA {{var.pg}}/{{cfg.pages}}", "en": "PAGE {{var.pg}}/{{cfg.pages}}"}},
+        {"v": ""}
+      ],
+      "do": [{"do": "var.add", "name": "pg", "by": 1, "min": 1, "max": "{{cfg.pages}}", "wrap": true}]
+    },
+    "views": [
+      {
+        "id": "main",
+        "blocks": [
+          {"type": "grid", "h": 208, "items": "cfg.buttons",
+           "rows": "{{cfg.rows}}", "cols": "{{cfg.cols}}", "pages": "{{cfg.pages}}", "page": "{{var.pg}}",
+           "page_of": "page", "slot_of": "slot",
+           "label": "{{item.label}}", "icon": "{{item.icon}}",
+           "dim": [["hid.link", "ne", "ready"]],
+           "tap": [
+             {"do": "hid.keys", "if": [["item.kind", "in", ["combo", "macro"]]], "keys": "{{item.keys}}"},
+             {"do": "hid.media", "if": [["item.kind", "eq", "media"]], "key": "{{item.media}}"},
+             {"do": "hid.text", "if": [["item.kind", "eq", "text"]], "text": "{{item.text}}", "enter": "{{item.enter}}"}
+           ],
+           "long": [
+             {"do": "hid.keys", "if": [["item.kind", "in", ["combo", "macro"]]], "keys": "{{item.keys}}"},
+             {"do": "hid.media", "if": [["item.kind", "eq", "media"]], "key": "{{item.media}}"},
+             {"do": "hid.text", "if": [["item.kind", "eq", "text"]], "text": "{{item.text}}", "enter": "{{item.enter}}"}
+           ],
+           "down": [
+             {"do": "hid.hold", "if": [["item.kind", "eq", "hold"]], "keys": "{{item.keys}}"}
+           ]}
+        ]
+      }
+    ],
+    "on": {
+      "settings": [
+        {"do": "var.set", "if": [["var.pg", "gt", "{{cfg.pages}}"]], "name": "pg", "value": 1}
+      ],
+      "action.preset": [
+        {"do": "list.add", "list": "buttons", "table": "presets",
+         "row": "{{ev.args.set}}.{{cfg.os}}", "or_row": "{{ev.args.set}}", "place": "grid"},
+        {"do": "reply", "text": {"es": "Botones de ejemplo añadidos en los huecos libres.",
+                                 "en": "Example buttons added to the free cells."}}
+      ]
+    }
+  }
+}

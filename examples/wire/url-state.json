@@ -1,0 +1,36 @@
+{
+  "r": 57,
+  "t": 1792330000,
+  "sys": {
+    "lang": "es", "theme": "night",
+    "loc": {"n": "Málaga", "lat": 36.72, "lon": -4.42, "tz": "Europe/Madrid"},
+    "tz": {"iana": "Europe/Madrid", "posix": "CET-1CEST,M3.5.0,M10.5.0/3"},
+    "idle": 10, "idle_by": "clock", "night": true, "night_from": "23:30", "night_to": "07:30",
+    "home": "pauta", "pin": "*", "lock_min": 0, "unlock_tg": false,
+    "photos": "none", "kb": "es"
+  },
+  "inf": {
+    "var": "v1-hid",
+    "dev": [["q3x7ab", "Android", 1792300000], ["m2k7td", "Escritorio", 1792310000]],
+    "safe": 0, "ota": null, "sd": true, "hid": "ready",
+    "last": [["m3ka7q2b", "ok", 4, 0], ["t5vwxa2c", "partial", 2, 1]],
+    "opt": {"semaforo": ["lan"]}
+  },
+  "p": [
+    ["pauta", 1, {"new_alert": false}],
+    ["pomodoro", 1, {"work": 50, "short": 10}],
+    ["nicscom", 1, "@"],
+    ["atajos", 1, {"cols": 4, "buttons": [
+      {"id": "dmicro", "label": "Micro", "icon": "mic_off", "page": 1, "slot": 1, "kind": "combo", "keys": ["ctrl+shift+m"]},
+      {"id": "k2m3n4", "label": "Firma", "icon": "mail", "page": 1, "slot": 5, "kind": "text", "text": "Un saludo, Ignacio", "enter": false}
+    ]}],
+    ["semaforo", 1, {"sites": [
+      {"id": "k3f7a2", "name": "Tienda", "url": "https://tienda.es"},
+      {"id": "z5a6b7", "name": "GitHub", "url": "https://www.githubstatus.com", "mode": "statuspage"}
+    ], "tg_slow": true}],
+    ["salvapantallas", 0, null]
+  ],
+  "rt": {
+    "semaforo": {"status": {"k3f7a2": "ok", "z5a6b7": "warn"}}
+  }
+}

@@ -1,0 +1,16 @@
+{"v": 1, "id": "7hq2mx4a", "d": "q3x7ab", "base": 57, "t": 1792330412, "ops": [
+  {"op": "sys", "set": {"idle": 5, "lock_sched": true, "lock_from": "19:00", "lock_to": "08:00"},
+   "box": {"pin": "BFLXfrX4QTs6pzk7Dj1rKOCp_9KVOxhBByM0ekEVCSk0lRHXGDXnf0fF4Tbje65_cUwmvCgQ5T5a7qs0fQBNOqCMTV4QbnZlRQjaz5e6KY-fTrNQLRlakVDBvxDkUF4HgLHM"}},
+  {"op": "cfg", "p": "pomodoro", "set": {"work": 50, "short": 10}},
+  {"op": "enable", "p": "semaforo", "on": true},
+  {"op": "item.add", "p": "nicscom", "f": "autos", "id": "k3f7a2", "val": {"ch": "AGUA", "at": "09:00", "days": 31, "on": true}},
+  {"op": "item.set", "p": "nicscom", "f": "autos", "id": "q7c2d3", "val": {"at": "08:45"}},
+  {"op": "item.del", "p": "nicscom", "f": "autos", "id": "x2b4e7"},
+  {"op": "item.set", "p": "atajos", "f": "buttons", "id": "dmicro", "val": {"slot": 2}},
+  {"op": "item.set", "p": "atajos", "f": "buttons", "id": "dbloqu", "val": {"slot": 1}},
+  {"op": "item.order", "p": "semaforo", "f": "sites", "ids": ["z5a6b7", "k3f7a2"]},
+  {"op": "secret", "p": "nicscom", "f": "pass", "box": null},
+  {"op": "order", "ids": ["pauta", "pomodoro", "nicscom", "semaforo", "atajos", "salvapantallas"]},
+  {"op": "install", "p": "frase-dia", "ver": "1.0.0", "sha": "9f2c11a03b7e44d1"},
+  {"op": "action", "p": "nicscom", "a": "post", "args": {"ch": "CAFE"}}
+]}

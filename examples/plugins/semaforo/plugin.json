@@ -1,0 +1,245 @@
+{
+  "api": "1.0",
+  "id": "semaforo",
+  "version": "1.0.0",
+  "kind": "recipe",
+  "min_firmware": "1.5.0",
+  "name": {"es": "Semáforo", "en": "Status lights"},
+  "summary": {
+    "es": "Vigila tus webs y servicios: código, tiempo de respuesta, certificado y páginas de estado. Avisa si fallan.",
+    "en": "Watches your sites and services: status code, response time, certificate and status pages. Warns on failure."
+  },
+  "author": "Ignacio Aranda",
+  "license": "MIT",
+  "icon": "lights",
+  "category": "trabajo",
+  "permissions": ["net.user", "notify"],
+  "optional_permissions": ["lan"],
+  "net": {"user_hosts_from": ["sites.url"], "min_interval_s": 300, "max_per_hour": 300},
+  "surfaces": {"page": true, "glance": true},
+  "commands": [
+    {"cmd": "webs",
+     "args": {"es": "[ahora]", "en": "[now]"},
+     "desc": {"es": "Estado de tus webs; con «ahora», las comprueba ya",
+              "en": "Status of your sites; with «now», checks them right away"}}
+  ],
+  "help": {
+    "es": "/webs — estado de tus webs.\n/webs ahora — las comprueba ya y te contesta al acabar.",
+    "en": "/webs — status of your sites.\n/webs now — checks them right away and replies when done."
+  },
+  "settings": {"version": 1, "fields": [
+    {"key": "sites", "type": "list", "max_items": 12, "item_label": "{name}", "order": "manual",
+     "label": {"es": "Webs y servicios", "en": "Sites and services"},
+     "help": {"es": "Hasta 12. Cada una se comprueba por separado.", "en": "Up to 12. Each one is checked on its own."},
+     "fields": [
+       {"key": "name", "type": "text", "max": 16, "required": true,
+        "label": {"es": "Nombre", "en": "Name"},
+        "help": {"es": "Lo que sale en la pantalla, por ejemplo «Tienda».", "en": "What the screen shows, for example «Shop»."}},
+       {"key": "url", "type": "url", "max": 160, "scope": "any", "required": true,
+        "label": {"es": "Dirección", "en": "Address"},
+        "help": {"es": "https://… o, en tu red, http://192.168.1.10. Para una página de estado, su dirección principal, como https://www.githubstatus.com",
+                 "en": "https://… or, on your network, http://192.168.1.10. For a status page, its main address, such as https://www.githubstatus.com"}},
+       {"key": "mode", "type": "select", "default": "http",
+        "label": {"es": "Tipo", "en": "Type"},
+        "help": {"es": "«Solo conexión» es para aparatos de tu red con un certificado propio, como un NAS: solo mira si el puerto contesta, sin comprobar el certificado.",
+                 "en": "«Connection only» is for devices on your network with their own certificate, such as a NAS: it only checks that the port answers, without checking the certificate."},
+        "options": [
+          {"v": "http", "es": "Web (código y tiempo)", "en": "Website (code and time)"},
+          {"v": "statuspage", "es": "Página de estado (Statuspage)", "en": "Status page (Statuspage)"},
+          {"v": "port", "es": "Solo conexión (en tu red)", "en": "Connection only (on your network)"}]},
+       {"key": "expect", "type": "select", "default": "2xx", "visible_if": {"mode": "http"},
+        "label": {"es": "Cuenta como bien", "en": "Counts as up"},
+        "options": [
+          {"v": "2xx", "es": "Respuesta 2xx o 3xx", "en": "A 2xx or 3xx reply"},
+          {"v": "200", "es": "Solo 200", "en": "Only 200"},
+          {"v": "any", "es": "Cualquier respuesta (que conteste)", "en": "Any reply (it answers)"}]},
+       {"key": "slow_ms", "type": "number", "min": 200, "max": 10000, "step": 100, "default": 2000,
+        "unit": "ms", "visible_if": {"mode": "http"},
+        "label": {"es": "Lenta a partir de", "en": "Slow above"}},
+       {"key": "cert", "type": "bool", "default": true, "visible_if": {"mode": "http"},
+        "label": {"es": "Vigilar el certificado", "en": "Watch the certificate"},
+        "help": {"es": "Solo en direcciones https.", "en": "Only for https addresses."}},
+       {"key": "on", "type": "bool", "default": true,
+        "label": {"es": "Vigilar", "en": "Watch"},
+        "help": {"es": "Apágalo para pausarla sin borrarla.", "en": "Turn it off to pause it without deleting it."}}
+     ]},
+    {"key": "every_min", "type": "number", "min": 5, "max": 60, "default": 5, "unit": "min",
+     "label": {"es": "Comprobar cada", "en": "Check every"}},
+    {"key": "fails", "type": "number", "min": 1, "max": 10, "default": 3,
+     "group": {"es": "Cuándo cambia de color", "en": "When the color changes"},
+     "label": {"es": "Caída tras fallos seguidos", "en": "Down after failures in a row"}},
+    {"key": "recover", "type": "number", "min": 1, "max": 10, "default": 2,
+     "group": {"es": "Cuándo cambia de color", "en": "When the color changes"},
+     "label": {"es": "De vuelta tras aciertos seguidos", "en": "Back after successes in a row"}},
+    {"key": "slow_n", "type": "number", "min": 1, "max": 5, "default": 2,
+     "group": {"es": "Cuándo cambia de color", "en": "When the color changes"},
+     "label": {"es": "Lenta tras lecturas lentas seguidas", "en": "Slow after slow readings in a row"}},
+    {"key": "cert_days", "type": "number", "min": 1, "max": 60, "default": 14,
+     "unit": {"es": "días", "en": "days"},
+     "group": {"es": "Certificados", "en": "Certificates"},
+     "label": {"es": "Avisar si al certificado le quedan", "en": "Warn when the certificate has"}},
+    {"key": "cert_at", "type": "time", "default": "09:00",
+     "group": {"es": "Certificados", "en": "Certificates"},
+     "label": {"es": "Hora del aviso de certificados", "en": "Time of the certificate warning"}},
+    {"key": "tg", "type": "bool", "default": true,
+     "group": {"es": "Avisos por Telegram", "en": "Telegram messages"},
+     "label": {"es": "Avisarme cuando una cae", "en": "Tell me when one goes down"}},
+    {"key": "tg_back", "type": "bool", "default": true, "visible_if": {"tg": true},
+     "group": {"es": "Avisos por Telegram", "en": "Telegram messages"},
+     "label": {"es": "Y cuando vuelve", "en": "And when it comes back"}},
+    {"key": "tg_slow", "type": "bool", "default": false, "visible_if": {"tg": true},
+     "group": {"es": "Avisos por Telegram", "en": "Telegram messages"},
+     "label": {"es": "Y cuando va lenta", "en": "And when it is slow"}},
+    {"key": "glance_ok", "type": "bool", "default": false,
+     "label": {"es": "Línea de estado también si todo va bien", "en": "Status line even when all is well"},
+     "help": {"es": "Si está apagado, el pie de las otras páginas solo habla del Semáforo cuando algo falla.",
+              "en": "When off, the footer of other pages only mentions Status lights when something fails."}}
+  ]},
+  "actions": [
+    {"id": "check", "label": {"es": "Comprobar ahora", "en": "Check now"}, "args": [], "confirm": false}
+  ],
+  "runtime": [{"name": "status", "kind": "status", "max": 12}],
+  "memory": {"psram_kb": 40, "static_kb": 0},
+  "storage": {"state_kb": 2},
+  "recipe": {
+    "format": 1,
+    "engines": {
+      "monitor": {
+        "targets": "cfg.sites",
+        "name": "name", "url": "url", "mode": "mode", "enabled": "on",
+        "every": "{{cfg.every_min}}m",
+        "down_after": "{{cfg.fails}}",
+        "up_after": "{{cfg.recover}}",
+        "slow_after": "{{cfg.slow_n}}",
+        "modes": {
+          "http": {"check": "probe", "ok": "{{item.expect}}", "slow_ms": "{{item.slow_ms}}", "cert": "{{item.cert}}"},
+          "statuspage": {"check": "json", "suffix": "/api/v2/status.json", "pick": "status.indicator", "max_bytes": 512,
+                         "map": {"none": "ok", "minor": "warn", "maintenance": "warn", "major": "fail", "critical": "fail"},
+                         "else": "fail"},
+          "port": {"check": "connect"}
+        },
+        "cert": {"warn_days": "{{cfg.cert_days}}", "marks": [14, 7, 3, 1, 0], "at": "{{cfg.cert_at}}"},
+        "history": 24,
+        "publish": "status"
+      }
+    },
+    "header": {
+      "subtitle": [
+        {"if": [["monitor.total", "eq", 0]], "v": {"es": "SIN WEBS", "en": "NO SITES"}},
+        {"if": [["monitor.unknown", "eq", "{{monitor.total}}"]], "v": {"es": "COMPROBANDO…", "en": "CHECKING…"}},
+        {"if": [["monitor.down", "eq", 1]], "v": {"es": "1 CAÍDA", "en": "1 DOWN"}},
+        {"if": [["monitor.down", "gt", 1]], "v": {"es": "{{monitor.down}} CAÍDAS", "en": "{{monitor.down}} DOWN"}},
+        {"v": "{{monitor.ok}}/{{monitor.total}} OK"}
+      ],
+      "progress": "{{monitor.ratio}}"
+    },
+    "footer": {
+      "label": {"es": "COMPROBAR", "en": "CHECK"},
+      "do": [{"do": "monitor.run"}]
+    },
+    "glance": [
+      {"show": [["monitor.down", "gt", 0]], "kind": "sticky", "status": "fail", "icon": "lights",
+       "text": [
+         {"if": [["monitor.down", "eq", 1]], "v": {"es": "1 CAÍDA · {{monitor.first_down}}", "en": "1 DOWN · {{monitor.first_down}}"}},
+         {"v": {"es": "{{monitor.down}} CAÍDAS", "en": "{{monitor.down}} DOWN"}}
+       ]},
+      {"show": [["cfg.glance_ok", "eq", true], ["monitor.total", "gt", 0]], "kind": "normal", "status": "ok",
+       "icon": "lights", "text": "{{monitor.ok}}/{{monitor.total}} OK"}
+    ],
+    "views": [
+      {
+        "id": "main",
+        "blocks": [
+          {"type": "list", "h": 208, "items": "monitor.targets",
+           "row": {
+             "lead": "{{item.status}}",
+             "label": "{{item.name}}",
+             "value": "{{item.detail}}",
+             "tone": [
+               {"if": [["item.status", "eq", "stale"]], "v": "mute"},
+               {"if": [["item.st", "eq", "fail"]], "v": "clay"},
+               {"if": [["item.st", "in", ["slow", "warn"]]], "v": "ochre"},
+               {"v": "dim"}
+             ]
+           },
+           "empty": {"es": "Sin webs: añádelas en Ajustes", "en": "No sites: add them in Settings"},
+           "tap": [{"do": "view", "id": "detail", "item": "{{item.id}}"}]}
+        ]
+      },
+      {
+        "id": "detail",
+        "header": {"subtitle": "{{sel.name|upper}}", "progress": -1},
+        "footer": {"label": {"es": "VOLVER", "en": "BACK"}, "do": [{"do": "view", "id": "main"}]},
+        "blocks": [
+          {"type": "rows", "items": [
+            {"label": {"es": "Último", "en": "Last"}, "value": "{{sel.detail}}", "lead": "{{sel.status}}"},
+            {"label": {"es": "Comprobada", "en": "Checked"}, "value": "{{sel.at|ago}}"},
+            {"label": {"es": "Dirección", "en": "Address"}, "value": "{{sel.host|trunc:28}}"}
+          ]},
+          {"type": "gap", "h": 8},
+          {"type": "spark", "h": 46, "values": "sel.spark", "tone": "dim"}
+        ]
+      }
+    ],
+    "alarms": [
+      {"id": "down", "each": "monitor.targets",
+       "enter": [["item.st", "eq", "fail"]],
+       "exit": [["item.st", "in", ["ok", "slow", "warn"]]],
+       "level": "warn", "icon": "alert", "open": true,
+       "title": {"es": "{{item.name}}: caída", "en": "{{item.name}}: down"},
+       "body": "{{item.why}}",
+       "on_exit": {"level": "info", "title": {"es": "{{item.name}} de vuelta", "en": "{{item.name}} is back"}},
+       "notify": {
+         "if": [["cfg.tg", "eq", true]],
+         "text": "🔴 {{item.name}} ({{item.why}})",
+         "exit": {"if": [["cfg.tg_back", "eq", true]],
+                  "text": {"es": "🟢 {{item.name}} de vuelta", "en": "🟢 {{item.name}} is back"}},
+         "batch": {"head": {"es": "{{ev.count}} cambios:", "en": "{{ev.count}} changes:"}},
+         "ttl_s": 1800
+       }},
+      {"id": "slow", "each": "monitor.targets",
+       "enter": [["item.st", "eq", "slow"]],
+       "exit": [["item.st", "in", ["ok", "warn", "fail"]]],
+       "level": "info", "icon": "clock",
+       "title": {"es": "{{item.name}} va lenta", "en": "{{item.name}} is slow"},
+       "body": "{{item.ms}} ms",
+       "notify": {
+         "if": [["cfg.tg", "eq", true], ["cfg.tg_slow", "eq", true]],
+         "text": "🟡 {{item.name}}: {{item.ms}} ms",
+         "batch": {"head": {"es": "{{ev.count}} cambios:", "en": "{{ev.count}} changes:"}},
+         "ttl_s": 1800
+       }}
+    ],
+    "on": {
+      "command.webs": [
+        {"do": "monitor.run", "if": [["ev.w1", "in", ["ahora", "now"]]], "reply_after": true},
+        {"do": "reply", "if": [["ev.w1", "unset"]], "each": "monitor.targets", "max_lines": 12,
+         "head": {"es": "Tus webs ({{monitor.ok}}/{{monitor.total}} bien):", "en": "Your sites ({{monitor.ok}}/{{monitor.total}} up):"},
+         "line": "{{item.status|status_emoji}} {{item.name}} · {{item.detail}}",
+         "empty": {"es": "No vigilas ninguna web. Añádelas en ⚙ Ajustes.", "en": "You are not watching any site. Add them in ⚙ Settings."}},
+        {"do": "reply", "if": [["ev.w1", "set"], ["ev.w1", "nin", ["ahora", "now"]]],
+         "text": {"es": "Escribe /webs o /webs ahora.", "en": "Type /webs or /webs now."}}
+      ],
+      "action.check": [
+        {"do": "monitor.run", "reply_after": true}
+      ],
+      "monitor.round_end": [
+        {"do": "reply", "each": "monitor.targets", "max_lines": 12,
+         "head": {"es": "Comprobadas ({{monitor.ok}}/{{monitor.total}} bien):", "en": "Checked ({{monitor.ok}}/{{monitor.total}} up):"},
+         "line": "{{item.status|status_emoji}} {{item.name}} · {{item.detail}}",
+         "empty": {"es": "No vigilas ninguna web.", "en": "You are not watching any site."}}
+      ],
+      "monitor.cert_due": [
+        {"do": "alert", "level": "warn", "key": "cert", "icon": "lock", "open": true,
+         "title": [
+           {"if": [["ev.count", "eq", 1]], "v": {"es": "1 certificado caduca pronto", "en": "1 certificate expires soon"}},
+           {"v": {"es": "{{ev.count}} certificados caducan pronto", "en": "{{ev.count}} certificates expire soon"}}
+         ],
+         "body": "{{ev.names}}"},
+        {"do": "notify", "if": [["cfg.tg", "eq", true]], "key": "cert", "each": "ev.items",
+         "head": {"es": "Certificados que caducan pronto:", "en": "Certificates expiring soon:"},
+         "line": {"es": "{{item.name}}: {{item.cert_days}} días", "en": "{{item.name}}: {{item.cert_days}} days"}}
+      ]
+    }
+  }
+}

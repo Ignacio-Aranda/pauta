@@ -158,6 +158,8 @@ volver a flashear; está en la
 |---|---|
 | [Hardware](docs/hardware.md) | La placa, los pines y cómo saber tu revisión |
 | [Instalación](docs/instalacion.md) | Compilar, flashear y personalizar |
+| [Plugins](docs/plugins.md) | El estándar de plugins en corto: nativos, recetas y la Mini App (borrador) |
+| [Plugins: referencia](docs/plugins-referencia.md) | La especificación completa del estándar, con cada tope y cada regla |
 | [Registro de cambios](CHANGELOG.md) | Qué cambia en cada versión |
 
 ## Licencia
