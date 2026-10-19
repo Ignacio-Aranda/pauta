@@ -53,7 +53,7 @@
         "loc": {"$ref": "manifest.schema.json#/$defs/locationValue"},
         "tz": {"$ref": "manifest.schema.json#/$defs/tzValue"},
         "idle": {"type": "integer", "minimum": 0, "maximum": 240},
-        "idle_by": {"anyOf": [{"$ref": "manifest.schema.json#/$defs/pluginId"}, {"enum": ["auto", "clock"]}]},
+        "idle_by": {"anyOf": [{"$ref": "manifest.schema.json#/$defs/pluginId"}, {"const": "clock"}]},
         "night": {"type": "boolean"},
         "night_from": {"$ref": "#/$defs/time"},
         "night_to": {"$ref": "#/$defs/time"},
@@ -68,7 +68,7 @@
         "lock_show": {"enum": ["idle", "clock"]},
         "live_lock": {"type": "boolean"},
         "unlock_tg": {"type": "boolean"},
-        "photos": {"anyOf": [{"$ref": "manifest.schema.json#/$defs/pluginId"}, {"enum": ["auto", "none"]}]},
+        "photos": {"anyOf": [{"$ref": "manifest.schema.json#/$defs/pluginId"}, {"const": "none"}]},
         "kb": {"enum": ["us", "es", "es-mac"]},
         "kb_speed": {"enum": ["50", "20", "10"]},
         "ntp": {"type": "string", "maxLength": 253}

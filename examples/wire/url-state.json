@@ -5,9 +5,9 @@
     "lang": "es", "theme": "night",
     "loc": {"n": "Málaga", "lat": 36.72, "lon": -4.42, "tz": "Europe/Madrid"},
     "tz": {"iana": "Europe/Madrid", "posix": "CET-1CEST,M3.5.0,M10.5.0/3"},
-    "idle": 10, "idle_by": "auto", "night": true, "night_from": "23:30", "night_to": "07:30",
+    "idle": 10, "idle_by": "clock", "night": true, "night_from": "23:30", "night_to": "07:30",
     "home": "pauta", "pin": "*", "lock_min": 0, "unlock_tg": false,
-    "photos": "auto", "kb": "es"
+    "photos": "none", "kb": "es"
   },
   "inf": {
     "var": "v1-hid",

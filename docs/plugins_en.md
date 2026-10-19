@@ -13,8 +13,9 @@ Pages and public APIs.
 This guide gives the short version. The normative detail, with every limit and
 every rule, is in the **[reference](plugins-referencia_en.md)**, and each
 section here links to its counterpart there. It is a **v1 draft**: there is no
-code yet, and what is still to be decided is in the [open
-questions](plugins-referencia_en.md#open-questions).
+code yet, but there is no [open
+question](plugins-referencia_en.md#open-questions) left: the owner's answers
+are part of the text.
 
 ## 1. The three pieces
 
@@ -22,14 +23,14 @@ questions](plugins-referencia_en.md#open-questions).
 with the time in large type on the right and, below it, the date and the
 weather for the city you choose; the **footer**, with the page's action
 button, the connection dot and the sun or the moon; **idle mode** (a calm
-screen for when you're not using it: a big clock on paper or your photos full
-screen with a strip showing the time, whichever you choose) and the **PIN
-lock**; the **system menu**, a list of ruled rows that opens when you tap the
-logo; the network, the bot and **safe mode**, which starts with everything
-switched off if the board restarts three times in a row because of a fault.
-It also provides the **services** the plugins use: network, MQTT (the
-messaging protocol of the nicscom network), files, alerts, keyboard, images
-and scheduler.
+screen for when you're not using it, after 10 minutes without a touch: a big
+clock on paper or, if you choose it, your photos full screen with a strip
+showing the time) and the **PIN lock**; the **system menu**, a list of ruled
+rows that opens when you tap the logo; the network, the bot and **safe mode**,
+which starts with everything switched off if the board restarts three times in
+a row because of a fault. It also provides the **services** the plugins use:
+network, MQTT (the messaging protocol of the nicscom network), files, alerts,
+keyboard, images and scheduler.
 
 **The built-in app** is Pauta, the checklist. It comes enabled and is the home
 screen, but it uses the same interface as any plugin, like the apps a phone
@@ -157,14 +158,13 @@ the board's menu, the screen shows a 10-character one-time code (and its QR
 code) for 2 minutes, and the Mini App scans it or you type it in
 ([§9.4](plugins-referencia_en.md#94-pairing-devices)). With that code, the
 Mini App proves that it has seen the screen, so nobody can slip in along the
-way. This is the recommended answer to an open question
-([P29](plugins-referencia_en.md#p29-how-a-device-is-paired)). There is room
-for 4 devices. On the way back, the Mini App sends the changes with
-`sendData` (4096 bytes at most), signed by your device; the board validates
-them against the same tables, saves them and replies "Saved: Pomodoro (2
-changes)" ([§9.5](plugins-referencia_en.md#95-the-way-back-senddata)). If a
-plugin's settings do not fit in the URL, they open separately from a second
-button, "⚙ nicscom".
+way. There is room for 4 devices. On the way back, the Mini App sends the
+changes with `sendData` (4096 bytes at most), signed by your device; the board
+validates them against the same tables, saves them and replies "Saved:
+Pomodoro (2 changes)"
+([§9.5](plugins-referencia_en.md#95-the-way-back-senddata)). If a plugin's
+settings do not fit in the URL, they open separately from a second button,
+"⚙ nicscom".
 
 **Important changes are confirmed on the board.** Anyone with access to your
 Telegram account could send things, so these changes wait until you **hold
@@ -175,31 +175,29 @@ down for 1 second** the accept button on the screen, within 2 minutes
 - changing the Shortcuts buttons;
 - enabling, from the Mini App, a plugin that talks to your local network or
   types on your computer;
-- saving a new address on your local network, such as the router in Status
-  lights;
+- saving or changing an address on your local network, such as the router in
+  Status lights;
 - accepting new permissions, including when a plugin is updated;
 - deleting photos or data from the microSD;
 - installing a recipe or a firmware update;
-- turning on "Unlock from Telegram".
-
-The local network, photo and unlock cases still depend on three open
-questions
-([P19](plugins-referencia_en.md#p19-a-touch-for-new-destinations-on-the-local-network),
-[P26](plugins-referencia_en.md#p26-deleting-photos-always-with-a-touch) and
-[P27](plugins-referencia_en.md#p27-turning-on-unlock-from-telegram-with-a-touch)),
-whose recommended answers the text already applies.
+- turning on "Unlock from Telegram" (when you set the PIN in the board's
+  menu, it is turned on with the touch of its confirmation).
 
 **On the screen, only the essentials**: the system menu enables and disables
-plugins, locks the screen, sets and changes the PIN, puts it into idle mode,
-leaves safe mode, installs updates and pairs or forgets devices, and the
-nicscom scheduler is edited on its own page. The menu's **Screen** subpage
-keeps within reach what you change with the board in front of you: idle mode
-(clock or photo), how nicscom alerts appear (full screen or band), the theme
-and the brightness ([§5.8](plugins-referencia_en.md#58-system-menu)). The city
-and the time zone can also be chosen in the configuration portal, the same one
-used for the WiFi ([§7.3](plugins-referencia_en.md#73-location-and-weather)).
-**Telegram** is still there for writing tasks, the plugins' commands
-(`/nics AGUA`, `/webs`, `/fondo`), sending photos and receiving alerts
+plugins, locks the screen, sets and changes the PIN (and, with the same touch,
+turns on "Unlock from Telegram"), puts it into idle mode, leaves safe mode,
+installs updates and pairs or forgets devices, and the nicscom scheduler is
+edited on its own page. The menu's **Screen** subpage keeps within reach what
+you change with the board in front of you: when idle mode starts (never, or
+after 5, 10 or 30 minutes) and, once the Screensaver arrives, whether the
+clock or a photo shows; how nicscom alerts appear (full screen or band), the
+theme and the brightness ([§5.8](plugins-referencia_en.md#58-system-menu)).
+None of this is chosen by itself: idle mode starts with the clock, and the
+bot's photos go to no plugin until you choose one. The city and the time zone
+can also be chosen in the configuration portal, the same one used for the WiFi
+([§7.3](plugins-referencia_en.md#73-location-and-weather)). **Telegram** is
+still there for writing tasks, the plugins' commands (`/nics AGUA`, `/webs`,
+`/fondo`), sending photos and receiving alerts
 ([§6.2](plugins-referencia_en.md#62-telegram)).
 
 ## 4. Permissions and secrets
@@ -255,7 +253,11 @@ MQTT broker ([§7.7](plugins-referencia_en.md#77-secrets)):
   another server.
 
 The lock and the vault do not stop anyone who reflashes the board over USB,
-because the chip does not encrypt its memory.
+because the chip does not encrypt its memory. For that same reason, if you
+forget the PIN and did not turn on "Unlock from Telegram",
+`tools/pin-rescate.py` removes it with the board plugged in over USB, without
+erasing the list or the settings
+([§5.7](plugins-referencia_en.md#57-pin-lock)).
 
 ## 5. A recipe step by step: the Pomodoro
 
@@ -469,9 +471,9 @@ The recipe never picks colours or coordinates: `tone` names a role (`ink`,
   shows it in idle mode and, if it does not fit, trims the text and never the
   number. Tapping it opens the Pomodoro page
   ([§13.6](plugins-referencia_en.md#136-header-footer-status-line-and-keeping-the-screen-on)).
-- `keep_awake` holds off idle mode while you are looking at the page with the
-  countdown running, if the `awake` setting allows it. The PIN lock kicks in
-  all the same.
+- `keep_awake` holds off idle mode, the night-window one included, while you
+  are looking at the page with the countdown running, if the `awake` setting
+  allows it. The PIN lock kicks in all the same.
 
 ### Step 7. When a phase ends
 
@@ -676,12 +678,10 @@ Action).
 checks the signature and the file's hash, validates the recipe and shows you
 its permissions; it is installed when you hold down. Updates are announced by
 the bot, never install themselves and, if they ask for new permissions, go
-through the screen again. Whether you can already install from the catalogue
-in F2 is still an open question
-([P22](plugins-referencia_en.md#p22-can-catalogue-recipes-already-be-installed-in-v1)),
-as is installing unsigned recipes from the `/pauta/inbox/` folder on the
-microSD, marked "unverified"
-([P23](plugins-referencia_en.md#p23-unsigned-recipes-in-v1)).
+through the screen again. Installing from the catalogue arrives in F2 and,
+from F5 on, unsigned recipes can also be installed from the `/pauta/inbox/`
+folder on the microSD, marked "unverified" and with their touch; never through
+the bot.
 
 **A native plugin** is proposed the same way, but in
 `firmware/pauta/src/plugins/<id>/`, and arrives with the next firmware
@@ -701,7 +701,7 @@ done, and from F2 on each phase is a version
 | Phase | Firmware | What it brings |
 |---|---|---|
 | F0 Foundations | 1.2.0, first stretch | The plugin host, the board's internal disk (9.76 MB usable of its flash, unused today), secrets kept apart, safe mode and the core of the recipe engine. Pauta is rewritten as a plugin. On the outside, this stretch looks and behaves exactly like 1.1.0 and keeps the saved list |
-| F1 New screens | 1.2.0, second stretch | The header with the time, the date and the weather; the city and the time zone, chosen in the configuration portal; swiping between pages, status line, band and full-screen alerts, idle mode with a clock, the system menu with its Screen subpage, a PIN lock whose PIN is set and changed in the menu, and booting without WiFi. The **Pomodoro**, with factory defaults until F2, if it turns out cheap with the recipe engine; if not, it arrives in 1.3.0 |
+| F1 New screens | 1.2.0, second stretch | The header with the time, the date and the weather; the city and the time zone, chosen in the configuration portal; swiping between pages, status line, band and full-screen alerts, idle mode with a clock after 10 minutes, the system menu with its Screen subpage, a PIN lock whose PIN is set and changed in the menu (with `tools/pin-rescate.py` to remove it over USB if it is forgotten), and booting without WiFi. The **Pomodoro**, with factory defaults until F2, if it turns out cheap with the recipe engine; if not, it arrives in 1.3.0 |
 | F2 Mini App and OTA | 1.3.0 | First, measuring how much fits in the URL. Then, the Mini App with pairing and encrypted state, secrets in sealed envelopes, the signed WiFi update and the catalogue. The Mini App can also change the city and the PIN |
 | F3 nicscom | 1.4.0 | The MQTT service, the scheduler and **nicscom** |
 | F4 Office | 1.5.0 | The USB keyboard, in a separate firmware (`v1-hid`) because its USB stack takes up about 43 KB of the chip's internal memory even when it is not used; the website watcher and the **Shortcuts** and **Status lights** recipes |
@@ -729,7 +729,7 @@ done, and from F2 on each phase is a version
 | Conformance and testing | [§15](plugins-referencia_en.md#15-conformance) |
 | What is left out of v1 | [§16](plugins-referencia_en.md#16-out-of-scope-for-v1-and-future-work) |
 | The six reference plugins | [Annex A](plugins-referencia_en.md#annex-a-the-six-reference-fits) |
-| What is still to be decided | [Open questions](plugins-referencia_en.md#open-questions) |
+| Open questions (there are none left) | [Open questions](plugins-referencia_en.md#open-questions) |
 
 The schemas are in [`schemas/`](../schemas/) and the examples, in
 [`examples/`](../examples/).

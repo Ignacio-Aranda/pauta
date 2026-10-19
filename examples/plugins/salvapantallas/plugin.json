@@ -22,8 +22,8 @@
               "en": "Idle photos: caption a photo with /fondo"}}
   ],
   "help": {
-    "es": "Mándame fotos (sin pie, o con el pie /fondo) y saldrán cuando la pantalla esté en reposo. También vale copiarlas a la carpeta pauta/fotos de la microSD.\n/fondo — cuántas fotos hay.\n/fondo borrar 12 — quita la foto 12.",
-    "en": "Send me photos (without a caption, or captioned /fondo) and they will show while the screen is idle. Copying them to the pauta/fotos folder on the microSD works too.\n/fondo — how many photos there are.\n/fondo delete 12 — removes photo 12."
+    "es": "Mándame fotos con el pie /fondo (o sin pie, si en ⚙ Ajustes me eliges para tus fotos). Saldrán en el reposo cuando me elijas para él, en ⚙ Ajustes o en el menú de la placa, en Pantalla. También vale copiarlas a la carpeta pauta/fotos de la microSD.\n/fondo — cuántas fotos hay.\n/fondo borrar 12 — quita la foto 12.",
+    "en": "Send me photos captioned /fondo (or with no caption, if you pick me for your photos in ⚙ Settings). They will show while idle once you pick me for it, in ⚙ Settings or in the board menu, under Screen. Copying them to the pauta/fotos folder on the microSD works too.\n/fondo — how many photos there are.\n/fondo delete 12 — removes photo 12."
   },
   "settings": {"version": 1, "fields": [
     {"key": "mode", "type": "select", "default": "all",

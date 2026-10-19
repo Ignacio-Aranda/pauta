@@ -909,10 +909,10 @@
       "additionalProperties": false
     },
     "check": {
-      "description": "Cómo se comprueba cada objetivo según su modo: 'probe' (código, tiempos y certificado) o 'json' (lee un valor de una respuesta JSON, como la página de estado de Statuspage).",
+      "description": "Cómo se comprueba cada objetivo según su modo: 'probe' (código, tiempos y certificado), 'json' (lee un valor de una respuesta JSON, como la página de estado de Statuspage) o 'connect' (solo conexión: mira si el puerto contesta, sin TLS, sin petición y sin comprobar el certificado; solo en la red local y con el permiso lan, apartado 13.11). 'connect' no lleva más claves.",
       "type": "object",
       "required": ["check"],
-      "properties": {"check": {"enum": ["probe", "json"]}},
+      "properties": {"check": {"enum": ["probe", "json", "connect"]}},
       "allOf": [
         {
           "if": {"properties": {"check": {"const": "probe"}}},

@@ -10,9 +10,9 @@ estática en GitHub Pages y APIs públicas.
 
 Esta guía lo cuenta en corto. El detalle normativo, con cada tope y cada
 regla, está en la **[referencia](plugins-referencia.md)**, y cada apartado de
-aquí enlaza al suyo. Es un **borrador v1**: todavía no hay código, y lo que
-falta por decidir está en las [preguntas
-abiertas](plugins-referencia.md#preguntas-abiertas).
+aquí enlaza al suyo. Es un **borrador v1**: todavía no hay código, pero ya no
+queda ninguna [pregunta abierta](plugins-referencia.md#preguntas-abiertas):
+las respuestas del dueño forman parte del texto.
 
 ## 1. Las tres piezas
 
@@ -20,13 +20,13 @@ abiertas](plugins-referencia.md#preguntas-abiertas).
 la hora en grande a la derecha y, debajo, la fecha y el tiempo de la ciudad
 que elijas; el **pie**, con el botón de acción de la página, el punto de
 conexión y el sol o la luna; el **reposo** (una pantalla tranquila cuando no
-la usas: un reloj grande sobre papel o tus fotos a pantalla completa con una
-faja con la hora, a elegir) y el **bloqueo con PIN**; el **menú del sistema**,
-una lista de renglones que se abre tocando el logotipo; la red, el
-bot y el **modo seguro**, que arranca con todo apagado si la placa se reinicia
-tres veces seguidas por un fallo. También presta los **servicios** que usan
-los plugins: red, MQTT (el protocolo de mensajes de la red nicscom), archivos,
-avisos, teclado, imágenes y programador.
+la usas, a los 10 minutos sin tocarla: un reloj grande sobre papel o, si lo
+eliges, tus fotos a pantalla completa con una faja con la hora) y el **bloqueo
+con PIN**; el **menú del sistema**, una lista de renglones que se abre tocando
+el logotipo; la red, el bot y el **modo seguro**, que arranca con todo apagado
+si la placa se reinicia tres veces seguidas por un fallo. También presta los
+**servicios** que usan los plugins: red, MQTT (el protocolo de mensajes de la
+red nicscom), archivos, avisos, teclado, imágenes y programador.
 
 **La app de serie** es Pauta, la checklist. Viene activa y es la pantalla de
 inicio, pero usa la misma interfaz que cualquier plugin, como las apps que
@@ -151,13 +151,12 @@ el menú de la placa, la pantalla enseña durante 2 minutos un código de un sol
 uso de 10 caracteres (y su QR), y la Mini App lo escanea o lo tecleas
 ([§9.4](plugins-referencia.md#94-emparejar-dispositivos)). Con ese código, la
 Mini App demuestra que ha visto la pantalla, así que nadie puede colarse por
-el camino. Es la recomendación de una pregunta abierta
-([P29](plugins-referencia.md#p29-cómo-se-empareja-un-dispositivo)). Caben 4
-dispositivos. A la vuelta, la Mini App manda los cambios con `sendData` (4096
-bytes como mucho), firmados por tu dispositivo; la placa los valida con las
-mismas tablas, los guarda y contesta «Guardado: Pomodoro (2 cambios)»
-([§9.5](plugins-referencia.md#95-la-vuelta-senddata)). Si los ajustes de un
-plugin no caben en la URL, se abren aparte con un segundo botón, «⚙ nicscom».
+el camino. Caben 4 dispositivos. A la vuelta, la Mini App manda los cambios
+con `sendData` (4096 bytes como mucho), firmados por tu dispositivo; la placa
+los valida con las mismas tablas, los guarda y contesta «Guardado: Pomodoro (2
+cambios)» ([§9.5](plugins-referencia.md#95-la-vuelta-senddata)). Si los
+ajustes de un plugin no caben en la URL, se abren aparte con un segundo botón,
+«⚙ nicscom».
 
 **Lo importante se confirma en la placa.** Cualquiera con tu cuenta de
 Telegram podría mandar cosas, así que estos cambios esperan a que **mantengas
@@ -168,30 +167,29 @@ pulsado 1 segundo** el botón de aceptar en la pantalla, en menos de 2 minutos
 - cambiar los botones de Atajos;
 - activar desde la Mini App un plugin que habla con tu red local o teclea en
   tu ordenador;
-- guardar una dirección nueva de tu red local, como el router en el Semáforo;
+- guardar o cambiar una dirección de tu red local, como el router en el
+  Semáforo;
 - aceptar permisos nuevos, también al actualizar un plugin;
 - borrar fotos o datos de la microSD;
 - instalar una receta o una actualización del firmware;
-- encender «Desbloquear desde Telegram».
-
-Los casos de la red local, de las fotos y del desbloqueo dependen todavía de
-tres preguntas abiertas
-([P19](plugins-referencia.md#p19-toque-para-los-destinos-nuevos-de-la-red-local),
-[P26](plugins-referencia.md#p26-borrar-fotos-siempre-con-un-toque) y
-[P27](plugins-referencia.md#p27-encender-desbloquear-desde-telegram-con-un-toque)),
-cuya recomendación ya aplica el texto.
+- encender «Desbloquear desde Telegram» (al poner el PIN en el menú de la
+  placa, se enciende con el toque de su confirmación).
 
 **En la pantalla, solo lo imprescindible**: el menú del sistema activa y
-desactiva plugins, bloquea, pone y cambia el PIN, pone el reposo, sale del
-modo seguro, actualiza y empareja u olvida dispositivos, y el programador de
-nicscom se edita en su propia página. La subpágina **Pantalla** del menú deja
-a mano lo que se cambia con la placa delante: el reposo (reloj o foto), cómo
-salen los avisos de nicscom (pantalla completa o banda), el tema y el brillo
-([§5.8](plugins-referencia.md#58-menú-del-sistema)). La ciudad y la zona
-horaria se eligen también en el portal de configuración, el mismo de la WiFi
-([§7.3](plugins-referencia.md#73-ubicación-y-tiempo)).
-**Telegram** sigue para escribir tareas, los comandos de los plugins
-(`/nics AGUA`, `/webs`, `/fondo`), mandar fotos y recibir avisos
+desactiva plugins, bloquea, pone y cambia el PIN (y, con el mismo toque,
+enciende «Desbloquear desde Telegram»), pone el reposo, sale del modo seguro,
+actualiza y empareja u olvida dispositivos, y el programador de nicscom se
+edita en su propia página. La subpágina **Pantalla** del menú deja a mano lo
+que se cambia con la placa delante: cuándo entra el reposo (nunca, a los 5, 10
+o 30 minutos) y, cuando llegue el Salvapantallas, si sale el reloj o una foto;
+cómo salen los avisos de nicscom (pantalla completa o banda), el tema y el
+brillo ([§5.8](plugins-referencia.md#58-menú-del-sistema)). Nada de esto se
+elige solo: el reposo sale con el reloj y las fotos del bot no van a ningún
+plugin hasta que lo eliges. La ciudad y la zona horaria se eligen también en
+el portal de configuración, el mismo de la WiFi
+([§7.3](plugins-referencia.md#73-ubicación-y-tiempo)). **Telegram** sigue para
+escribir tareas, los comandos de los plugins (`/nics AGUA`, `/webs`,
+`/fondo`), mandar fotos y recibir avisos
 ([§6.2](plugins-referencia.md#62-telegram)).
 
 ## 4. Permisos y secretos
@@ -244,7 +242,10 @@ MQTT del laboratorio ([§7.7](plugins-referencia.md#77-secretos)):
   y hay que volver a meterla: nadie puede desviarla a otro servidor.
 
 El bloqueo y el cofre no frenan a quien reflashee la placa por USB, porque el
-chip no cifra su memoria.
+chip no cifra su memoria. Por eso mismo, si olvidas el PIN y no encendiste
+«Desbloquear desde Telegram», `tools/pin-rescate.py` lo quita con la placa
+conectada por USB, sin borrar la lista ni los ajustes
+([§5.7](plugins-referencia.md#57-bloqueo-con-pin)).
 
 ## 5. Una receta paso a paso: el Pomodoro
 
@@ -457,8 +458,9 @@ nunca elige colores ni coordenadas: `tone` nombra un papel (`ink`, `dim`,
   también en el reposo y, si no cabe, recorta el texto y nunca la cifra.
   Tocarla abre la página del Pomodoro
   ([§13.6](plugins-referencia.md#136-cabecera-pie-línea-de-estado-y-pantalla-encendida)).
-- `keep_awake` impide el reposo mientras ves la página con la cuenta en
-  marcha, si el ajuste `awake` lo permite. El bloqueo con PIN entra igual.
+- `keep_awake` impide el reposo, también el de la franja nocturna, mientras
+  ves la página con la cuenta en marcha, si el ajuste `awake` lo permite. El
+  bloqueo con PIN entra igual.
 
 ### Paso 7. Al acabar una fase
 
@@ -661,11 +663,9 @@ No hay servidor: lo genera una tarea automática de GitHub (una GitHub Action).
 la firma y la huella del archivo, valida la receta y te enseña sus permisos;
 se instala cuando mantienes pulsado. Las actualizaciones se avisan por el bot,
 nunca se instalan solas y, si piden permisos nuevos, vuelven a pasar por la
-pantalla. Instalar del catálogo ya en F2 es todavía una pregunta abierta
-([P22](plugins-referencia.md#p22-se-pueden-instalar-recetas-del-catálogo-ya-en-la-v1)),
-igual que instalar recetas sin firmar desde la carpeta `/pauta/inbox/` de la
-microSD, marcadas «no verificada»
-([P23](plugins-referencia.md#p23-recetas-sin-firmar-en-la-v1)).
+pantalla. Se instala del catálogo desde F2 y, desde F5, también se pueden
+instalar recetas sin firmar desde la carpeta `/pauta/inbox/` de la microSD,
+marcadas «no verificada» y con su toque; por el bot, nunca.
 
 **Un nativo** se propone igual, pero en `firmware/pauta/src/plugins/<id>/`, y
 llega con la siguiente versión del firmware, por USB o por la actualización
@@ -684,7 +684,7 @@ cada fase es una versión
 | Fase | Firmware | Qué trae |
 |---|---|---|
 | F0 Cimientos | 1.2.0, primer tramo | El host de plugins, el disco interno de la placa (9,76 MB útiles de su flash, hoy sin usar), los secretos apartados, el modo seguro y el núcleo del motor de recetas. Pauta se reescribe como plugin. Por fuera, este tramo se ve y se comporta igual que la 1.1.0 y conserva la lista guardada |
-| F1 Pantallas nuevas | 1.2.0, segundo tramo | La cabecera con la hora, la fecha y el tiempo; la ciudad y la zona horaria, elegidas en el portal de configuración; deslizar entre páginas, línea de estado, avisos en banda y a pantalla completa, reposo con reloj, el menú del sistema con su subpágina Pantalla, bloqueo con un PIN que se pone y se cambia en el menú, y arranque sin WiFi. El **Pomodoro**, con los valores de fábrica hasta F2, si sale barato con el motor de recetas; si no, llega en la 1.3.0 |
+| F1 Pantallas nuevas | 1.2.0, segundo tramo | La cabecera con la hora, la fecha y el tiempo; la ciudad y la zona horaria, elegidas en el portal de configuración; deslizar entre páginas, línea de estado, avisos en banda y a pantalla completa, reposo con reloj a los 10 minutos, el menú del sistema con su subpágina Pantalla, bloqueo con un PIN que se pone y se cambia en el menú (con `tools/pin-rescate.py` para quitarlo por USB si se olvida), y arranque sin WiFi. El **Pomodoro**, con los valores de fábrica hasta F2, si sale barato con el motor de recetas; si no, llega en la 1.3.0 |
 | F2 Mini App y OTA | 1.3.0 | Primero se mide cuánto cabe en la URL. Después, la Mini App con emparejamiento y estado cifrado, los secretos en sobres sellados, la actualización firmada por WiFi y el catálogo. La Mini App también cambia la ciudad y el PIN |
 | F3 nicscom | 1.4.0 | El servicio MQTT, el programador y **nicscom** |
 | F4 Oficina | 1.5.0 | El teclado USB, en un firmware aparte (`v1-hid`) porque su pila USB ocupa unos 43 KB de la memoria interna del chip aunque no se use; el vigilante de webs y las recetas **Atajos** y **Semáforo** |
@@ -712,7 +712,7 @@ cada fase es una versión
 | Conformidad y pruebas | [§15](plugins-referencia.md#15-conformidad) |
 | Lo que queda fuera de la v1 | [§16](plugins-referencia.md#16-fuera-de-alcance-de-la-v1-y-futuro) |
 | Los seis plugins de referencia | [Anexo A](plugins-referencia.md#anexo-a-los-seis-encajes-de-referencia) |
-| Lo que falta por decidir | [Preguntas abiertas](plugins-referencia.md#preguntas-abiertas) |
+| Preguntas abiertas (ya no queda ninguna) | [Preguntas abiertas](plugins-referencia.md#preguntas-abiertas) |
 
 Los esquemas están en [`schemas/`](../schemas/) y los ejemplos, en
 [`examples/`](../examples/).

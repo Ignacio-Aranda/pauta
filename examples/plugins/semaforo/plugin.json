@@ -41,9 +41,12 @@
                  "en": "https://… or, on your network, http://192.168.1.10. For a status page, its main address, such as https://www.githubstatus.com"}},
        {"key": "mode", "type": "select", "default": "http",
         "label": {"es": "Tipo", "en": "Type"},
+        "help": {"es": "«Solo conexión» es para aparatos de tu red con un certificado propio, como un NAS: solo mira si el puerto contesta, sin comprobar el certificado.",
+                 "en": "«Connection only» is for devices on your network with their own certificate, such as a NAS: it only checks that the port answers, without checking the certificate."},
         "options": [
           {"v": "http", "es": "Web (código y tiempo)", "en": "Website (code and time)"},
-          {"v": "statuspage", "es": "Página de estado (Statuspage)", "en": "Status page (Statuspage)"}]},
+          {"v": "statuspage", "es": "Página de estado (Statuspage)", "en": "Status page (Statuspage)"},
+          {"v": "port", "es": "Solo conexión (en tu red)", "en": "Connection only (on your network)"}]},
        {"key": "expect", "type": "select", "default": "2xx", "visible_if": {"mode": "http"},
         "label": {"es": "Cuenta como bien", "en": "Counts as up"},
         "options": [
@@ -112,7 +115,8 @@
           "http": {"check": "probe", "ok": "{{item.expect}}", "slow_ms": "{{item.slow_ms}}", "cert": "{{item.cert}}"},
           "statuspage": {"check": "json", "suffix": "/api/v2/status.json", "pick": "status.indicator", "max_bytes": 512,
                          "map": {"none": "ok", "minor": "warn", "maintenance": "warn", "major": "fail", "critical": "fail"},
-                         "else": "fail"}
+                         "else": "fail"},
+          "port": {"check": "connect"}
         },
         "cert": {"warn_days": "{{cfg.cert_days}}", "marks": [14, 7, 3, 1, 0], "at": "{{cfg.cert_at}}"},
         "history": 24,
